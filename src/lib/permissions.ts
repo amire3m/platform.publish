@@ -78,10 +78,18 @@ export function hasPermission(user: PermissionSubject, permission: Permission): 
   return effectivePermissions(user).has(permission);
 }
 
+export function normalizeAllowedAccountIds(
+  allowedAccountIds: readonly string[] | null | undefined,
+): readonly string[] | null {
+  return !allowedAccountIds || allowedAccountIds.length === 0 ? null : allowedAccountIds;
+}
+
+export function accountScopeForUser(user: PermissionSubject): readonly string[] | null {
+  return user.role === "owner" ? null : normalizeAllowedAccountIds(user.allowedAccountIds);
+}
+
 /** Channel/page level scoping: owner & manager-with-empty-list see everything. */
 export function canAccessAccount(user: PermissionSubject, accountId: string): boolean {
-  if (user.role === "owner") return true;
-  const allowed = user.allowedAccountIds ?? [];
-  if (allowed.length === 0) return true; // empty = no explicit restriction configured yet
-  return allowed.includes(accountId);
+  const allowed = accountScopeForUser(user);
+  return allowed === null || allowed.includes(accountId);
 }

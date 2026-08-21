@@ -132,6 +132,7 @@ describe("analytics type contracts", () => {
   it("supports multi-account overviews and channel-average content comparison", () => {
     const overview = {
       scope: "overview",
+      hasSnapshotData: true,
       accounts: [
         {
           accountId: "account-1",
@@ -164,11 +165,15 @@ describe("analytics type contracts", () => {
           thumbnailUrl: null,
           publishedAt: null,
           totals: emptyTotals,
+          percentageChanges: emptyChanges,
         },
       ],
       subscribersTotal: null,
-      lastSyncedAt: null,
-      isStale: false,
+      freshness: {
+        state: "never",
+        lastSyncedAt: null,
+        accounts: [],
+      },
     } satisfies AnalyticsOverview;
 
     const content = {
@@ -195,8 +200,11 @@ describe("analytics type contracts", () => {
         percentageDifferences: emptyChanges,
       },
       chartSeries: [],
-      lastSyncedAt: null,
-      isStale: false,
+      freshness: {
+        state: "never",
+        lastSyncedAt: null,
+        accounts: [],
+      },
     } satisfies ContentAnalytics;
 
     expect(overview.accounts).toHaveLength(2);

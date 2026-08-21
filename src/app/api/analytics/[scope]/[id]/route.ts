@@ -1,28 +1,69 @@
-import { eq, desc } from "drizzle-orm";
-import { db } from "@/db";
-import { analyticsSnapshots, content } from "@/db/schema";
-import { requirePermission, jsonError, jsonOk } from "@/lib/api-helpers";
+import { AnalyticsAccessError, getAnalyticsExportRows, getContentAnalytics } from "@/lib/analytics/queries";
+import { buildAnalyticsPeriod, parseAnalyticsRange } from "@/lib/analytics/ranges";
+import { jsonError, jsonOk, requirePermission } from "@/lib/api-helpers";
+import { accountScopeForUser } from "@/lib/permissions";
 
-export async function GET(_req: Request, { params }: { params: Promise<{ scope: string; id: string }> }) {
-  const { user, response } = await requirePermission("view_analytics");
-  if (!user) return response;
-  const { scope, id } = await params;
+interface DetailDependencies {
+  requirePermission(permission: "view_analytics"): Promise<{
+    user: { role: string; allowedAccountIds?: string[] | null } | null;
+    response: Response | null;
+  }>;
+  getContent: typeof getContentAnalytics;
+  getExportRows: typeof getAnalyticsExportRows;
+  now(): Date;
+}
 
-  if (scope === "account") {
-    const rows = await db
-      .select()
-      .from(analyticsSnapshots)
-      .where(eq(analyticsSnapshots.accountId, id))
-      .orderBy(desc(analyticsSnapshots.dateUtc))
-      .limit(90);
+const defaultDependencies: DetailDependencies = {
+  requirePermission,
+  getContent: getContentAnalytics,
+  getExportRows: getAnalyticsExportRows,
+  now: () => new Date(),
+};
+
+export async function handleAnalyticsDetailRequest(
+  request: Request,
+  params: { scope: string; id: string },
+  dependencies: DetailDependencies,
+): Promise<Response> {
+  const { user, response } = await dependencies.requirePermission("view_analytics");
+  if (!user) return response!;
+  if (params.scope !== "account" && params.scope !== "content") {
+    return jsonError("scope نامعتبر است.", 422, "INVALID_SCOPE");
+  }
+  const range = parseAnalyticsRange(new URL(request.url).searchParams.get("range") ?? "90");
+  if (!range) return jsonError("بازه آمار نامعتبر است.", 422, "INVALID_RANGE");
+  const allowedAccountIds = accountScopeForUser(user);
+  try {
+    if (params.scope === "content") {
+      const result = await dependencies.getContent({
+        externalVideoId: params.id,
+        range,
+        allowedAccountIds,
+      });
+      return result ? jsonOk(result) : jsonError("محتوا یافت نشد.", 404, "NOT_FOUND");
+    }
+    const period = buildAnalyticsPeriod(range, dependencies.now(), "Asia/Tehran");
+    const rows = await dependencies.getExportRows({
+      scope: "account",
+      range,
+      accountId: params.id,
+      contentId: null,
+      startDate: period.currentStart,
+      endDate: period.currentEnd,
+      allowedAccountIds,
+    });
     return jsonOk(rows);
+  } catch (error) {
+    if (error instanceof AnalyticsAccessError) {
+      return jsonError("شما به این حساب دسترسی ندارید.", 403, "FORBIDDEN");
+    }
+    throw error;
   }
+}
 
-  if (scope === "content") {
-    const [row] = await db.select().from(content).where(eq(content.id, id)).limit(1);
-    if (!row) return jsonError("محتوا یافت نشد.", 404);
-    return jsonOk({ publishResults: row.publishResults, platformTargets: row.platformTargets });
-  }
-
-  return jsonError("scope نامعتبر است.", 400);
+export async function GET(
+  request: Request,
+  context: { params: Promise<{ scope: string; id: string }> },
+) {
+  return handleAnalyticsDetailRequest(request, await context.params, defaultDependencies);
 }

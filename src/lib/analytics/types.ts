@@ -36,6 +36,27 @@ export interface PeriodComparison {
   };
 }
 
+export interface AnalyticsChartPoint extends DailyMetric {
+  subscribersGained: number;
+  subscribersLost: number;
+  engagementRate: number;
+}
+
+export type AnalyticsFreshnessState = "fresh" | "stale" | "error" | "never";
+
+export interface AnalyticsFreshness {
+  state: AnalyticsFreshnessState;
+  lastSyncedAt: Date | null;
+  accounts: readonly {
+    accountId: string;
+    state: AnalyticsFreshnessState;
+    lastSyncAt: Date | null;
+    lastError: string | null;
+    lastErrorCode: string | null;
+    nextAttemptAt: Date | string | null;
+  }[];
+}
+
 export interface AnalyticsFetchInput {
   accountId: string;
   startDate: Date;
@@ -129,6 +150,7 @@ export interface ContentSnapshotMetadata {
 
 export interface AnalyticsOverview {
   scope: "overview";
+  hasSnapshotData: boolean;
   accounts: readonly {
     accountId: string;
     channelId: string;
@@ -138,7 +160,7 @@ export interface AnalyticsOverview {
   currentStart: Date;
   currentEnd: Date;
   comparison: PeriodComparison;
-  chartSeries: readonly AccountDailyMetric[];
+  chartSeries: readonly AnalyticsChartPoint[];
   topVideos: readonly {
     accountId: string;
     channelId: string;
@@ -149,10 +171,10 @@ export interface AnalyticsOverview {
     thumbnailUrl: string | null;
     publishedAt: Date | null;
     totals: MetricTotals;
+    percentageChanges: PeriodComparison["percentageChanges"];
   }[];
   subscribersTotal: number | null;
-  lastSyncedAt: Date | null;
-  isStale: boolean;
+  freshness: AnalyticsFreshness;
 }
 
 export interface ContentAnalytics {
@@ -174,9 +196,8 @@ export interface ContentAnalytics {
     channelAverage: MetricTotals;
     percentageDifferences: PeriodComparison["percentageChanges"];
   };
-  chartSeries: readonly ContentDailyMetric[];
-  lastSyncedAt: Date | null;
-  isStale: boolean;
+  chartSeries: readonly AnalyticsChartPoint[];
+  freshness: AnalyticsFreshness;
 }
 
 export interface AnalyticsExportFilter {

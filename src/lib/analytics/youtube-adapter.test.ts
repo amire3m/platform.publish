@@ -190,8 +190,8 @@ describe("YouTubeAnalyticsAdapter", () => {
     expect(mocks.setCredentials).toHaveBeenCalledWith(tokens);
     expect(result.map((row) => [row.date.toISOString(), row.subscribersTotal])).toEqual([
       ["2026-08-18T20:30:00.000Z", null],
-      ["2026-08-20T20:30:00.000Z", 1234],
       ["2026-08-19T20:30:00.000Z", null],
+      ["2026-08-20T20:30:00.000Z", 1234],
     ]);
     expect(mocks.analyticsQuery).toHaveBeenCalledWith({
       ids: "channel==MINE",
@@ -204,6 +204,27 @@ describe("YouTubeAnalyticsAdapter", () => {
       part: ["snippet", "statistics"],
       mine: true,
     });
+  });
+
+  it("synthesizes missing and trailing account days and puts subscribers on the latest completed day", async () => {
+    mocks.analyticsQuery.mockResolvedValue({
+      data: {
+        columnHeaders: headers.map((name) => ({ name })),
+        rows: [metricRow("2026-08-20", "10")],
+      },
+    });
+
+    const result = await createYouTubeAnalyticsAdapter({}).fetchAccountDaily(input());
+
+    expect(result.map((item) => ({
+      day: item.date.toISOString(),
+      views: item.views,
+      subscribersTotal: item.subscribersTotal,
+    }))).toEqual([
+      { day: "2026-08-18T20:30:00.000Z", views: 0, subscribersTotal: null },
+      { day: "2026-08-19T20:30:00.000Z", views: 10, subscribersTotal: null },
+      { day: "2026-08-20T20:30:00.000Z", views: 0, subscribersTotal: 1234 },
+    ]);
   });
 
   it("isolates credentials and auth clients between adapter instances", () => {

@@ -98,6 +98,9 @@ export const socialAccounts = pgTable("social_accounts", {
   lastError: text("last_error"),
   analyticsSyncLockedAt: timestamp("analytics_sync_locked_at", { withTimezone: true }),
   analyticsSyncLockId: text("analytics_sync_lock_id"),
+  analyticsSyncedThrough: timestamp("analytics_synced_through", { withTimezone: true }),
+  analyticsLastErrorCode: text("analytics_last_error_code"),
+  analyticsNextAttemptAt: timestamp("analytics_next_attempt_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });

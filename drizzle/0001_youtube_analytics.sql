@@ -37,7 +37,10 @@ ON "analytics_snapshots" ("platform", "account_id", "scope_type", "scope_id", "d
 
 ALTER TABLE "social_accounts"
   ADD COLUMN "analytics_sync_locked_at" timestamp with time zone,
-  ADD COLUMN "analytics_sync_lock_id" text;
+  ADD COLUMN "analytics_sync_lock_id" text,
+  ADD COLUMN "analytics_synced_through" timestamp with time zone,
+  ADD COLUMN "analytics_last_error_code" text,
+  ADD COLUMN "analytics_next_attempt_at" timestamp with time zone;
 
 ALTER TABLE "app_settings"
   ADD COLUMN "last_analytics_run_at" timestamp with time zone;

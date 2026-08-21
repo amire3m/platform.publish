@@ -47,10 +47,19 @@ describe("analytics schema", () => {
     const settingsColumns = getTableColumns(appSettings);
 
     expect(Object.keys(accountColumns)).toEqual(
-      expect.arrayContaining(["analyticsSyncLockedAt", "analyticsSyncLockId"]),
+      expect.arrayContaining([
+        "analyticsSyncLockedAt",
+        "analyticsSyncLockId",
+        "analyticsSyncedThrough",
+        "analyticsLastErrorCode",
+        "analyticsNextAttemptAt",
+      ]),
     );
     expect(accountColumns.analyticsSyncLockedAt.notNull).toBe(false);
     expect(accountColumns.analyticsSyncLockId.notNull).toBe(false);
+    expect(accountColumns.analyticsSyncedThrough.notNull).toBe(false);
+    expect(accountColumns.analyticsLastErrorCode.notNull).toBe(false);
+    expect(accountColumns.analyticsNextAttemptAt.notNull).toBe(false);
     expect(Object.keys(settingsColumns)).toContain("lastAnalyticsRunAt");
     expect(settingsColumns.lastAnalyticsRunAt.notNull).toBe(false);
   });

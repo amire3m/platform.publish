@@ -344,13 +344,36 @@ export function createYouTubeAnalyticsAdapter(tokens: Credentials): YouTubeAnaly
         responseRows(response.data),
         { ...channel, accountId: input.accountId, timezone: input.timezone },
       );
-      if (rows.length > 0) {
-        const latest = rows.reduce((candidate, row) =>
-          row.date > candidate.date ? row : candidate,
-        );
-        latest.subscribersTotal = channel.subscribersTotal;
+      const rowsByDay = new Map(rows.map((row) => [
+        DateTime.fromJSDate(row.date, { zone: input.timezone }).toFormat("yyyy-MM-dd"),
+        row,
+      ]));
+      const completedDays: AccountDailyMetric[] = [];
+      for (
+        let day = DateTime.fromJSDate(input.startDate, { zone: input.timezone }).startOf("day");
+        day < DateTime.fromJSDate(input.endDate, { zone: input.timezone }).startOf("day");
+        day = day.plus({ days: 1 })
+      ) {
+        completedDays.push(rowsByDay.get(day.toFormat("yyyy-MM-dd")) ?? {
+          accountId: input.accountId,
+          channelId: channel.channelId,
+          channelTitle: channel.channelTitle,
+          date: day.toJSDate(),
+          views: 0,
+          likes: 0,
+          comments: 0,
+          shares: 0,
+          watchTimeMinutes: 0,
+          averageViewDurationSeconds: 0,
+          subscribersTotal: null,
+          subscribersGained: 0,
+          subscribersLost: 0,
+        });
       }
-      return rows;
+      if (completedDays.length > 0) {
+        completedDays[completedDays.length - 1].subscribersTotal = channel.subscribersTotal;
+      }
+      return completedDays;
     },
 
     async fetchContentDaily(input) {

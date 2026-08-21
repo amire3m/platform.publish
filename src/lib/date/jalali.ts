@@ -73,6 +73,22 @@ export function utcToJalaliParts(utcIso: string | Date): JalaliDateTimeParts {
   return { jy, jm, jd, hour: dt.hour, minute: dt.minute };
 }
 
+/** Normalize an instant to the start of its Asia/Tehran calendar day, represented in UTC. */
+export function startOfTehranDayUtc(date: Date): Date {
+  return DateTime.fromJSDate(date, { zone: "utc" })
+    .setZone(APP_TIMEZONE)
+    .startOf("day")
+    .toUTC()
+    .toJSDate();
+}
+
+/** Format an instant as its machine-friendly Gregorian calendar date in Asia/Tehran. */
+export function formatTehranGregorianDate(date: Date): string {
+  return DateTime.fromJSDate(date, { zone: "utc" })
+    .setZone(APP_TIMEZONE)
+    .toFormat("yyyy-MM-dd");
+}
+
 /** Format a UTC ISO timestamp as a human Jalali string, e.g. "شنبه ۱۸ اردیبهشت ۱۴۰۵ ساعت ۲۰:۳۰". */
 export function formatJalaliDateTime(utcIso: string | Date, opts?: { withWeekday?: boolean }): string {
   const dt =

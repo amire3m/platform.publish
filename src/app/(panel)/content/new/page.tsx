@@ -8,16 +8,11 @@ import { Button, Card, Input, Label, Select, Textarea } from "@/components/ui";
 import { useToast } from "@/components/providers";
 import { JalaliDateTimePicker } from "@/components/JalaliDateTimePicker";
 import { DEFAULT_CAPABILITY_CONFIG, type Platform } from "@/lib/capabilities";
+import type { PublicAccountDto } from "@/lib/accounts/public";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
-interface Account {
-  id: string;
-  platform: Platform;
-  displayName: string;
-  username: string;
-  active: boolean;
-}
+type Account = Pick<PublicAccountDto, "id" | "displayName" | "username" | "active"> & { platform: Platform };
 
 interface TargetDraft {
   platform: Platform;

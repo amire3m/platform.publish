@@ -1,60 +1,182 @@
-import { db } from "@/db";
-import { content, socialAccounts, analyticsSnapshots } from "@/db/schema";
-import { requirePermission, jsonOk } from "@/lib/api-helpers";
-import { getSyncStatus } from "@/lib/telegram/tgdb";
-import { desc } from "drizzle-orm";
+import { AnalyticsAccessError, getAnalyticsOverview } from "@/lib/analytics/queries";
+import { parseAnalyticsRange } from "@/lib/analytics/ranges";
+import { jsonError, jsonOk, requirePermission } from "@/lib/api-helpers";
+import { accountScopeForUser, canAccessAccount } from "@/lib/permissions";
 
-export async function GET() {
-  const { user, response } = await requirePermission("view_analytics");
-  if (!user) return response;
+interface AnalyticsUser {
+  role: string;
+  allowedAccountIds?: string[] | null;
+}
 
-  const accounts = await db.select().from(socialAccounts);
-  const contents = await db.select().from(content);
-  const recentSnapshots = await db.select().from(analyticsSnapshots).orderBy(desc(analyticsSnapshots.dateUtc)).limit(200);
+interface CompatibilityAccount {
+  id: string;
+  platform: string;
+}
 
-  const youtubeAccounts = accounts.filter((a) => a.platform === "youtube");
-  const instagramAccounts = accounts.filter((a) => a.platform === "instagram");
+interface CompatibilityContent {
+  status: string;
+  scheduledAtUtc: Date | null;
+  platformTargets: Record<string, unknown>[];
+  [key: string]: unknown;
+}
 
-  const latestByAccount = new Map<string, (typeof recentSnapshots)[number]>();
-  for (const snap of recentSnapshots) {
-    if (!latestByAccount.has(snap.accountId)) latestByAccount.set(snap.accountId, snap);
-  }
+interface LegacyDashboardFields {
+  syncStatus: unknown;
+  totals: {
+    channels: number;
+    pages: number;
+    followers: number;
+    views: number;
+    engagement: number;
+  };
+  statusCounts: Record<string, number>;
+  failedContents: CompatibilityContent[];
+  pendingApproval: CompatibilityContent[];
+  upcoming: CompatibilityContent[];
+  hasAnalyticsData: boolean;
+}
 
-  const totalFollowers = Array.from(latestByAccount.values()).reduce(
-    (sum, s) => sum + Number(s.followersOrSubscribers ?? 0),
-    0,
-  );
-  const totalViews = recentSnapshots.reduce((sum, s) => sum + Number(s.views ?? 0), 0);
-  const totalEngagement = recentSnapshots.reduce(
-    (sum, s) => sum + Number(s.likes ?? 0) + Number(s.comments ?? 0) + Number(s.shares ?? 0) + Number(s.saves ?? 0),
-    0,
-  );
+interface OverviewDependencies {
+  requirePermission(permission: "view_analytics"): Promise<{
+    user: AnalyticsUser | null;
+    response: Response | null;
+  }>;
+  getOverview: typeof getAnalyticsOverview;
+  getLegacyDashboardFields(
+    user: AnalyticsUser,
+    requestedAccountId?: string,
+  ): Promise<LegacyDashboardFields>;
+}
 
-  const statusCounts = contents.reduce<Record<string, number>>((acc, c) => {
-    acc[c.status] = (acc[c.status] ?? 0) + 1;
-    return acc;
+function sanitizeAccountRecord(record: Record<string, unknown>): Record<string, unknown> | null {
+  const hasSnakeAlias = Object.prototype.hasOwnProperty.call(record, "account_id");
+  const hasCamelAlias = Object.prototype.hasOwnProperty.call(record, "accountId");
+  if (hasSnakeAlias && hasCamelAlias && record.account_id !== record.accountId) return null;
+  const accountId = hasSnakeAlias ? record.account_id : record.accountId;
+  if (typeof accountId !== "string") return null;
+  const { account_id: _snakeAlias, accountId: _camelAlias, ...metadata } = record;
+  return { ...metadata, account_id: accountId };
+}
+
+export function buildLegacyDashboardFields(input: {
+  user: AnalyticsUser;
+  requestedAccountId?: string;
+  syncStatus: unknown;
+  accounts: readonly CompatibilityAccount[];
+  contents: readonly CompatibilityContent[];
+}): LegacyDashboardFields {
+  const accountScope = accountScopeForUser(input.user);
+  const accountMatches = (accountId: string) =>
+    canAccessAccount(input.user, accountId)
+    && (!input.requestedAccountId || accountId === input.requestedAccountId);
+  const accounts = input.accounts.filter((account) => accountMatches(account.id));
+  const contents = input.contents.flatMap((item) => {
+    const platformTargets = item.platformTargets.flatMap((target) => {
+      const sanitized = sanitizeAccountRecord(target);
+      return sanitized && accountMatches(sanitized.account_id as string) ? [sanitized] : [];
+    });
+    if ((accountScope !== null || input.requestedAccountId) && platformTargets.length === 0) {
+      return [];
+    }
+    const targetIds = new Set(platformTargets.map((target) => target.account_id as string));
+    const publishResults = Array.isArray(item.publishResults)
+      ? item.publishResults.flatMap((result) => {
+          if (typeof result !== "object" || result === null || Array.isArray(result)) return [];
+          const sanitized = sanitizeAccountRecord(result as Record<string, unknown>);
+          return sanitized && targetIds.has(sanitized.account_id as string) ? [sanitized] : [];
+        })
+      : [];
+    return [{ ...item, platformTargets, publishResults }];
+  });
+  const youtubeAccounts = accounts.filter((account) => account.platform === "youtube");
+  const instagramAccounts = accounts.filter((account) => account.platform === "instagram");
+  const statusCounts = contents.reduce<Record<string, number>>((counts, item) => {
+    counts[item.status] = (counts[item.status] ?? 0) + 1;
+    return counts;
   }, {});
 
-  const failedContents = contents.filter((c) => c.status === "failed").slice(0, 10);
-  const pendingApproval = contents.filter((c) => c.status === "in_review").slice(0, 10);
-  const upcoming = contents
-    .filter((c) => c.status === "scheduled")
-    .sort((a, b) => (a.scheduledAtUtc?.getTime() ?? 0) - (b.scheduledAtUtc?.getTime() ?? 0))
-    .slice(0, 10);
-
-  return jsonOk({
-    syncStatus: await getSyncStatus(),
+  return {
+    syncStatus: input.syncStatus,
     totals: {
       channels: youtubeAccounts.length,
       pages: instagramAccounts.length,
-      followers: totalFollowers,
-      views: totalViews,
-      engagement: totalEngagement,
+      followers: 0,
+      views: 0,
+      engagement: 0,
     },
     statusCounts,
-    failedContents,
-    pendingApproval,
-    upcoming,
-    hasAnalyticsData: recentSnapshots.length > 0,
+    failedContents: contents.filter((item) => item.status === "failed").slice(0, 10),
+    pendingApproval: contents.filter((item) => item.status === "in_review").slice(0, 10),
+    upcoming: contents
+      .filter((item) => item.status === "scheduled")
+      .sort((a, b) => (a.scheduledAtUtc?.getTime() ?? 0) - (b.scheduledAtUtc?.getTime() ?? 0))
+      .slice(0, 10),
+    hasAnalyticsData: false,
+  };
+}
+
+async function getLegacyDashboardFields(
+  user: AnalyticsUser,
+  requestedAccountId?: string,
+): Promise<LegacyDashboardFields> {
+  const [{ db }, { content, socialAccounts }, { getSyncStatus }] = await Promise.all([
+    import("@/db"),
+    import("@/db/schema"),
+    import("@/lib/telegram/tgdb"),
+  ]);
+  const [allAccounts, contents] = await Promise.all([
+    db.select().from(socialAccounts),
+    db.select().from(content),
+  ]);
+  return buildLegacyDashboardFields({
+    user,
+    requestedAccountId,
+    syncStatus: await getSyncStatus(),
+    accounts: allAccounts,
+    contents,
   });
+}
+
+const defaultDependencies: OverviewDependencies = {
+  requirePermission,
+  getOverview: getAnalyticsOverview,
+  getLegacyDashboardFields,
+};
+
+export async function handleAnalyticsOverviewRequest(
+  request: Request,
+  dependencies: OverviewDependencies,
+): Promise<Response> {
+  const { user, response } = await dependencies.requirePermission("view_analytics");
+  if (!user) return response!;
+  const url = new URL(request.url);
+  const range = parseAnalyticsRange(url.searchParams.get("range") ?? "90");
+  if (!range) return jsonError("بازه آمار نامعتبر است.", 422, "INVALID_RANGE");
+  const accountId = url.searchParams.get("accountId") || undefined;
+  const allowedAccountIds = accountScopeForUser(user);
+  try {
+    const analytics = await dependencies.getOverview({ range, accountId, allowedAccountIds });
+    const legacy = await dependencies.getLegacyDashboardFields(user, accountId);
+    const current = analytics.comparison.current;
+    return jsonOk({
+      ...analytics,
+      ...legacy,
+      totals: {
+        ...legacy.totals,
+        followers: analytics.subscribersTotal ?? 0,
+        views: current.views,
+        engagement: current.likes + current.comments + current.shares,
+      },
+      hasAnalyticsData: analytics.hasSnapshotData,
+    });
+  } catch (error) {
+    if (error instanceof AnalyticsAccessError) {
+      return jsonError("شما به این حساب دسترسی ندارید.", 403, "FORBIDDEN");
+    }
+    throw error;
+  }
+}
+
+export function GET(request: Request) {
+  return handleAnalyticsOverviewRequest(request, defaultDependencies);
 }

@@ -7,21 +7,11 @@ import { InstagramIcon, YoutubeIcon } from "@/components/brand-icons";
 import { Button, Card, ConfirmModal, EmptyState, Input, Label, Modal, Select, Skeleton, StatusBadge } from "@/components/ui";
 import { useToast } from "@/components/providers";
 import { formatJalaliDateTime } from "@/lib/date/jalali";
+import type { PublicAccountDto } from "@/lib/accounts/public";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
-interface Account {
-  id: string;
-  platform: "youtube" | "instagram";
-  username: string;
-  displayName: string;
-  active: boolean;
-  connectionStatus: string;
-  topicId: string | null;
-  topicLabel: string | null;
-  lastSyncAt: string | null;
-  capabilities: Record<string, unknown>;
-}
+type Account = PublicAccountDto & { platform: "youtube" | "instagram" };
 
 interface Topic {
   id: string;

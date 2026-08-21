@@ -1,0 +1,143 @@
+"use client";
+
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
+import { useState } from "react";
+import {
+  AlertTriangle,
+  BarChart3,
+  CalendarDays,
+  FileText,
+  FolderOpen,
+  LayoutDashboard,
+  LogOut,
+  Menu,
+  Moon,
+  PlusCircle,
+  ScrollText,
+  Send,
+  Settings,
+  Sun,
+  Tv,
+  Users,
+} from "lucide-react";
+import { InstagramIcon, YoutubeIcon } from "@/components/brand-icons";
+import { useTheme, useToast } from "@/components/providers";
+import { ROLE_LABELS_FA } from "@/lib/permissions";
+
+const NAV_ITEMS = [
+  { href: "/dashboard", label: "داشبورد", icon: LayoutDashboard },
+  { href: "/calendar", label: "تقویم انتشار", icon: CalendarDays },
+  { href: "/content", label: "کتابخانه محتوا", icon: FolderOpen },
+  { href: "/content/new", label: "ایجاد محتوا", icon: PlusCircle },
+  { href: "/accounts", label: "کانال‌ها و پیج‌ها", icon: Tv },
+  { href: "/users", label: "کاربران و تیم", icon: Users },
+  { href: "/analytics", label: "آنالیز", icon: BarChart3 },
+  { href: "/reports", label: "گزارش‌ها", icon: FileText },
+  { href: "/audit-logs", label: "لاگ فعالیت‌ها", icon: ScrollText },
+  { href: "/errors", label: "خطاها", icon: AlertTriangle },
+  { href: "/settings/telegram", label: "تنظیمات تلگرام", icon: Send },
+  { href: "/settings/youtube", label: "تنظیمات یوتیوب", icon: YoutubeIcon },
+  { href: "/settings/instagram", label: "تنظیمات اینستاگرام", icon: InstagramIcon },
+  { href: "/settings/general", label: "تنظیمات عمومی", icon: Settings },
+];
+
+export function AppShell({
+  user,
+  children,
+}: {
+  user: { name: string; role: string; username?: string | null };
+  children: React.ReactNode;
+}) {
+  const pathname = usePathname();
+  const router = useRouter();
+  const { theme, toggleTheme } = useTheme();
+  const { showToast } = useToast();
+  const [open, setOpen] = useState(false);
+
+  async function logout() {
+    await fetch("/api/auth/logout", { method: "POST" });
+    showToast("با موفقیت خارج شدید.", "info");
+    router.push("/login");
+    router.refresh();
+  }
+
+  return (
+    <div className="flex min-h-screen">
+      <aside
+        className={`fixed inset-y-0 right-0 z-40 w-72 transform border-l border-tg-border bg-tg-surface transition-transform lg:static lg:translate-x-0 ${
+          open ? "translate-x-0" : "translate-x-full lg:translate-x-0"
+        }`}
+      >
+        <div className="flex h-16 items-center gap-3 border-b border-tg-border px-5">
+          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-tg-accent text-white">
+            <Send className="h-5 w-5 -scale-x-100" />
+          </span>
+          <div>
+            <p className="text-sm font-bold text-tg-text">YouTube EmRo</p>
+            <p className="text-[11px] text-tg-secondary">مخزن اصلی: گروه تلگرام</p>
+          </div>
+        </div>
+        <nav className="flex flex-col gap-0.5 overflow-y-auto p-3" style={{ height: "calc(100vh - 4rem)" }}>
+          {NAV_ITEMS.map((item) => {
+            const Icon = item.icon;
+            const active = pathname === item.href || (item.href !== "/dashboard" && pathname?.startsWith(item.href));
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                onClick={() => setOpen(false)}
+                className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition ${
+                  active
+                    ? "bg-tg-accent text-tg-accent-fg"
+                    : "text-tg-secondary hover:bg-tg-hover hover:text-tg-text"
+                }`}
+              >
+                <Icon className="h-[18px] w-[18px]" />
+                <span>{item.label}</span>
+              </Link>
+            );
+          })}
+        </nav>
+      </aside>
+
+      {open && <div className="fixed inset-0 z-30 bg-black/40 lg:hidden" onClick={() => setOpen(false)} />}
+
+      <div className="flex min-h-screen flex-1 flex-col lg:mr-0">
+        <header className="sticky top-0 z-20 flex h-16 items-center justify-between border-b border-tg-border bg-tg-surface/80 px-4 backdrop-blur">
+          <button
+            className="rounded-lg p-2 text-tg-secondary transition hover:bg-tg-hover hover:text-tg-text lg:hidden"
+            onClick={() => setOpen(true)}
+            aria-label="باز کردن منو"
+          >
+            <Menu className="h-5 w-5" />
+          </button>
+          <div className="hidden text-sm text-tg-secondary lg:block">
+            منطقه زمانی: Asia/Tehran · تقویم: جلالی
+          </div>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={toggleTheme}
+              className="rounded-lg p-2 text-tg-secondary transition hover:bg-tg-hover hover:text-tg-text"
+              aria-label="تغییر پوسته"
+            >
+              {theme === "dark" ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+            </button>
+            <div className="hidden text-left sm:block">
+              <p className="text-sm font-semibold text-tg-text">{user.name}</p>
+              <p className="text-xs text-tg-secondary">{ROLE_LABELS_FA[user.role as keyof typeof ROLE_LABELS_FA] ?? user.role}</p>
+            </div>
+            <button
+              onClick={logout}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-tg-hover px-3 py-1.5 text-xs font-medium text-tg-text transition hover:brightness-95 dark:hover:brightness-125"
+            >
+              <LogOut className="h-3.5 w-3.5 -scale-x-100" />
+              خروج
+            </button>
+          </div>
+        </header>
+        <main className="flex-1 p-4 sm:p-6">{children}</main>
+      </div>
+    </div>
+  );
+}

@@ -1,0 +1,88 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Telegram Day palette */
+:root {
+  --tg-bg: #eef2f5;
+  --tg-surface: #ffffff;
+  --tg-hover: #f4f4f5;
+  --tg-border: #dfe3e8;
+  --tg-text: #0f1419;
+  --tg-secondary: #707579;
+  --tg-accent: #3390ec;
+  --tg-accent-hover: #1c89e0;
+  --tg-accent-fg: #ffffff;
+  --tg-accent-soft: #e7f3ff;
+}
+
+/* Telegram Night palette */
+.dark {
+  --tg-bg: #0e1621;
+  --tg-surface: #17212b;
+  --tg-hover: #232e3c;
+  --tg-border: #101921;
+  --tg-text: #ffffff;
+  --tg-secondary: #8a96a3;
+  --tg-accent: #6ab3f3;
+  --tg-accent-hover: #8ec2f5;
+  --tg-accent-fg: #0e1621;
+  --tg-accent-soft: #1f2c3a;
+}
+
+@theme inline {
+  --font-sans: var(--font-vazirmatn), "Vazirmatn", "Tahoma", sans-serif;
+  --color-tg-bg: var(--tg-bg);
+  --color-tg-surface: var(--tg-surface);
+  --color-tg-hover: var(--tg-hover);
+  --color-tg-border: var(--tg-border);
+  --color-tg-text: var(--tg-text);
+  --color-tg-secondary: var(--tg-secondary);
+  --color-tg-accent: var(--tg-accent);
+  --color-tg-accent-hover: var(--tg-accent-hover);
+  --color-tg-accent-fg: var(--tg-accent-fg);
+  --color-tg-accent-soft: var(--tg-accent-soft);
+}
+
+html {
+  color-scheme: light;
+}
+html.dark {
+  color-scheme: dark;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #94a3b8 transparent;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-thumb {
+  background-color: #94a3b8;
+  border-radius: 999px;
+}
+
+body {
+  font-feature-settings: "ss01" on;
+}
+
+.skeleton {
+  background: linear-gradient(90deg, rgba(112, 117, 121, 0.12) 25%, rgba(112, 117, 121, 0.24) 37%, rgba(112, 117, 121, 0.12) 63%);
+  background-size: 400% 100%;
+  animation: skeleton-loading 1.4s ease infinite;
+}
+@keyframes skeleton-loading {
+  0% { background-position: 100% 50%; }
+  100% { background-position: 0 50%; }
+}
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-toast-in {
+  animation: toast-in 0.2s ease-out;
+}

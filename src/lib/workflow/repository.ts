@@ -219,6 +219,32 @@ export interface InstantiateTemplateCommand {
   baseDueAt?: string | Date | null;
 }
 
+export interface UpdateDeliverableCommand {
+  id: string;
+  expectedVersion: number;
+  name?: string;
+  kind?: string | null;
+  assigneeUserId?: string | null;
+  dueAt?: string | Date | null;
+  notes?: string | null;
+  sortOrder?: number;
+  actorUserId: string;
+}
+
+export interface ReorderDeliverablesCommand {
+  programId: string;
+  orderedIds: string[];
+  actorUserId: string;
+}
+
+export interface HistoryFilters {
+  entityType?: string;
+  entityId?: string;
+  actorUserId?: string;
+  page?: number;
+  pageSize?: number;
+}
+
 // ---------------------------------------------------------------------------
 // Port interface
 // ---------------------------------------------------------------------------
@@ -246,6 +272,8 @@ export interface WorkflowDatabasePort {
     publications: WorkflowPublicationRecord[],
     events: WorkflowEventRecord[],
   ): Promise<WorkflowDeliverableRecord[]>;
+  listEvents?(filters?: HistoryFilters): Promise<{ items: WorkflowEventRecord[]; total: number }>;
+  transactReorderDeliverables?(programId: string, orderedIds: string[], events: WorkflowEventRecord[]): Promise<WorkflowDeliverableRecord[]>;
 }
 
 // ---------------------------------------------------------------------------
@@ -425,6 +453,43 @@ export class InMemoryWorkflowPort implements WorkflowDatabasePort {
     }
     for (const e of events) this.events.push(e);
     return deliverables;
+  }
+
+  async listEvents(filters?: HistoryFilters): Promise<{ items: WorkflowEventRecord[]; total: number }> {
+    let filtered = [...this.events];
+    if (filters?.entityType) filtered = filtered.filter((e) => e.entityType === filters.entityType);
+    if (filters?.entityId) filtered = filtered.filter((e) => e.entityId === filters.entityId);
+    if (filters?.actorUserId) filtered = filtered.filter((e) => e.actorUserId === filters.actorUserId);
+    // newest first
+    filtered.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    const total = filtered.length;
+    const page = filters?.page ?? 1;
+    const pageSize = filters?.pageSize ?? 20;
+    const offset = (page - 1) * pageSize;
+    const items = filtered.slice(offset, offset + pageSize);
+    return { items, total };
+  }
+
+  async transactReorderDeliverables(programId: string, orderedIds: string[], events: WorkflowEventRecord[]): Promise<WorkflowDeliverableRecord[]> {
+    // validate all belong to program
+    const programDeliverables = this.deliverables.filter((d) => d.programId === programId);
+    const idsSet = new Set(programDeliverables.map((d) => d.id));
+    if (orderedIds.length !== programDeliverables.length || !orderedIds.every((id) => idsSet.has(id))) {
+      throw new WorkflowRepositoryError("INVALID_TRANSITION" as never, "ترتیب نامعتبر است.");
+    }
+    const updated: WorkflowDeliverableRecord[] = [];
+    const now = new Date();
+    for (let i = 0; i < orderedIds.length; i++) {
+      const id = orderedIds[i];
+      const existing = this.deliverableMap.get(id)!;
+      const next: WorkflowDeliverableRecord = { ...existing, sortOrder: i, version: existing.version + 1, updatedAt: now };
+      this.deliverableMap.set(id, next);
+      const idx = this.deliverables.findIndex((d) => d.id === id);
+      if (idx >= 0) this.deliverables[idx] = next;
+      updated.push(next);
+    }
+    for (const e of events) this.events.push(e);
+    return updated.sort((a, b) => a.sortOrder - b.sortOrder);
   }
 }
 
@@ -633,6 +698,72 @@ function createDrizzleWorkflowPort(): WorkflowDatabasePort {
         if (publications.length) await tx.insert(workflowPublications).values(publications.map(toPublicationInsert) as never);
         if (events.length) await tx.insert(workflowEvents).values(events.map(toEventInsert) as never);
         return deliverables;
+      });
+    },
+
+    async listEvents(filters) {
+      const db = await getDb();
+      const { workflowEvents } = await import("@/db/schema");
+      const { eq, and, desc, sql } = await import("drizzle-orm");
+      const conditions: unknown[] = [];
+      if (filters?.entityType) conditions.push(eq(workflowEvents.entityType, filters.entityType));
+      if (filters?.entityId) conditions.push(eq(workflowEvents.entityId, filters.entityId));
+      if (filters?.actorUserId) conditions.push(eq(workflowEvents.actorUserId, filters.actorUserId));
+      const where = conditions.length ? and(...(conditions as never[])) : undefined;
+      const page = filters?.page ?? 1;
+      const pageSize = filters?.pageSize ?? 20;
+      const offset = (page - 1) * pageSize;
+      const rows = await db
+        .select()
+        .from(workflowEvents)
+        .where(where as never)
+        .orderBy(desc(workflowEvents.createdAt))
+        .limit(pageSize)
+        .offset(offset);
+      const totalRows = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(workflowEvents)
+        .where(where as never);
+      const total = Number((totalRows[0] as unknown as { count: number }).count ?? 0);
+      return {
+        items: rows.map((r) => ({
+          id: (r as unknown as { id: string }).id as string,
+          entityType: ((r as unknown as Record<string, unknown>).entityType as string) ?? ((r as unknown as Record<string, unknown>).entity_type as string),
+          entityId: ((r as unknown as Record<string, unknown>).entityId as string) ?? ((r as unknown as Record<string, unknown>).entity_id as string),
+          action: (r as unknown as { action: string }).action as string,
+          before: ((r as unknown as { before: unknown }).before as Record<string, unknown> | null) ?? null,
+          after: ((r as unknown as { after: unknown }).after as Record<string, unknown> | null) ?? null,
+          actorUserId: ((r as unknown as Record<string, unknown>).actorUserId as string | null) ?? ((r as unknown as Record<string, unknown>).actor_user_id as string | null) ?? null,
+          source: (r as unknown as { source: string }).source as string,
+          reason: ((r as unknown as { reason: string | null }).reason as string | null) ?? null,
+          createdAt: ((r as unknown as Record<string, unknown>).createdAt as Date) ?? ((r as unknown as Record<string, unknown>).created_at as Date),
+        })) as WorkflowEventRecord[],
+        total,
+      };
+    },
+
+    async transactReorderDeliverables(programId, orderedIds, events) {
+      const db = await getDb();
+      const { workflowDeliverables, workflowEvents } = await import("@/db/schema");
+      const { eq, inArray } = await import("drizzle-orm");
+      return db.transaction(async (tx) => {
+        const existing = await tx.select().from(workflowDeliverables).where(eq(workflowDeliverables.programId, programId));
+        const existingIds = new Set(existing.map((r) => r.id as string));
+        if (orderedIds.length !== existing.length || !orderedIds.every((id) => existingIds.has(id))) {
+          throw new WorkflowRepositoryError("INVALID_TRANSITION" as never, "ترتیب نامعتبر است.");
+        }
+        const updates: WorkflowDeliverableRecord[] = [];
+        for (let i = 0; i < orderedIds.length; i++) {
+          const id = orderedIds[i];
+          const [updated] = await tx
+            .update(workflowDeliverables)
+            .set({ sortOrder: i, updatedAt: new Date(), version: (existing.find((r) => (r.id as string) === id) as unknown as { version: number }).version + 1 } as never)
+            .where(eq(workflowDeliverables.id, id) as never)
+            .returning();
+          if (updated) updates.push(mapDeliverableRow(updated));
+        }
+        if (events.length) await tx.insert(workflowEvents).values(events.map(toEventInsert) as never);
+        return updates.sort((a, b) => a.sortOrder - b.sortOrder);
       });
     },
   };
@@ -877,10 +1008,15 @@ export interface WorkflowRepository {
   createProgram(command: CreateProgramCommand): Promise<WorkflowProgramRecord>;
   updateProgram(command: UpdateProgramCommand): Promise<WorkflowProgramRecord>;
   createDeliverable(command: CreateDeliverableCommand): Promise<WorkflowDeliverableRecord>;
+  updateDeliverable(command: UpdateDeliverableCommand): Promise<WorkflowDeliverableRecord>;
+  reorderDeliverables(command: ReorderDeliverablesCommand): Promise<WorkflowDeliverableRecord[]>;
+  getDeliverable(id: string): Promise<WorkflowDeliverableRecord | null>;
+  getPublication(id: string): Promise<WorkflowPublicationRecord | null>;
   transitionDeliverable(command: TransitionDeliverableCommand): Promise<WorkflowDeliverableRecord>;
   transitionPublication(command: TransitionPublicationCommand): Promise<WorkflowPublicationRecord>;
   createTemplate(command: CreateTemplateCommand): Promise<WorkflowTemplateRecord>;
   instantiateTemplate(command: InstantiateTemplateCommand): Promise<WorkflowDeliverableRecord[]>;
+  listHistory(filters: HistoryFilters): Promise<{ items: WorkflowEventRecord[]; total: number; page: number; pageSize: number }>;
 }
 
 function toDate(value: string | Date | null | undefined): Date | null {
@@ -1045,6 +1181,81 @@ export function createWorkflowRepository(port?: WorkflowDatabasePort): WorkflowR
         createdAt: now,
       };
       return dbPort.transactCreateDeliverable(deliverable, event);
+    },
+
+    async updateDeliverable(command) {
+      const now = new Date();
+      const existing = await dbPort.getDeliverable(command.id);
+      if (!existing) throw new WorkflowRepositoryError("NOT_FOUND", "خروجی یافت نشد.");
+      const patch: Partial<WorkflowDeliverableRecord> = { updatedAt: now };
+      if (command.name !== undefined) patch.name = command.name;
+      if (command.kind !== undefined) patch.kind = command.kind;
+      if (command.assigneeUserId !== undefined) patch.assigneeUserId = command.assigneeUserId;
+      if (command.dueAt !== undefined) patch.dueAt = toDate(command.dueAt);
+      if (command.notes !== undefined) patch.notes = command.notes;
+      if (command.sortOrder !== undefined) patch.sortOrder = command.sortOrder;
+      const after = { ...existing, ...patch, version: existing.version + 1, updatedAt: now };
+      const event: WorkflowEventRecord = {
+        id: generateEntityId("WEV"),
+        entityType: "workflow_deliverable",
+        entityId: command.id,
+        action: "updated",
+        before: { ...existing } as unknown as Record<string, unknown>,
+        after: { ...after } as unknown as Record<string, unknown>,
+        actorUserId: command.actorUserId,
+        source: "api",
+        reason: null,
+        createdAt: now,
+      };
+      return dbPort.transactUpdateDeliverable(command.id, command.expectedVersion, patch, event);
+    },
+
+    async reorderDeliverables(command) {
+      const now = new Date();
+      // verify program exists
+      const program = await dbPort.getProgram(command.programId);
+      if (!program) throw new WorkflowRepositoryError("NOT_FOUND", "برنامه یافت نشد.");
+      const events: WorkflowEventRecord[] = command.orderedIds.map((id, idx) => ({
+        id: generateEntityId("WEV"),
+        entityType: "workflow_deliverable",
+        entityId: id,
+        action: "reordered",
+        before: { sortOrder: idx } as unknown as Record<string, unknown>,
+        after: { sortOrder: idx } as unknown as Record<string, unknown>,
+        actorUserId: command.actorUserId,
+        source: "api",
+        reason: null,
+        createdAt: now,
+      }));
+      if (dbPort.transactReorderDeliverables) {
+        return dbPort.transactReorderDeliverables(command.programId, command.orderedIds, events);
+      }
+      // Fallback sequential (for mocked ports without reorder)
+      const deliverables = await dbPort.listDeliverablesForProgram(command.programId);
+      const idsSet = new Set(deliverables.map((d) => d.id));
+      if (command.orderedIds.length !== deliverables.length || !command.orderedIds.every((id) => idsSet.has(id))) {
+        throw new WorkflowRepositoryError("INVALID_TRANSITION" as unknown as "NOT_FOUND", "ترتیب نامعتبر است.");
+      }
+      // naive sequential update - use transactUpdateDeliverable for each but not transactional in mock; still works for tests
+      const results: WorkflowDeliverableRecord[] = [];
+      for (let i = 0; i < command.orderedIds.length; i++) {
+        const id = command.orderedIds[i];
+        const existing = await dbPort.getDeliverable(id);
+        if (!existing) throw new WorkflowRepositoryError("NOT_FOUND", "خروجی یافت نشد.");
+        const patch: Partial<WorkflowDeliverableRecord> = { sortOrder: i, updatedAt: now };
+        const ev = events[i];
+        const updated = await dbPort.transactUpdateDeliverable(id, existing.version, patch, ev);
+        results.push(updated);
+      }
+      return results.sort((a, b) => a.sortOrder - b.sortOrder);
+    },
+
+    async getDeliverable(id) {
+      return dbPort.getDeliverable(id);
+    },
+
+    async getPublication(id) {
+      return dbPort.getPublication(id);
     },
 
     async transitionDeliverable(command) {
@@ -1295,6 +1506,17 @@ export function createWorkflowRepository(port?: WorkflowDatabasePort): WorkflowR
       });
 
       return dbPort.transactInstantiateTemplate(command.programId, deliverables, publications, events);
+    },
+
+    async listHistory(filters) {
+      const page = filters.page ?? 1;
+      const pageSize = filters.pageSize ?? 20;
+      if (dbPort.listEvents) {
+        const { items, total } = await dbPort.listEvents({ ...filters, page, pageSize });
+        return { items, total, page, pageSize };
+      }
+      // fallback for mocked ports without listEvents: empty
+      return { items: [], total: 0, page, pageSize };
     },
   };
 }

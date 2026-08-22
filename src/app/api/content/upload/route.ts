@@ -40,6 +40,7 @@ interface IncomingTarget {
   publishAtJalali?: string | null;
   publishAtUtc?: string | null;
   fields?: Record<string, unknown>;
+  workflowPublicationId?: string | null;
 }
 
 export async function POST(req: Request) {
@@ -196,6 +197,7 @@ export async function POST(req: Request) {
     publish_at_utc: t.publishAtUtc ?? meta.scheduledAtUtc ?? null,
     fields: t.fields ?? {},
     attempts: 0,
+    ...(t.workflowPublicationId ? { workflow_publication_id: t.workflowPublicationId } : {}),
   }));
 
   const { record, telegramSynced } = await createContentRecord({

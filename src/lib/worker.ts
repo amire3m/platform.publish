@@ -23,26 +23,11 @@ import { instagramProvider, refreshInstagramToken } from "./providers/instagram"
 import { mockPublish } from "./providers/mock";
 import { formatJalaliDateTime, nowUtcIso } from "./date/jalali";
 import jwt from "jsonwebtoken";
+import type { PersistedPlatformTarget } from "./content-targets";
 
 const LEASE_MS = 5 * 60 * 1000; // 5 minutes
 const MAX_RETRY = 5;
 const BASE_BACKOFF_MS = 2 * 60 * 1000; // 2 minutes
-
-interface PlatformTarget {
-  [key: string]: unknown;
-  platform: "youtube" | "instagram";
-  account_id: string;
-  content_type: string;
-  status: string;
-  publish_at_utc?: string | null;
-  publish_at_jalali?: string | null;
-  fields?: Record<string, unknown>;
-  attempts?: number;
-  nextRetryAt?: string | null;
-  externalId?: string;
-  permalink?: string;
-  lastError?: string | null;
-}
 
 let tickRunning = false;
 
@@ -141,7 +126,7 @@ function buildMediaProxyUrl(fileId: string): string {
 }
 
 async function processContent(row: typeof content.$inferSelect, opts?: { force?: boolean }) {
-  const targets = (row.platformTargets as unknown as PlatformTarget[]) ?? [];
+  const targets = (row.platformTargets as unknown as PersistedPlatformTarget[]) ?? [];
   const media = (row.media as { telegram_file_id?: string; mime_type?: string; file_name?: string }[]) ?? [];
   const primaryMedia = media[0];
 
@@ -153,7 +138,7 @@ async function processContent(row: typeof content.$inferSelect, opts?: { force?:
   }
   const client = cfg ? new TelegramClient(cfg) : null;
 
-  const updatedTargets: PlatformTarget[] = [];
+  const updatedTargets: PersistedPlatformTarget[] = [];
   const publishResults: Record<string, unknown>[] = Array.isArray(row.publishResults) ? [...row.publishResults] : [];
   let anySuccess = false;
   let anyFailure = false;
@@ -164,7 +149,7 @@ async function processContent(row: typeof content.$inferSelect, opts?: { force?:
       continue;
     }
     const due = opts?.force || !target.publish_at_utc || new Date(target.publish_at_utc) <= new Date();
-    const backoffOk = opts?.force || !target.nextRetryAt || new Date(target.nextRetryAt) <= new Date();
+    const backoffOk = opts?.force || !target.next_retry_at || new Date(target.next_retry_at) <= new Date();
     if (!due || !backoffOk || target.status === "cancelled") {
       updatedTargets.push(target);
       continue;
@@ -172,14 +157,14 @@ async function processContent(row: typeof content.$inferSelect, opts?: { force?:
 
     const attempts = (target.attempts ?? 0) + 1;
     if (attempts > MAX_RETRY) {
-      updatedTargets.push({ ...target, status: "failed", lastError: "حداکثر تعداد تلاش مجدد انجام شد." });
+      updatedTargets.push({ ...target, status: "failed", last_error: "حداکثر تعداد تلاش مجدد انجام شد." });
       anyFailure = true;
       continue;
     }
 
     const [account] = await db.select().from(socialAccounts).where(eq(socialAccounts.id, target.account_id)).limit(1);
     if (!account) {
-      updatedTargets.push({ ...target, status: "failed", attempts, lastError: "حساب مقصد یافت نشد." });
+      updatedTargets.push({ ...target, status: "failed", attempts, last_error: "حساب مقصد یافت نشد." });
       anyFailure = true;
       continue;
     }
@@ -201,7 +186,7 @@ async function processContent(row: typeof content.$inferSelect, opts?: { force?:
         ...target,
         status: "failed",
         attempts,
-        lastError: "فایل اصلی در تلگرام یافت نشد یا اتصال تلگرام برقرار نیست.",
+        last_error: "فایل اصلی در تلگرام یافت نشد یا اتصال تلگرام برقرار نیست.",
       });
       anyFailure = true;
       continue;
@@ -212,13 +197,13 @@ async function processContent(row: typeof content.$inferSelect, opts?: { force?:
       const isMock = account.connectionStatus !== "connected";
 
       const result = isMock
-        ? await mockPublish(target.platform, {
+        ? await mockPublish(target.platform as "youtube" | "instagram", {
             accountExternalId: account.externalAccountId ?? "",
             credentialPayload,
             fileBuffer,
             fileName: primaryMedia.file_name ?? "media",
             mimeType: primaryMedia.mime_type ?? "application/octet-stream",
-            contentType: target.content_type,
+            contentType: (target.content_type as string) ?? "",
             title: row.title,
             description: row.description,
             caption: row.caption,
@@ -233,7 +218,7 @@ async function processContent(row: typeof content.$inferSelect, opts?: { force?:
               fileBuffer,
               fileName: primaryMedia.file_name ?? "media.mp4",
               mimeType: primaryMedia.mime_type ?? "video/mp4",
-              contentType: target.content_type,
+              contentType: (target.content_type as string) ?? "",
               title: row.title,
               description: row.description,
               tags: row.tags as string[],
@@ -248,7 +233,7 @@ async function processContent(row: typeof content.$inferSelect, opts?: { force?:
                 fileBuffer,
                 fileName: primaryMedia.file_name ?? "media",
                 mimeType: primaryMedia.mime_type ?? "image/jpeg",
-                contentType: target.content_type,
+                contentType: (target.content_type as string) ?? "",
                 caption: row.caption,
                 hashtags: row.hashtags as string[],
               },
@@ -268,31 +253,31 @@ async function processContent(row: typeof content.$inferSelect, opts?: { force?:
           ...target,
           status: "published",
           attempts,
-          externalId: result.externalId,
+          external_id: result.externalId,
           permalink: result.permalink,
-          lastError: null,
+          last_error: null,
         });
         anySuccess = true;
       } else {
-        const nextRetryAt = result.retryable
+        const next_retry_at = result.retryable
           ? new Date(Date.now() + BASE_BACKOFF_MS * Math.pow(2, attempts - 1)).toISOString()
           : null;
         updatedTargets.push({
           ...target,
           status: result.retryable && attempts < MAX_RETRY ? "scheduled" : "failed",
           attempts,
-          nextRetryAt,
-          lastError: result.message,
+          next_retry_at,
+          last_error: result.message,
         });
         anyFailure = true;
       }
     } catch (err) {
-      updatedTargets.push({ ...target, status: "failed", attempts, lastError: (err as Error).message });
+      updatedTargets.push({ ...target, status: "failed", attempts, last_error: (err as Error).message });
       anyFailure = true;
     }
   }
 
-  const allDone = updatedTargets.every((t) => ["published", "failed", "cancelled"].includes(t.status));
+  const allDone = updatedTargets.every((t) => ["published", "failed", "cancelled"].includes(t.status as string));
   const allPublished = updatedTargets.every((t) => t.status === "published");
   const newStatus = allPublished ? "published" : allDone ? (anySuccess ? "published" : "failed") : "publishing";
 

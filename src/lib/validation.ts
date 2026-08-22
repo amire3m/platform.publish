@@ -8,6 +8,7 @@ export const platformTargetSchema = z.object({
   publishAtJalali: z.string().nullable().optional(),
   publishAtUtc: z.string().nullable().optional(),
   fields: z.record(z.string(), z.any()).default({}),
+  workflowPublicationId: z.string().min(1).nullable().optional(),
 });
 
 export const createContentSchema = z.object({

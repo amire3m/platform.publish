@@ -518,3 +518,23 @@ export const workflowImportBatches = pgTable(
     ),
   }),
 );
+
+export const workflowImportPreviews = pgTable(
+  "workflow_import_previews",
+  {
+    id: text("id").primaryKey(),
+    actorUserId: text("actor_user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "set null" }),
+    csvSnapshot: text("csv_snapshot").notNull(),
+    csvHash: text("csv_hash").notNull(),
+    mapping: jsonb("mapping").$type<Record<string, unknown>>().notNull(),
+    decisions: jsonb("decisions").$type<Record<string, unknown>>().notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    consumedAt: timestamp("consumed_at", { withTimezone: true }),
+  },
+  (table) => ({
+    expiryIdx: index("workflow_import_preview_expiry_idx").on(table.expiresAt),
+  }),
+);

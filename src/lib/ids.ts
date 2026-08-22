@@ -12,7 +12,24 @@ const analyticsSnapshotSuffix = customAlphabet(
 );
 
 /** Generate spec-shaped human ids like CNT-1405-000001 / EVT-1405-000042. */
-export function generateEntityId(prefix: "CNT" | "EVT" | "ACC" | "USR" | "SNP" | "TPC" | "CRD" | "ANS"): string {
+export function generateEntityId(
+  prefix:
+    | "CNT"
+    | "EVT"
+    | "ACC"
+    | "USR"
+    | "SNP"
+    | "TPC"
+    | "CRD"
+    | "ANS"
+    | "WPR"
+    | "WDL"
+    | "WPB"
+    | "WTM"
+    | "WEV"
+    | "WNT"
+    | "WIB",
+): string {
   const { jy } = todayJalali();
   const suffix = prefix === "ANS" ? analyticsSnapshotSuffix() : legacySuffix();
   return `${prefix}-${jy}-${suffix}`;

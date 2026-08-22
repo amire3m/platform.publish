@@ -16,4 +16,11 @@ describe("generateEntityId", () => {
       Math.log2(ANALYTICS_SNAPSHOT_ID_SUFFIX.alphabet.length),
     ).toBeGreaterThanOrEqual(95);
   });
+
+  it.each(["WPR", "WDL", "WPB", "WTM", "WEV", "WNT", "WIB"] as const)(
+    "generates persisted workflow IDs for %s",
+    (prefix) => {
+      expect(generateEntityId(prefix)).toMatch(new RegExp(`^${prefix}-\\d{4}-\\d{6}$`));
+    },
+  );
 });

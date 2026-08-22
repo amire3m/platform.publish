@@ -4,8 +4,8 @@
 // IMPORTANT ARCHITECTURE NOTE
 // -----------------------------------------------------------------------------
 // Per product requirements, the *private Telegram supergroup* is the system of
-// record for business content, metadata, users, audit trail and analytics
-// snapshots. Every table below is a REBUILDABLE LOCAL INDEX/CACHE that mirrors
+// record for legacy business content, metadata, users, audit trail and analytics
+// snapshots. Those legacy tables are a REBUILDABLE LOCAL INDEX/CACHE that mirrors
 // structured "TGDB|v1" messages that live in Telegram topics. Nothing here is
 // treated as the ultimate source of truth for content data — it exists only to
 // make search, calendars and the publish worker fast. The `telegramMessageIds`
@@ -19,6 +19,7 @@
 // elsewhere only through an opaque `credentialRef` id.
 // -----------------------------------------------------------------------------
 
+import { sql } from "drizzle-orm";
 import {
   bigint,
   boolean,
@@ -230,3 +231,290 @@ export const appSettings = pgTable("app_settings", {
   syncStatus: text("sync_status").notNull().default("unknown"), // ok|degraded|offline|unknown
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+// ---------------------------------------------------------------------------
+// Content workflow (PostgreSQL-authoritative; not rebuilt from Telegram)
+// ---------------------------------------------------------------------------
+export const workflowPrograms = pgTable(
+  "workflow_programs",
+  {
+    id: text("id").primaryKey(),
+    title: text("title").notNull(),
+    seriesName: text("series_name"),
+    ownerUserId: text("owner_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    dueAt: timestamp("due_at", { withTimezone: true }),
+    notes: text("notes"),
+    source: text("source").notNull().default("manual"),
+    sourceRef: text("source_ref"),
+    version: integer("version").notNull().default(1),
+    createdBy: text("created_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
+  },
+  (table) => ({
+    ownerIdx: index("workflow_program_owner_idx").on(table.ownerUserId),
+    dueIdx: index("workflow_program_due_idx").on(table.dueAt),
+    archivedIdx: index("workflow_program_archived_idx").on(table.archivedAt),
+  }),
+);
+
+export const workflowDeliverables = pgTable(
+  "workflow_deliverables",
+  {
+    id: text("id").primaryKey(),
+    programId: text("program_id")
+      .notNull()
+      .references(() => workflowPrograms.id),
+    name: text("name").notNull(),
+    kind: text("kind"),
+    sortOrder: integer("sort_order").notNull().default(0),
+    productionStatus: text("production_status")
+      .notNull()
+      .default("not_started"),
+    assigneeUserId: text("assignee_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    dueAt: timestamp("due_at", { withTimezone: true }),
+    notes: text("notes"),
+    contentId: text("content_id").references(() => content.id),
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
+    version: integer("version").notNull().default(1),
+    createdBy: text("created_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    programIdx: index("workflow_deliverable_program_idx").on(table.programId),
+    assigneeIdx: index("workflow_deliverable_assignee_idx").on(
+      table.assigneeUserId,
+    ),
+    statusIdx: index("workflow_deliverable_status_idx").on(
+      table.productionStatus,
+    ),
+    dueIdx: index("workflow_deliverable_due_idx").on(table.dueAt),
+    contentUnique: uniqueIndex("workflow_deliverable_content_unique").on(
+      table.contentId,
+    ),
+  }),
+);
+
+export const workflowPublications = pgTable(
+  "workflow_publications",
+  {
+    id: text("id").primaryKey(),
+    deliverableId: text("deliverable_id")
+      .notNull()
+      .references(() => workflowDeliverables.id),
+    platform: text("platform").notNull(),
+    socialAccountId: text("social_account_id").references(
+      () => socialAccounts.id,
+    ),
+    status: text("status").notNull().default("waiting_for_production"),
+    createdSource: text("created_source").notNull().default("manual"),
+    terminalOwner: text("terminal_owner"),
+    scheduledAt: timestamp("scheduled_at", { withTimezone: true }),
+    publishedAt: timestamp("published_at", { withTimezone: true }),
+    externalId: text("external_id"),
+    permalink: text("permalink"),
+    lastErrorCode: text("last_error_code"),
+    lastErrorMessage: text("last_error_message"),
+    manualReason: text("manual_reason"),
+    version: integer("version").notNull().default(1),
+    updatedBy: text("updated_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    deliverableIdx: index("workflow_publication_deliverable_idx").on(
+      table.deliverableId,
+    ),
+    statusIdx: index("workflow_publication_status_idx").on(table.status),
+    scheduleIdx: index("workflow_publication_schedule_idx").on(
+      table.scheduledAt,
+    ),
+    accountUnique: uniqueIndex("workflow_publication_account_unique").on(
+      table.deliverableId,
+      table.platform,
+      table.socialAccountId,
+    ),
+    accountlessUnique: uniqueIndex(
+      "workflow_publication_accountless_unique",
+    )
+      .on(table.deliverableId, table.platform)
+      .where(sql`${table.socialAccountId} is null`),
+  }),
+);
+
+export const workflowTemplates = pgTable(
+  "workflow_templates",
+  {
+    id: text("id").primaryKey(),
+    name: text("name").notNull(),
+    description: text("description"),
+    active: boolean("active").notNull().default(true),
+    createdBy: text("created_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
+  },
+  (table) => ({
+    activeIdx: index("workflow_template_active_idx").on(table.active),
+  }),
+);
+
+export const workflowTemplateItems = pgTable(
+  "workflow_template_items",
+  {
+    id: text("id").primaryKey(),
+    templateId: text("template_id")
+      .notNull()
+      .references(() => workflowTemplates.id),
+    name: text("name").notNull(),
+    kind: text("kind"),
+    sortOrder: integer("sort_order").notNull().default(0),
+    destinations: jsonb("destinations")
+      .$type<Array<{ platform: "telegram" | "youtube" | "instagram" }>>()
+      .notNull()
+      .default([]),
+    dueOffsetMinutes: integer("due_offset_minutes"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    templateIdx: index("workflow_template_item_template_idx").on(
+      table.templateId,
+      table.sortOrder,
+    ),
+  }),
+);
+
+export const workflowEvents = pgTable(
+  "workflow_events",
+  {
+    id: text("id").primaryKey(),
+    entityType: text("entity_type").notNull(),
+    entityId: text("entity_id").notNull(),
+    action: text("action").notNull(),
+    before: jsonb("before").$type<Record<string, unknown> | null>(),
+    after: jsonb("after").$type<Record<string, unknown> | null>(),
+    actorUserId: text("actor_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    source: text("source").notNull(),
+    reason: text("reason"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    entityIdx: index("workflow_event_entity_idx").on(
+      table.entityType,
+      table.entityId,
+      table.createdAt,
+    ),
+  }),
+);
+
+export const workflowNotifications = pgTable(
+  "workflow_notifications",
+  {
+    id: text("id").primaryKey(),
+    recipientUserId: text("recipient_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    channel: text("channel").notNull(),
+    eventType: text("event_type").notNull(),
+    payload: jsonb("payload").$type<Record<string, unknown>>().notNull(),
+    idempotencyKey: text("idempotency_key").notNull(),
+    scheduledAt: timestamp("scheduled_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    status: text("status").notNull().default("pending"),
+    attempts: integer("attempts").notNull().default(0),
+    lastError: text("last_error"),
+    claimId: text("claim_id"),
+    claimedAt: timestamp("claimed_at", { withTimezone: true }),
+    readAt: timestamp("read_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    idempotencyUnique: uniqueIndex(
+      "workflow_notification_idempotency_unique",
+    ).on(table.idempotencyKey),
+    deliveryIdx: index("workflow_notification_delivery_idx").on(
+      table.status,
+      table.scheduledAt,
+    ),
+    recipientIdx: index("workflow_notification_recipient_idx").on(
+      table.recipientUserId,
+      table.readAt,
+    ),
+  }),
+);
+
+export const workflowImportBatches = pgTable(
+  "workflow_import_batches",
+  {
+    id: text("id").primaryKey(),
+    sheetId: text("sheet_id").notNull(),
+    sheetGid: text("sheet_gid"),
+    initiatorUserId: text("initiator_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    mapping: jsonb("mapping").$type<Record<string, unknown>>().notNull(),
+    counts: jsonb("counts").$type<Record<string, number>>().notNull(),
+    results: jsonb("results")
+      .$type<Array<Record<string, unknown>>>()
+      .notNull()
+      .default([]),
+    status: text("status").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    statusIdx: index("workflow_import_batch_status_idx").on(
+      table.status,
+      table.createdAt,
+    ),
+  }),
+);

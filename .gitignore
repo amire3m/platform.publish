@@ -17,6 +17,7 @@ coverage/
 
 # Local agent workflow state
 .superpowers/
+.worktrees/
 
 # Logs and temporary files
 *.log

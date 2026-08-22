@@ -6,6 +6,15 @@ vi.mock("@/lib/worker", () => ({
 vi.mock("@/lib/analytics/scheduler", () => ({
   runScheduledAnalyticsSync: vi.fn(),
 }));
+vi.mock("@/lib/workflow/reconciliation", () => ({
+  reconcileWorkflowTargets: vi.fn(),
+}));
+vi.mock("@/lib/workflow/notification-scheduler", () => ({
+  runSchedulerTick: vi.fn(),
+}));
+vi.mock("@/lib/workflow/notifications", () => ({
+  runWorkflowNotificationDelivery: vi.fn(),
+}));
 vi.mock("@/lib/api-helpers", () => ({
   jsonError: (message: string, status = 400) =>
     Response.json({ ok: false, error: message }, { status }),
@@ -15,12 +24,18 @@ vi.mock("@/lib/api-helpers", () => ({
 import { GET, POST } from "@/app/api/cron/tick/route";
 import { runScheduledAnalyticsSync } from "@/lib/analytics/scheduler";
 import { runPublishTick } from "@/lib/worker";
+import { reconcileWorkflowTargets } from "@/lib/workflow/reconciliation";
+import { runSchedulerTick } from "@/lib/workflow/notification-scheduler";
+import { runWorkflowNotificationDelivery } from "@/lib/workflow/notifications";
 
 describe("/api/cron/tick", () => {
   beforeEach(() => {
     process.env.CRON_SECRET = "cron-secret";
     vi.mocked(runPublishTick).mockResolvedValue({ processed: 2, errors: 0 });
     vi.mocked(runScheduledAnalyticsSync).mockResolvedValue({ ran: true, results: [] });
+    vi.mocked(reconcileWorkflowTargets).mockResolvedValue({ reconciled: 0, warnings: 0, processed: 0 });
+    vi.mocked(runSchedulerTick).mockResolvedValue({ enqueued: 0 });
+    vi.mocked(runWorkflowNotificationDelivery).mockResolvedValue({ delivered: 0, failed: 0, skipped: 0 });
   });
 
   afterEach(() => {
@@ -62,13 +77,13 @@ describe("/api/cron/tick", () => {
       headers: { "x-cron-secret": "cron-secret" },
     }));
 
-    expect(await response.json()).toEqual({
+    expect(await response.json()).toEqual(expect.objectContaining({
       ok: true,
-      data: {
+      data: expect.objectContaining({
         publish: { ok: true, value: { processed: 2, errors: 0 } },
         analytics: { ok: true, value: { ran: false, results: [] } },
-      },
-    });
+      }),
+    }));
   });
 
   it("returns both publish and analytics results after an authorized run", async () => {
@@ -83,13 +98,14 @@ describe("/api/cron/tick", () => {
     }));
 
     expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({
+    const body = await response.json();
+    expect(body).toEqual(expect.objectContaining({
       ok: true,
-      data: {
+      data: expect.objectContaining({
         publish: { ok: true, value: { processed: 2, errors: 0 } },
         analytics: { ok: true, value: analytics },
-      },
-    });
+      }),
+    }));
   });
 
   it("runs both jobs independently and returns a secret-safe error outcome", async () => {
@@ -102,10 +118,26 @@ describe("/api/cron/tick", () => {
     const body = await response.json();
 
     expect(runScheduledAnalyticsSync).toHaveBeenCalledOnce();
-    expect(body.data).toEqual({
-      publish: { ok: false, error: "Publish job failed." },
-      analytics: { ok: true, value: { ran: true, results: [] } },
-    });
+    expect(body.data.publish).toEqual({ ok: false, error: "Publish job failed." });
+    expect(body.data.analytics).toEqual({ ok: true, value: { ran: true, results: [] } });
     expect(JSON.stringify(body)).not.toContain("secret detail");
+  });
+
+  it("runs workflow jobs independently and returns notifications failure without affecting publish", async () => {
+    vi.mocked(runWorkflowNotificationDelivery).mockRejectedValue(new Error("notif secret"));
+    vi.mocked(reconcileWorkflowTargets).mockResolvedValue({ reconciled: 1, warnings: 0, processed: 1 });
+
+    const response = await POST(new Request("http://localhost/api/cron/tick", {
+      method: "POST",
+      headers: { "x-cron-secret": "cron-secret" },
+    }));
+    const body = await response.json();
+
+    expect(runPublishTick).toHaveBeenCalledOnce();
+    expect(reconcileWorkflowTargets).toHaveBeenCalledOnce();
+    expect(runWorkflowNotificationDelivery).toHaveBeenCalledOnce();
+    expect(body.data.publish.ok).toBe(true);
+    expect(body.data.notifications.ok).toBe(false);
+    expect(JSON.stringify(body)).not.toContain("notif secret");
   });
 });

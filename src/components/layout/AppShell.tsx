@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import {
   AlertTriangle,
   BarChart3,
+  Bell,
   CalendarDays,
   FileText,
   FolderOpen,
@@ -25,6 +26,7 @@ import {
 import { InstagramIcon, YoutubeIcon } from "@/components/brand-icons";
 import { useTheme, useToast } from "@/components/providers";
 import { ROLE_LABELS_FA } from "@/lib/permissions";
+import { NotificationCenter } from "@/components/workflow/NotificationCenter";
 
 const NAV_ITEMS = [
   { href: "/dashboard", label: "داشبورد", icon: LayoutDashboard },
@@ -56,6 +58,8 @@ export function AppShell({
   const { showToast } = useToast();
   const [open, setOpen] = useState(false);
   const [canViewWorkflow, setCanViewWorkflow] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [showNotifications, setShowNotifications] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -75,6 +79,27 @@ export function AppShell({
     loadPermissions();
     return () => {
       cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function fetchUnread() {
+      try {
+        const res = await fetch("/api/workflow/notifications?limit=1");
+        if (!res.ok) return;
+        const body = await res.json();
+        const count = body?.data?.unreadCount ?? 0;
+        if (!cancelled) setUnreadCount(count);
+      } catch {
+        // ignore
+      }
+    }
+    fetchUnread();
+    const interval = setInterval(fetchUnread, 30000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
     };
   }, []);
 
@@ -145,6 +170,21 @@ export function AppShell({
           </div>
           <div className="flex items-center gap-3">
             <button
+              onClick={() => setShowNotifications((v) => !v)}
+              className="relative rounded-lg p-2 text-tg-secondary transition hover:bg-tg-hover hover:text-tg-text"
+              aria-label="اعلان‌ها"
+            >
+              <Bell className="h-5 w-5" />
+              {unreadCount > 0 && (
+                <span
+                  aria-live="polite"
+                  className="absolute -right-1 -top-1 flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white"
+                >
+                  {unreadCount > 99 ? "99+" : unreadCount}
+                </span>
+              )}
+            </button>
+            <button
               onClick={toggleTheme}
               className="rounded-lg p-2 text-tg-secondary transition hover:bg-tg-hover hover:text-tg-text"
               aria-label="تغییر پوسته"
@@ -165,6 +205,30 @@ export function AppShell({
           </div>
         </header>
         <main className="flex-1 p-4 sm:p-6">{children}</main>
+        {showNotifications && (
+          <div className="fixed inset-0 z-50 flex justify-end bg-black/20" onClick={() => setShowNotifications(false)}>
+            <div
+              className="h-full w-full max-w-sm overflow-y-auto bg-tg-surface p-4 shadow-xl"
+              onClick={(e) => e.stopPropagation()}
+              role="dialog"
+              aria-label="مرکز اعلان‌ها"
+            >
+              <div className="flex items-center justify-between">
+                <h2 className="text-sm font-semibold text-tg-text">مرکز اعلان‌ها</h2>
+                <button
+                  onClick={() => setShowNotifications(false)}
+                  className="rounded p-1 text-tg-secondary hover:bg-tg-hover"
+                  aria-label="بستن"
+                >
+                  ✕
+                </button>
+              </div>
+              <div className="mt-4">
+                <NotificationCenter />
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

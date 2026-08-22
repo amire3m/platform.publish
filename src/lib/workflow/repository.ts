@@ -531,9 +531,9 @@ function createDrizzleWorkflowPort(): WorkflowDatabasePort {
       const db = await getDb();
       const { workflowPrograms, workflowEvents } = await import("@/db/schema");
       return db.transaction(async (tx) => {
-        const [inserted] = await tx.insert(workflowPrograms).values(toProgramInsert(program)).returning();
+        const [inserted] = await tx.insert(workflowPrograms).values(toProgramInsert(program) as never).returning();
         if (!inserted) throw new WorkflowRepositoryError("NOT_FOUND", "خطا در ایجاد برنامه.");
-        await tx.insert(workflowEvents).values(toEventInsert(event));
+        await tx.insert(workflowEvents).values(toEventInsert(event) as never);
         return mapProgramRow(inserted);
       });
     },
@@ -546,11 +546,11 @@ function createDrizzleWorkflowPort(): WorkflowDatabasePort {
         const setPatch = toProgramPatch(patch, expectedVersion);
         const [updated] = await tx
           .update(workflowPrograms)
-          .set(setPatch)
+          .set(setPatch as never)
           .where(and(eq(workflowPrograms.id, id), eq(workflowPrograms.version, expectedVersion)))
           .returning();
         if (updated) {
-          await tx.insert(workflowEvents).values(toEventInsert(event));
+          await tx.insert(workflowEvents).values(toEventInsert(event) as never);
           return mapProgramRow(updated);
         }
         // distinguish not-found vs conflict
@@ -564,9 +564,9 @@ function createDrizzleWorkflowPort(): WorkflowDatabasePort {
       const db = await getDb();
       const { workflowDeliverables, workflowEvents } = await import("@/db/schema");
       return db.transaction(async (tx) => {
-        const [inserted] = await tx.insert(workflowDeliverables).values(toDeliverableInsert(deliverable)).returning();
+        const [inserted] = await tx.insert(workflowDeliverables).values(toDeliverableInsert(deliverable) as never).returning();
         if (!inserted) throw new WorkflowRepositoryError("NOT_FOUND", "خطا در ایجاد خروجی.");
-        await tx.insert(workflowEvents).values(toEventInsert(event));
+        await tx.insert(workflowEvents).values(toEventInsert(event) as never);
         return mapDeliverableRow(inserted);
       });
     },
@@ -579,11 +579,11 @@ function createDrizzleWorkflowPort(): WorkflowDatabasePort {
         const setPatch = toDeliverablePatch(patch, expectedVersion);
         const [updated] = await tx
           .update(workflowDeliverables)
-          .set(setPatch)
+          .set(setPatch as never)
           .where(and(eq(workflowDeliverables.id, id), eq(workflowDeliverables.version, expectedVersion)))
           .returning();
         if (updated) {
-          await tx.insert(workflowEvents).values(toEventInsert(event));
+          await tx.insert(workflowEvents).values(toEventInsert(event) as never);
           return mapDeliverableRow(updated);
         }
         const [existing] = await tx.select({ id: workflowDeliverables.id }).from(workflowDeliverables).where(eq(workflowDeliverables.id, id)).limit(1);
@@ -600,11 +600,11 @@ function createDrizzleWorkflowPort(): WorkflowDatabasePort {
         const setPatch = toPublicationPatch(patch, expectedVersion);
         const [updated] = await tx
           .update(workflowPublications)
-          .set(setPatch)
+          .set(setPatch as never)
           .where(and(eq(workflowPublications.id, id), eq(workflowPublications.version, expectedVersion)))
           .returning();
         if (updated) {
-          await tx.insert(workflowEvents).values(toEventInsert(event));
+          await tx.insert(workflowEvents).values(toEventInsert(event) as never);
           return mapPublicationRow(updated);
         }
         const [existing] = await tx.select({ id: workflowPublications.id }).from(workflowPublications).where(eq(workflowPublications.id, id)).limit(1);
@@ -617,10 +617,10 @@ function createDrizzleWorkflowPort(): WorkflowDatabasePort {
       const db = await getDb();
       const { workflowTemplates, workflowTemplateItems, workflowEvents } = await import("@/db/schema");
       return db.transaction(async (tx) => {
-        const [inserted] = await tx.insert(workflowTemplates).values(toTemplateInsert(template)).returning();
+        const [inserted] = await tx.insert(workflowTemplates).values(toTemplateInsert(template) as never).returning();
         if (!inserted) throw new WorkflowRepositoryError("NOT_FOUND", "خطا در ایجاد الگو.");
-        if (items.length) await tx.insert(workflowTemplateItems).values(items.map(toTemplateItemInsert));
-        await tx.insert(workflowEvents).values(toEventInsert(event));
+        if (items.length) await tx.insert(workflowTemplateItems).values(items.map(toTemplateItemInsert) as never);
+        await tx.insert(workflowEvents).values(toEventInsert(event) as never);
         return mapTemplateRow(inserted);
       });
     },
@@ -629,9 +629,9 @@ function createDrizzleWorkflowPort(): WorkflowDatabasePort {
       const db = await getDb();
       const { workflowDeliverables, workflowPublications, workflowEvents } = await import("@/db/schema");
       return db.transaction(async (tx) => {
-        if (deliverables.length) await tx.insert(workflowDeliverables).values(deliverables.map(toDeliverableInsert));
-        if (publications.length) await tx.insert(workflowPublications).values(publications.map(toPublicationInsert));
-        if (events.length) await tx.insert(workflowEvents).values(events.map(toEventInsert));
+        if (deliverables.length) await tx.insert(workflowDeliverables).values(deliverables.map(toDeliverableInsert) as never);
+        if (publications.length) await tx.insert(workflowPublications).values(publications.map(toPublicationInsert) as never);
+        if (events.length) await tx.insert(workflowEvents).values(events.map(toEventInsert) as never);
         return deliverables;
       });
     },

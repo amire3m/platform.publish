@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   AlertTriangle,
   BarChart3,
@@ -10,6 +10,7 @@ import {
   FileText,
   FolderOpen,
   LayoutDashboard,
+  ListChecks,
   LogOut,
   Menu,
   Moon,
@@ -54,6 +55,28 @@ export function AppShell({
   const { theme, toggleTheme } = useTheme();
   const { showToast } = useToast();
   const [open, setOpen] = useState(false);
+  const [canViewWorkflow, setCanViewWorkflow] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadPermissions() {
+      try {
+        const res = await fetch("/api/auth/me");
+        if (!res.ok) return;
+        const body = await res.json();
+        const permissions: string[] = body?.data?.permissions ?? body?.permissions ?? [];
+        if (!cancelled && Array.isArray(permissions) && permissions.includes("view_workflow")) {
+          setCanViewWorkflow(true);
+        }
+      } catch {
+        // keep hidden on error
+      }
+    }
+    loadPermissions();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   async function logout() {
     await fetch("/api/auth/logout", { method: "POST" });
@@ -61,6 +84,11 @@ export function AppShell({
     router.push("/login");
     router.refresh();
   }
+
+  const workflowNavItem = { href: "/workflow", label: "اتاق انتشار", icon: ListChecks } as const;
+  const visibleNavItems = canViewWorkflow
+    ? ([NAV_ITEMS[0], workflowNavItem, ...NAV_ITEMS.slice(1)] as typeof NAV_ITEMS)
+    : NAV_ITEMS;
 
   return (
     <div className="flex min-h-screen">
@@ -79,7 +107,7 @@ export function AppShell({
           </div>
         </div>
         <nav className="flex flex-col gap-0.5 overflow-y-auto p-3" style={{ height: "calc(100vh - 4rem)" }}>
-          {NAV_ITEMS.map((item) => {
+          {visibleNavItems.map((item) => {
             const Icon = item.icon;
             const active = pathname === item.href || (item.href !== "/dashboard" && pathname?.startsWith(item.href));
             return (

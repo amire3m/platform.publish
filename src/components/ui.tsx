@@ -1,7 +1,7 @@
 "use client";
 
 import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, TextareaHTMLAttributes } from "react";
-import { useEffect } from "react";
+import { useEffect, useId, useRef } from "react";
 import { AlertTriangle, FolderOpen } from "lucide-react";
 
 export function Button({
@@ -134,23 +134,94 @@ export function Modal({
   children: ReactNode;
   footer?: ReactNode;
 }) {
+  const titleId = useId();
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const previouslyFocusedRef = useRef<HTMLElement | null>(null);
+
   useEffect(() => {
+    if (!open) return;
+    previouslyFocusedRef.current = document.activeElement as HTMLElement | null;
+
+    const focusSelector =
+      'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+    const getFocusable = () => {
+      const current = dialogRef.current;
+      if (!current) return [] as HTMLElement[];
+      return Array.from(current.querySelectorAll<HTMLElement>(focusSelector)).filter(
+        (el) => !el.hasAttribute("disabled") && el.getAttribute("aria-hidden") !== "true",
+      );
+    };
+
+    // Initial focus on first enabled control, fallback to dialog itself
+    const initialDialog = dialogRef.current;
+    if (!initialDialog) return;
+    const focusable = getFocusable();
+    const toFocus = focusable[0] ?? initialDialog;
+    // Use microtask to ensure element is visible
+    requestAnimationFrame(() => toFocus.focus());
+
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") {
+        e.preventDefault();
+        onClose();
+        return;
+      }
+      if (e.key === "Tab") {
+        const elements = getFocusable();
+        if (elements.length === 0) {
+          e.preventDefault();
+          return;
+        }
+        const first = elements[0];
+        const last = elements[elements.length - 1];
+        const active = document.activeElement as HTMLElement | null;
+        const currentDialog = dialogRef.current;
+        if (e.shiftKey) {
+          if (active === first || !currentDialog?.contains(active as Node)) {
+            e.preventDefault();
+            last.focus();
+          }
+        } else {
+          if (active === last) {
+            e.preventDefault();
+            first.focus();
+          }
+        }
+      }
     }
-    if (open) document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
+
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+    };
   }, [open, onClose]);
+
+  useEffect(() => {
+    if (open) return;
+    const prev = previouslyFocusedRef.current;
+    if (prev && typeof prev.focus === "function") {
+      // Restore focus after dialog unmounts
+      requestAnimationFrame(() => prev.focus());
+    }
+    previouslyFocusedRef.current = null;
+  }, [open]);
 
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm" onClick={onClose}>
       <div
-        className="w-full max-w-lg rounded-xl border border-tg-border bg-tg-surface p-6 shadow-2xl"
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
+        className="w-full max-w-lg rounded-xl border border-tg-border bg-tg-surface p-6 shadow-2xl outline-none"
         onClick={(e) => e.stopPropagation()}
         dir="rtl"
       >
-        <h3 className="mb-4 text-lg font-bold text-tg-text">{title}</h3>
+        <h3 id={titleId} className="mb-4 text-lg font-bold text-tg-text">
+          {title}
+        </h3>
         <div className="text-sm text-tg-text/80">{children}</div>
         {footer && <div className="mt-6 flex justify-end gap-2">{footer}</div>}
       </div>

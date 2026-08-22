@@ -16,7 +16,7 @@ export async function GET(req: Request) {
   const rows = await db.select().from(content).where(isNotNull(content.scheduledAtUtc));
 
   const events = rows.flatMap((row) => {
-    const targets = (row.platformTargets as { platform: string; account_id: string; content_type: string; status: string; publish_at_utc?: string; publish_at_jalali?: string }[]) ?? [];
+    const targets = (row.platformTargets as { platform: string; account_id: string; content_type: string; status: string; publish_at_utc?: string; publish_at_jalali?: string; workflow_publication_id?: string | null }[]) ?? [];
     return targets
       .filter((t) => {
         if (platform && t.platform !== platform) return false;
@@ -26,6 +26,7 @@ export async function GET(req: Request) {
       })
       .map((t) => ({
         contentId: row.id,
+        publicationId: t.workflow_publication_id ?? null,
         title: row.title || "(بدون عنوان)",
         platform: t.platform,
         accountId: t.account_id,

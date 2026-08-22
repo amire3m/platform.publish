@@ -21,6 +21,7 @@ const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 interface CalendarEvent {
   contentId: string;
+  publicationId?: string | null;
   title: string;
   platform: string;
   accountId: string;
@@ -57,18 +58,28 @@ export default function CalendarPage() {
 
   async function handleDrop(ev: React.DragEvent, jyv: number, jmv: number, jdv: number) {
     ev.preventDefault();
+    const publicationId = ev.dataTransfer.getData("publicationId");
     const contentId = ev.dataTransfer.getData("contentId");
     const timeStr = ev.dataTransfer.getData("time"); // HH:mm
-    if (!contentId) return;
+    if (!publicationId && !contentId) return;
     const [hh, mm] = timeStr.split(":").map(Number);
     const utc = jalaliToUtcIso(jyv, jmv, jdv, hh || 12, mm || 0);
     const pad = (n: number) => String(n).padStart(2, "0");
     const jalaliSlash = `${jyv}/${pad(jmv)}/${pad(jdv)} ${pad(hh || 12)}:${pad(mm || 0)}`;
-    const res = await fetch(`/api/calendar/${contentId}/reschedule`, {
-      method: "PATCH",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ scheduledAtUtc: utc, scheduledAtJalali: jalaliSlash }),
-    });
+    let res: Response;
+    if (publicationId) {
+      res = await fetch(`/api/calendar/targets/${publicationId}/reschedule`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ scheduledAtUtc: utc, scheduledAtJalali: jalaliSlash }),
+      });
+    } else {
+      res = await fetch(`/api/calendar/${contentId}/reschedule`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ scheduledAtUtc: utc, scheduledAtJalali: jalaliSlash }),
+      });
+    }
     const json = await res.json();
     if (!json.ok) return showToast(json.error ?? "تغییر زمان ناموفق بود.", "error");
     showToast("زمان انتشار تغییر کرد.", "success");
@@ -146,10 +157,11 @@ export default function CalendarPage() {
                   <div className="mt-1 space-y-1">
                     {dayEvents.slice(0, 3).map((e) => (
                       <div
-                        key={`${e.contentId}-${e.platform}`}
+                        key={`${e.contentId}-${e.platform}-${e.publicationId ?? ""}` }
                         draggable
                         onDragStart={(ev) => {
                           ev.dataTransfer.setData("contentId", e.contentId);
+                          if (e.publicationId) ev.dataTransfer.setData("publicationId", e.publicationId);
                           ev.dataTransfer.setData("time", e.publishAtJalali?.split(" ")[1] ?? "12:00");
                         }}
                         className={`cursor-move truncate rounded px-1 py-0.5 text-[10px] ${
@@ -177,7 +189,7 @@ export default function CalendarPage() {
           {events
             .sort((a, b) => new Date(a.publishAtUtc).getTime() - new Date(b.publishAtUtc).getTime())
             .map((e) => (
-              <Link key={`${e.contentId}-${e.platform}`} href={`/content/${e.contentId}`} className="flex items-center justify-between p-3 text-sm hover:bg-tg-hover">
+              <Link key={`${e.contentId}-${e.platform}-${e.publicationId ?? ""}`} href={`/content/${e.contentId}`} className="flex items-center justify-between p-3 text-sm hover:bg-tg-hover">
                 <div className="flex items-center gap-2">
                   <span className="text-tg-secondary">
                     {e.platform === "youtube" ? <YoutubeIcon className="h-4 w-4 text-red-500" /> : <InstagramIcon className="h-4 w-4 text-fuchsia-500" />}

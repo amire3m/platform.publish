@@ -56,11 +56,16 @@ export const rescheduleSchema = z.object({
 export const bulkRescheduleSchema = z.object({
   items: z
     .array(
-      z.object({
-        contentId: z.string(),
-        scheduledAtJalali: z.string(),
-        scheduledAtUtc: z.string(),
-      }),
+      z
+        .object({
+          contentId: z.string().optional(),
+          publicationId: z.string().optional(),
+          scheduledAtJalali: z.string(),
+          scheduledAtUtc: z.string(),
+        })
+        .refine((v) => Boolean(v.contentId || v.publicationId), {
+          message: "حداقل یکی از contentId یا publicationId الزامی است.",
+        }),
     )
     .min(1),
 });

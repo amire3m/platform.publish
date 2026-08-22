@@ -24,6 +24,7 @@ import { mockPublish } from "./providers/mock";
 import { formatJalaliDateTime, nowUtcIso } from "./date/jalali";
 import jwt from "jsonwebtoken";
 import type { PersistedPlatformTarget } from "./content-targets";
+import { reflectTargetState } from "./workflow/target-adapter";
 
 const LEASE_MS = 5 * 60 * 1000; // 5 minutes
 const MAX_RETRY = 5;
@@ -114,6 +115,29 @@ async function doTick() {
   return { processed, errors };
 }
 
+async function tryReflectWorkflowTarget(target: PersistedPlatformTarget): Promise<void> {
+  const publicationId = target.workflow_publication_id as string | undefined;
+  if (!publicationId) return;
+  try {
+    const { db: dbRef } = await import("@/db");
+    const { workflowPublications, workflowDeliverables } = await import("@/db/schema");
+    const { eq } = await import("drizzle-orm");
+    const [pub] = await dbRef.select().from(workflowPublications).where(eq(workflowPublications.id, publicationId)).limit(1);
+    if (!pub) return;
+    const deliverableId = (pub as unknown as { deliverableId: string; deliverable_id?: string }).deliverableId ?? (pub as unknown as { deliverable_id: string }).deliverable_id;
+    const [del] = deliverableId
+      ? await dbRef.select().from(workflowDeliverables).where(eq(workflowDeliverables.id, deliverableId)).limit(1)
+      : [null];
+    const productionStatus = ((del as unknown as { productionStatus?: string; production_status?: string } | null)?.productionStatus ??
+      (del as unknown as { production_status?: string } | null)?.production_status ?? "ready") as string;
+    await reflectTargetState(
+      { publicationId, target, productionStatus, publication: pub as unknown as Record<string, unknown> },
+    );
+  } catch (err) {
+    console.error("[worker] workflow reflect failed:", (err as Error).message);
+  }
+}
+
 async function getMediaBytes(client: TelegramClient, fileId: string): Promise<Buffer> {
   return client.downloadFile(fileId);
 }
@@ -192,6 +216,16 @@ async function processContent(row: typeof content.$inferSelect, opts?: { force?:
       continue;
     }
 
+    // Reflect publishing for keyed workflow targets (claim) before provider invocation
+    if (target.workflow_publication_id) {
+      try {
+        const publishingTarget: PersistedPlatformTarget = { ...target, status: "publishing" };
+        await tryReflectWorkflowTarget(publishingTarget);
+      } catch (err) {
+        console.error("[worker] workflow claim reflect failed:", (err as Error).message);
+      }
+    }
+
     try {
       const fileBuffer = await getMediaBytes(client, primaryMedia.telegram_file_id);
       const isMock = account.connectionStatus !== "connected";
@@ -249,31 +283,56 @@ async function processContent(row: typeof content.$inferSelect, opts?: { force?:
       });
 
       if (result.ok) {
-        updatedTargets.push({
+        const reflected: PersistedPlatformTarget = {
           ...target,
           status: "published",
           attempts,
           external_id: result.externalId,
           permalink: result.permalink,
           last_error: null,
-        });
+        };
+        updatedTargets.push(reflected);
         anySuccess = true;
+        // reflect workflow after success
+        if (reflected.workflow_publication_id) {
+          try {
+            await tryReflectWorkflowTarget(reflected);
+          } catch (err) {
+            console.error("[worker] workflow reflect after success failed:", (err as Error).message);
+          }
+        }
       } else {
         const next_retry_at = result.retryable
           ? new Date(Date.now() + BASE_BACKOFF_MS * Math.pow(2, attempts - 1)).toISOString()
           : null;
-        updatedTargets.push({
+        const reflected: PersistedPlatformTarget = {
           ...target,
           status: result.retryable && attempts < MAX_RETRY ? "scheduled" : "failed",
           attempts,
           next_retry_at,
           last_error: result.message,
-        });
+        };
+        updatedTargets.push(reflected);
         anyFailure = true;
+        if (reflected.workflow_publication_id) {
+          try {
+            await tryReflectWorkflowTarget(reflected);
+          } catch (err) {
+            console.error("[worker] workflow reflect after failure failed:", (err as Error).message);
+          }
+        }
       }
     } catch (err) {
-      updatedTargets.push({ ...target, status: "failed", attempts, last_error: (err as Error).message });
+      const reflected: PersistedPlatformTarget = { ...target, status: "failed", attempts, last_error: (err as Error).message };
+      updatedTargets.push(reflected);
       anyFailure = true;
+      if (reflected.workflow_publication_id) {
+        try {
+          await tryReflectWorkflowTarget(reflected);
+        } catch (e) {
+          console.error("[worker] workflow reflect after exception failed:", (e as Error).message);
+        }
+      }
     }
   }
 

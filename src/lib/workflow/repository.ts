@@ -237,6 +237,19 @@ export interface ReorderDeliverablesCommand {
   actorUserId: string;
 }
 
+export interface WorkflowImportBatchRecord {
+  id: string;
+  sheetId: string;
+  sheetGid: string | null;
+  initiatorUserId: string | null;
+  mapping: Record<string, unknown>;
+  counts: Record<string, number>;
+  results: Array<Record<string, unknown>>;
+  status: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 export interface HistoryFilters {
   entityType?: string;
   entityId?: string;
@@ -274,6 +287,11 @@ export interface WorkflowDatabasePort {
   ): Promise<WorkflowDeliverableRecord[]>;
   listEvents?(filters?: HistoryFilters): Promise<{ items: WorkflowEventRecord[]; total: number }>;
   transactReorderDeliverables?(programId: string, orderedIds: string[], events: WorkflowEventRecord[]): Promise<WorkflowDeliverableRecord[]>;
+
+  // Import batches (transactional failure reporting)
+  createImportBatch?(batch: WorkflowImportBatchRecord): Promise<WorkflowImportBatchRecord>;
+  updateImportBatch?(id: string, patch: Partial<WorkflowImportBatchRecord>): Promise<WorkflowImportBatchRecord>;
+  getImportBatch?(id: string): Promise<WorkflowImportBatchRecord | null>;
 }
 
 // ---------------------------------------------------------------------------
@@ -286,6 +304,10 @@ export class InMemoryWorkflowPort implements WorkflowDatabasePort {
   events: WorkflowEventRecord[] = [];
   templates: WorkflowTemplateRecord[] = [];
   templateItems: WorkflowTemplateItemRecord[] = [];
+  batches: WorkflowImportBatchRecord[] = [];
+  // for import-service transactional failure injection
+  failOnRow?: number | null;
+  private batchMap = new Map<string, WorkflowImportBatchRecord>();
 
   private programMap = new Map<string, WorkflowProgramRecord>();
   private deliverableMap = new Map<string, WorkflowDeliverableRecord>();
@@ -490,6 +512,26 @@ export class InMemoryWorkflowPort implements WorkflowDatabasePort {
     }
     for (const e of events) this.events.push(e);
     return updated.sort((a, b) => a.sortOrder - b.sortOrder);
+  }
+
+  async createImportBatch(batch: WorkflowImportBatchRecord): Promise<WorkflowImportBatchRecord> {
+    this.batchMap.set(batch.id, batch);
+    this.batches.push(batch);
+    return batch;
+  }
+
+  async updateImportBatch(id: string, patch: Partial<WorkflowImportBatchRecord>): Promise<WorkflowImportBatchRecord> {
+    const existing = this.batchMap.get(id);
+    if (!existing) throw new WorkflowRepositoryError("NOT_FOUND", "batch یافت نشد.");
+    const updated = { ...existing, ...patch, updatedAt: (patch.updatedAt as Date) ?? new Date() };
+    this.batchMap.set(id, updated);
+    const idx = this.batches.findIndex((b) => b.id === id);
+    if (idx >= 0) this.batches[idx] = updated;
+    return updated;
+  }
+
+  async getImportBatch(id: string): Promise<WorkflowImportBatchRecord | null> {
+    return this.batchMap.get(id) ?? null;
   }
 }
 
@@ -765,6 +807,32 @@ function createDrizzleWorkflowPort(): WorkflowDatabasePort {
         if (events.length) await tx.insert(workflowEvents).values(events.map(toEventInsert) as never);
         return updates.sort((a, b) => a.sortOrder - b.sortOrder);
       });
+    },
+
+    async createImportBatch(batch) {
+      const db = await getDb();
+      const { workflowImportBatches } = await import("@/db/schema");
+      const [inserted] = await db.insert(workflowImportBatches).values(batch as never).returning();
+      return inserted as unknown as WorkflowImportBatchRecord;
+    },
+    async updateImportBatch(id, patch) {
+      const db = await getDb();
+      const { workflowImportBatches } = await import("@/db/schema");
+      const { eq } = await import("drizzle-orm");
+      const [updated] = await db
+        .update(workflowImportBatches)
+        .set({ ...patch, updatedAt: new Date() } as never)
+        .where(eq(workflowImportBatches.id, id) as never)
+        .returning();
+      if (!updated) throw new WorkflowRepositoryError("NOT_FOUND", "batch یافت نشد.");
+      return updated as unknown as WorkflowImportBatchRecord;
+    },
+    async getImportBatch(id) {
+      const db = await getDb();
+      const { workflowImportBatches } = await import("@/db/schema");
+      const { eq } = await import("drizzle-orm");
+      const [row] = await db.select().from(workflowImportBatches).where(eq(workflowImportBatches.id, id)).limit(1);
+      return (row as unknown as WorkflowImportBatchRecord) ?? null;
     },
   };
 }

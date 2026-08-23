@@ -18,7 +18,9 @@ export type Permission =
   | "update_assigned_deliverables"
   | "manage_publications"
   | "manage_workflow_templates"
-  | "import_workflow";
+  | "import_workflow"
+  | "view_mail"
+  | "manage_mail";
 
 export type Role = "owner" | "manager" | "editor" | "publisher" | "analyst" | "viewer";
 
@@ -42,6 +44,8 @@ export const ALL_PERMISSIONS: Permission[] = [
   "manage_publications",
   "manage_workflow_templates",
   "import_workflow",
+  "view_mail",
+  "manage_mail",
 ];
 
 export const ROLE_LABELS_FA: Record<Role, string> = {

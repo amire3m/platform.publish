@@ -13,6 +13,7 @@ import {
   LayoutDashboard,
   ListChecks,
   LogOut,
+  Mail,
   Menu,
   Moon,
   PlusCircle,
@@ -58,6 +59,7 @@ export function AppShell({
   const { showToast } = useToast();
   const [open, setOpen] = useState(false);
   const [canViewWorkflow, setCanViewWorkflow] = useState(false);
+  const [canViewMail, setCanViewMail] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const [showNotifications, setShowNotifications] = useState(false);
 
@@ -69,8 +71,9 @@ export function AppShell({
         if (!res.ok) return;
         const body = await res.json();
         const permissions: string[] = body?.data?.permissions ?? body?.permissions ?? [];
-        if (!cancelled && Array.isArray(permissions) && permissions.includes("view_workflow")) {
-          setCanViewWorkflow(true);
+        if (!cancelled && Array.isArray(permissions)) {
+          if (permissions.includes("view_workflow")) setCanViewWorkflow(true);
+          if (permissions.includes("view_mail") || permissions.includes("manage_mail")) setCanViewMail(true);
         }
       } catch {
         // keep hidden on error
@@ -111,9 +114,11 @@ export function AppShell({
   }
 
   const workflowNavItem = { href: "/workflow", label: "اتاق انتشار", icon: ListChecks } as const;
-  const visibleNavItems = canViewWorkflow
+  const mailNavItem = { href: "/inbox", label: "صندوق", icon: Mail } as const;
+  const withWorkflow = canViewWorkflow
     ? ([NAV_ITEMS[0], workflowNavItem, ...NAV_ITEMS.slice(1)] as typeof NAV_ITEMS)
     : NAV_ITEMS;
+  const visibleNavItems = canViewMail ? ([...withWorkflow.slice(0, 2), mailNavItem, ...withWorkflow.slice(2)] as typeof NAV_ITEMS) : withWorkflow;
 
   return (
     <div className="flex min-h-screen">

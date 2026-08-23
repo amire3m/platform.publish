@@ -10,6 +10,7 @@ import {
   CalendarDays,
   FileText,
   FolderOpen,
+  Images,
   LayoutDashboard,
   ListChecks,
   LogOut,
@@ -62,6 +63,7 @@ export function AppShell({
   const [canViewWorkflow, setCanViewWorkflow] = useState(false);
   const [canViewMail, setCanViewMail] = useState(false);
   const [canViewContentRoom, setCanViewContentRoom] = useState(false);
+  const [canViewAssets, setCanViewAssets] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const [showNotifications, setShowNotifications] = useState(false);
 
@@ -77,6 +79,7 @@ export function AppShell({
           if (permissions.includes("view_workflow")) setCanViewWorkflow(true);
           if (permissions.includes("view_mail") || permissions.includes("manage_mail")) setCanViewMail(true);
           if (permissions.includes("view_content_room")) setCanViewContentRoom(true);
+          if (permissions.includes("view_assets")) setCanViewAssets(true);
         }
       } catch {
         // keep hidden on error
@@ -119,13 +122,17 @@ export function AppShell({
   const workflowNavItem = { href: "/workflow", label: "اتاق انتشار", icon: ListChecks } as const;
   const mailNavItem = { href: "/inbox", label: "صندوق", icon: Mail } as const;
   const contentRoomNavItem = { href: "/content-room", label: "اتاق محتوا", icon: Package } as const;
+  const assetsNavItem = { href: "/assets", label: "کتابخانه", icon: Images } as const;
   const withWorkflow = canViewWorkflow
     ? ([NAV_ITEMS[0], workflowNavItem, ...NAV_ITEMS.slice(1)] as typeof NAV_ITEMS)
     : NAV_ITEMS;
   const withContentRoom = canViewContentRoom
     ? ([withWorkflow[0], contentRoomNavItem, ...withWorkflow.slice(1)] as typeof NAV_ITEMS)
     : withWorkflow;
-  const visibleNavItems = canViewMail ? ([...withContentRoom.slice(0, 2), mailNavItem, ...withContentRoom.slice(2)] as typeof NAV_ITEMS) : withContentRoom;
+  const withAssets = canViewAssets
+    ? ([withContentRoom[0], assetsNavItem, ...withContentRoom.slice(1)] as typeof NAV_ITEMS)
+    : withContentRoom;
+  const visibleNavItems = canViewMail ? ([...withAssets.slice(0, 2), mailNavItem, ...withAssets.slice(2)] as typeof NAV_ITEMS) : withAssets;
 
   return (
     <div className="flex min-h-screen">

@@ -44,6 +44,12 @@ const STATUS_ORDER: Record<ContentStatus, number> = {
   ready_to_send: 6,
 };
 
+export function deriveIsCold(archivedAt: Date | null | undefined): boolean {
+  if (!archivedAt) return false;
+  const cutoff = Date.now() - 90 * 24 * 60 * 60 * 1000;
+  return archivedAt.getTime() < cutoff;
+}
+
 // ---------------------------------------------------------------------------
 // Errors
 // ---------------------------------------------------------------------------
@@ -73,6 +79,8 @@ export interface ContentProductRecord {
   updatedAt: Date;
   dueAt: Date | null;
   notes: string | null;
+  archivedAt: Date | null;
+  isCold?: boolean;
 }
 
 export interface ContentPartRecord {
@@ -96,6 +104,10 @@ export interface ProductFilters {
   productType?: string;
   channel?: string;
   status?: string;
+  includeArchived?: boolean;
+  dateFrom?: string | Date | null;
+  dateTo?: string | Date | null;
+  sort?: string;
 }
 
 export interface ProductScope {
@@ -154,6 +166,11 @@ export interface ContentRoomDatabasePort {
     patch: Partial<ContentProductRecord>,
     event: ContentRoomEventRecord,
   ): Promise<ContentProductRecord>;
+  transactArchiveProduct?(
+    id: string,
+    archivedAt: Date | null,
+    event: ContentRoomEventRecord,
+  ): Promise<ContentProductRecord>;
   getPart?(id: string): Promise<ContentPartRecord | null>;
   transactUpdatePartFile?(
     partId: string,
@@ -176,9 +193,14 @@ export class InMemoryContentRoomPort implements ContentRoomDatabasePort {
 
   async listProducts(filters?: ProductFilters): Promise<ContentProductRecord[]> {
     let result = [...this.products];
+    // default exclude archived
+    if (!filters?.includeArchived) {
+      result = result.filter((p) => !p.archivedAt);
+    }
     if (filters?.search) {
       const q = filters.search.toLowerCase();
-      result = result.filter((p) => p.title.toLowerCase().includes(q));
+      // search title and notes
+      result = result.filter((p) => p.title.toLowerCase().includes(q) || (p.notes ?? "").toLowerCase().includes(q));
     }
     if (filters?.productType) {
       result = result.filter((p) => p.productType === filters.productType);
@@ -189,20 +211,36 @@ export class InMemoryContentRoomPort implements ContentRoomDatabasePort {
     if (filters?.status) {
       result = result.filter((p) => p.status === filters.status);
     }
-    // newest first
-    result.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    if (filters?.dateFrom) {
+      const from = new Date(filters.dateFrom as string);
+      if (!Number.isNaN(from.getTime())) result = result.filter((p) => p.createdAt >= from);
+    }
+    if (filters?.dateTo) {
+      const to = new Date(filters.dateTo as string);
+      if (!Number.isNaN(to.getTime())) result = result.filter((p) => p.createdAt <= to);
+    }
+    // attach isCold
+    result = result.map((p) => ({ ...p, isCold: deriveIsCold(p.archivedAt) }));
+    // sorting: support sort param; default newest first
+    if (filters?.sort === "oldest") {
+      result.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+    } else {
+      result.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    }
     return result;
   }
 
   async getProduct(id: string): Promise<ContentProductRecord | null> {
-    return this.productMap.get(id) ?? null;
+    const p = this.productMap.get(id) ?? null;
+    if (!p) return null;
+    return { ...p, isCold: deriveIsCold(p.archivedAt) };
   }
 
   async getProductDetail(id: string): Promise<ContentProductDetail | null> {
     const product = this.productMap.get(id) ?? null;
     if (!product) return null;
     const parts = this.partsByProduct.get(id) ?? [];
-    return { ...product, parts: [...parts].sort((a, b) => a.partNumber - b.partNumber) };
+    return { ...product, isCold: deriveIsCold(product.archivedAt), parts: [...parts].sort((a, b) => a.partNumber - b.partNumber) };
   }
 
   async listPartsForProduct(productId: string): Promise<ContentPartRecord[]> {
@@ -239,6 +277,25 @@ export class InMemoryContentRoomPort implements ContentRoomDatabasePort {
       ...patch,
       version: existing.version + 1,
       updatedAt: (patch.updatedAt as Date) ?? new Date(),
+    };
+    this.productMap.set(id, updated);
+    const idx = this.products.findIndex((p) => p.id === id);
+    if (idx >= 0) this.products[idx] = updated;
+    this.events.push(event);
+    event.after = { ...updated } as unknown as Record<string, unknown>;
+    return { ...updated, isCold: deriveIsCold(updated.archivedAt) };
+  }
+
+  async transactArchiveProduct(id: string, archivedAt: Date | null, event: ContentRoomEventRecord): Promise<ContentProductRecord> {
+    const existing = this.productMap.get(id);
+    if (!existing) throw new ContentRoomRepositoryError("NOT_FOUND", "محصول یافت نشد.");
+    const now = new Date();
+    const updated: ContentProductRecord = {
+      ...existing,
+      archivedAt,
+      isCold: deriveIsCold(archivedAt),
+      version: existing.version + 1,
+      updatedAt: now,
     };
     this.productMap.set(id, updated);
     const idx = this.products.findIndex((p) => p.id === id);
@@ -295,14 +352,26 @@ function createDrizzleContentRoomPort(): ContentRoomDatabasePort {
     async listProducts(filters) {
       const db = await getDb();
       const { contentProducts } = await import("@/db/schema");
-      const { eq, and, sql } = await import("drizzle-orm");
+      const { eq, and, sql, isNull, gte, lte } = await import("drizzle-orm");
       const conditions: unknown[] = [];
+      if (!filters?.includeArchived) {
+        conditions.push(isNull(contentProducts.archivedAt));
+      }
       if (filters?.search) {
-        conditions.push(sql`${contentProducts.title} ILIKE ${"%" + filters.search + "%"}`);
+        const term = "%" + filters.search + "%";
+        conditions.push(sql`(${contentProducts.title} ILIKE ${term} OR ${contentProducts.notes} ILIKE ${term})`);
       }
       if (filters?.productType) conditions.push(eq(contentProducts.productType, filters.productType));
       if (filters?.channel) conditions.push(eq(contentProducts.channel, filters.channel));
       if (filters?.status) conditions.push(eq(contentProducts.status, filters.status));
+      if (filters?.dateFrom) {
+        const d = new Date(filters.dateFrom as string);
+        if (!Number.isNaN(d.getTime())) conditions.push(gte(contentProducts.createdAt, d));
+      }
+      if (filters?.dateTo) {
+        const d = new Date(filters.dateTo as string);
+        if (!Number.isNaN(d.getTime())) conditions.push(lte(contentProducts.createdAt, d));
+      }
       const rows = conditions.length
         ? await db
             .select()
@@ -408,6 +477,25 @@ function createDrizzleContentRoomPort(): ContentRoomDatabasePort {
       return row ? mapPartRow(row as unknown as Record<string, unknown>) : null;
     },
 
+    async transactArchiveProduct(id, archivedAt, event) {
+      const db = await getDb();
+      const { contentProducts, workflowEvents } = await import("@/db/schema");
+      const { eq } = await import("drizzle-orm");
+      return db.transaction(async (tx) => {
+        const [existingRow] = await tx.select().from(contentProducts).where(eq(contentProducts.id, id)).limit(1);
+        if (!existingRow) throw new ContentRoomRepositoryError("NOT_FOUND", "محصول یافت نشد.");
+        const existing = existingRow as unknown as { version: number };
+        const [updated] = await tx
+          .update(contentProducts)
+          .set({ archivedAt, updatedAt: new Date(), version: existing.version + 1 } as never)
+          .where(eq(contentProducts.id, id))
+          .returning();
+        if (!updated) throw new ContentRoomRepositoryError("NOT_FOUND", "محصول یافت نشد.");
+        await tx.insert(workflowEvents).values(toEventInsert(event) as never);
+        return mapProductRow(updated as unknown as Record<string, unknown>);
+      });
+    },
+
     async transactUpdatePartFile(partId, expectedVersion, patch, event) {
       const db = await getDb();
       const { contentParts, workflowEvents } = await import("@/db/schema");
@@ -452,6 +540,7 @@ function createDrizzleContentRoomPort(): ContentRoomDatabasePort {
 // Helpers
 // ---------------------------------------------------------------------------
 function mapProductRow(row: Record<string, unknown>): ContentProductRecord {
+  const archivedAt = (row.archivedAt as Date | null) ?? (row.archived_at as Date | null) ?? null;
   return {
     id: row.id as string,
     title: row.title as string,
@@ -465,6 +554,8 @@ function mapProductRow(row: Record<string, unknown>): ContentProductRecord {
     updatedAt: (row.updatedAt as Date) ?? (row.updated_at as Date),
     dueAt: (row.dueAt as Date | null) ?? (row.due_at as Date | null) ?? null,
     notes: (row.notes as string | null) ?? null,
+    archivedAt,
+    isCold: deriveIsCold(archivedAt),
   };
 }
 
@@ -496,6 +587,7 @@ function toProductInsert(p: ContentProductRecord): Record<string, unknown> {
     updatedAt: p.updatedAt,
     dueAt: p.dueAt,
     notes: p.notes,
+    archivedAt: p.archivedAt ?? null,
   };
 }
 
@@ -508,6 +600,7 @@ function toProductPatch(patch: Partial<ContentProductRecord>, expectedVersion: n
   if (patch.status !== undefined) out.status = patch.status;
   if (patch.notes !== undefined) out.notes = patch.notes;
   if (patch.dueAt !== undefined) out.dueAt = patch.dueAt;
+  if (patch.archivedAt !== undefined) out.archivedAt = patch.archivedAt;
   out.version = expectedVersion + 1;
   out.updatedAt = patch.updatedAt ?? new Date();
   return out;
@@ -579,6 +672,8 @@ export interface ContentRoomRepository {
   getProduct(id: string): Promise<ContentProductDetail | null>;
   createProduct(command: CreateProductCommand): Promise<ContentProductDetail>;
   updateProductStatus(command: UpdateProductStatusCommand): Promise<ContentProductRecord>;
+  archiveProduct(command: { id: string; actorUserId: string }): Promise<ContentProductRecord>;
+  unarchiveProduct(command: { id: string; actorUserId: string }): Promise<ContentProductRecord>;
   getParts(productId: string): Promise<ContentPartRecord[]>;
   getPart?(id: string): Promise<ContentPartRecord | null>;
   updatePartFile?(command: { partId: string; fileRef?: string | null; coverFileRef?: string | null; expectedVersion?: number | null; actorUserId: string }): Promise<ContentPartRecord>;
@@ -634,6 +729,8 @@ export function createContentRoomRepository(port?: ContentRoomDatabasePort): Con
         updatedAt: now,
         dueAt: toDate(command.dueAt),
         notes: command.notes ?? null,
+        archivedAt: null,
+        isCold: false,
       };
       const parts: ContentPartRecord[] = [];
       for (let i = 1; i <= command.partsCount; i++) {
@@ -690,10 +787,57 @@ export function createContentRoomRepository(port?: ContentRoomDatabasePort): Con
       return dbPort.transactUpdateProduct(command.id, command.expectedVersion, patch, event);
     },
 
+    async archiveProduct(command) {
+      const existing = await dbPort.getProduct(command.id);
+      if (!existing) throw new ContentRoomRepositoryError("NOT_FOUND", "محصول یافت نشد.");
+      if (existing.archivedAt) throw new ContentRoomRepositoryError("INVALID_TRANSITION", "محصول قبلا آرشیو شده است.");
+      const now = new Date();
+      const event: ContentRoomEventRecord = {
+        id: generateEntityId("WEV"),
+        entityType: "content_product",
+        entityId: command.id,
+        action: "archived",
+        before: { ...existing } as unknown as Record<string, unknown>,
+        after: { ...existing, archivedAt: now, version: existing.version + 1, updatedAt: now } as unknown as Record<string, unknown>,
+        actorUserId: command.actorUserId,
+        source: "api",
+        reason: null,
+        createdAt: now,
+      };
+      if (dbPort.transactArchiveProduct) {
+        return dbPort.transactArchiveProduct(command.id, now, event);
+      }
+      // fallback via transactUpdateProduct
+      return dbPort.transactUpdateProduct(command.id, existing.version, { archivedAt: now, updatedAt: now } as unknown as Partial<ContentProductRecord>, event);
+    },
+
+    async unarchiveProduct(command) {
+      const existing = await dbPort.getProduct(command.id);
+      if (!existing) throw new ContentRoomRepositoryError("NOT_FOUND", "محصول یافت نشد.");
+      if (!existing.archivedAt) throw new ContentRoomRepositoryError("INVALID_TRANSITION", "محصول آرشیو نیست.");
+      const now = new Date();
+      const event: ContentRoomEventRecord = {
+        id: generateEntityId("WEV"),
+        entityType: "content_product",
+        entityId: command.id,
+        action: "unarchived",
+        before: { ...existing } as unknown as Record<string, unknown>,
+        after: { ...existing, archivedAt: null, version: existing.version + 1, updatedAt: now } as unknown as Record<string, unknown>,
+        actorUserId: command.actorUserId,
+        source: "api",
+        reason: null,
+        createdAt: now,
+      };
+      if (dbPort.transactArchiveProduct) {
+        return dbPort.transactArchiveProduct(command.id, null, event);
+      }
+      return dbPort.transactUpdateProduct(command.id, existing.version, { archivedAt: null, updatedAt: now } as unknown as Partial<ContentProductRecord>, event);
+    },
+
     async getPart(id) {
       if (dbPort.getPart) return dbPort.getPart(id);
       // fallback search via list
-      const allProducts = await dbPort.listProducts();
+      const allProducts = await dbPort.listProducts({ includeArchived: true } as never);
       for (const p of allProducts) {
         const parts = await dbPort.listPartsForProduct(p.id);
         const found = parts.find((x) => x.id === id);

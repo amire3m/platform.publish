@@ -8,9 +8,11 @@ import { contentStatusPresentation } from "@/lib/content-room/presentation";
 
 interface Props {
   products: readonly ContentRoomProductSummary[];
+  onArchive?: (product: ContentRoomProductSummary) => void;
+  onUnarchive?: (product: ContentRoomProductSummary) => void;
 }
 
-export function ContentRoomTable({ products }: Props) {
+export function ContentRoomTable({ products, onArchive, onUnarchive }: Props) {
   return (
     <div className="hidden lg:block" dir="rtl">
       <Card className="overflow-hidden p-0">
@@ -25,6 +27,7 @@ export function ContentRoomTable({ products }: Props) {
                 <th className="px-3 py-3 text-right font-semibold">وضعیت</th>
                 <th className="px-3 py-3 text-right font-semibold">پیشرفت</th>
                 <th className="px-3 py-3 text-right font-semibold">اقدام بعدی</th>
+                <th className="px-3 py-3 text-center font-semibold">آرشیو</th>
               </tr>
             </thead>
             <tbody>
@@ -74,6 +77,25 @@ export function ContentRoomTable({ products }: Props) {
                       <span className="inline-flex items-center rounded-full bg-tg-hover px-2 py-1 text-xs font-medium text-tg-text">
                         {next ?? "—"}
                       </span>
+                    </td>
+                    <td className="px-3 py-3 text-center">
+                      {p.archivedAt ? (
+                        <button
+                          onClick={() => onUnarchive?.(p)}
+                          className="rounded-full bg-amber-500/15 px-3 py-1 text-xs font-medium text-amber-700 hover:bg-amber-500/25 dark:text-amber-300"
+                          aria-label={`بازگردانی ${p.title}`}
+                        >
+                          بازگردانی{p.isCold ? " · سرد" : ""}
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => onArchive?.(p)}
+                          className="rounded-full bg-slate-500/10 px-3 py-1 text-xs font-medium text-slate-600 hover:bg-slate-500/20 dark:text-slate-300"
+                          aria-label={`آرشیو ${p.title}`}
+                        >
+                          آرشیو
+                        </button>
+                      )}
                     </td>
                   </tr>
                 );

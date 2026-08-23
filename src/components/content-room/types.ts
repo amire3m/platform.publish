@@ -15,6 +15,8 @@ export interface ContentRoomProductSummary {
   updatedAt?: string | Date | null;
   dueAt?: string | Date | null;
   notes?: string | null;
+  archivedAt?: string | Date | null;
+  isCold?: boolean | null;
 }
 
 export interface ContentPart {
@@ -38,4 +40,8 @@ export interface ContentRoomFilters {
   productType: string;
   channel: string;
   status: string;
+  dateFrom?: string;
+  dateTo?: string;
+  includeArchived?: boolean;
+  sort?: string;
 }

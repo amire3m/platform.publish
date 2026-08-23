@@ -38,12 +38,20 @@ export async function handleProductsRequest(
       const channel = url.searchParams.get("channel") ?? undefined;
       const status = url.searchParams.get("status") ?? undefined;
       const search = url.searchParams.get("query") ?? url.searchParams.get("search") ?? url.searchParams.get("q") ?? undefined;
+      const includeArchived = url.searchParams.get("includeArchived") === "true" || url.searchParams.get("includeArchived") === "1";
+      const dateFrom = url.searchParams.get("dateFrom") ?? undefined;
+      const dateTo = url.searchParams.get("dateTo") ?? undefined;
+      const sort = url.searchParams.get("sort") ?? undefined;
 
-      const filters: Record<string, string | undefined> = {};
+      const filters: Record<string, string | boolean | undefined> = {};
       if (productType) filters.productType = productType;
       if (channel) filters.channel = channel;
       if (status) filters.status = status;
       if (search) filters.search = search;
+      if (includeArchived) filters.includeArchived = true;
+      if (dateFrom) filters.dateFrom = dateFrom;
+      if (dateTo) filters.dateTo = dateTo;
+      if (sort) filters.sort = sort;
 
       const products = await deps.repository.listProducts(
         filters as never,

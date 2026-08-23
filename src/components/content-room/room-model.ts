@@ -35,9 +35,11 @@ export function filterProducts(
   const status = filters.status ?? "";
 
   return products.filter((p) => {
+    if (!filters.includeArchived && p.archivedAt) return false;
     if (hasQuery) {
       const title = (p.title ?? "").toLowerCase();
-      if (!title.includes(query)) return false;
+      const notes = (p.notes ?? "").toLowerCase();
+      if (!title.includes(query) && !notes.includes(query)) return false;
     }
     if (productType && p.productType !== productType) return false;
     if (channel && p.channel !== channel) return false;
@@ -52,6 +54,10 @@ export function contentRoomFilters(overrides: Partial<ContentRoomFilters> = {}):
     productType: overrides.productType ?? "",
     channel: overrides.channel ?? "",
     status: overrides.status ?? "",
+    dateFrom: overrides.dateFrom ?? "",
+    dateTo: overrides.dateTo ?? "",
+    includeArchived: overrides.includeArchived ?? false,
+    sort: overrides.sort ?? "",
   };
 }
 

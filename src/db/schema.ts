@@ -561,11 +561,13 @@ export const contentProducts = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
     dueAt: timestamp("due_at", { withTimezone: true }),
     notes: text("notes"),
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
   },
   (table) => ({
     productTypeIdx: index("content_product_type_idx").on(table.productType),
     channelIdx: index("content_product_channel_idx").on(table.channel),
     statusIdx: index("content_product_status_idx").on(table.status),
+    archivedIdx: index("content_product_archived_idx").on(table.archivedAt),
   }),
 );
 

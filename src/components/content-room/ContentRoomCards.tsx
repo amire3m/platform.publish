@@ -8,9 +8,11 @@ import { contentStatusPresentation } from "@/lib/content-room/presentation";
 
 interface Props {
   products: readonly ContentRoomProductSummary[];
+  onArchive?: (product: ContentRoomProductSummary) => void;
+  onUnarchive?: (product: ContentRoomProductSummary) => void;
 }
 
-export function ContentRoomCards({ products }: Props) {
+export function ContentRoomCards({ products, onArchive, onUnarchive }: Props) {
   return (
     <div className="grid gap-4 lg:hidden" dir="rtl">
       {products.map((p) => {
@@ -63,6 +65,23 @@ export function ContentRoomCards({ products }: Props) {
                 <p className="text-tg-secondary">اقدام بعدی</p>
                 <p className="font-medium text-tg-text">{next ?? "—"}</p>
               </div>
+            </div>
+            <div className="flex gap-2 pt-1">
+              {p.archivedAt ? (
+                <button
+                  onClick={() => onUnarchive?.(p)}
+                  className="flex-1 rounded-lg bg-amber-500/15 py-2 text-xs font-medium text-amber-700 hover:bg-amber-500/25 dark:text-amber-300"
+                >
+                  بازگردانی{p.isCold ? " · آرشیو سرد" : ""}
+                </button>
+              ) : (
+                <button
+                  onClick={() => onArchive?.(p)}
+                  className="flex-1 rounded-lg bg-slate-500/10 py-2 text-xs font-medium text-slate-600 hover:bg-slate-500/15 dark:text-slate-300"
+                >
+                  آرشیو
+                </button>
+              )}
             </div>
           </Card>
         );

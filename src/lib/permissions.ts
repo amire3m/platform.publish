@@ -26,7 +26,8 @@ export type Permission =
   | "manage_content_room"
   | "manage_channels"
   | "view_dashboard"
-  | "view_assets";
+  | "view_assets"
+  | "view_archive";
 
 export type Role = "owner" | "manager" | "editor" | "publisher" | "analyst" | "viewer";
 
@@ -58,6 +59,7 @@ export const ALL_PERMISSIONS: Permission[] = [
   "manage_channels",
   "view_dashboard",
   "view_assets",
+  "view_archive",
 ];
 
 export const ROLE_LABELS_FA: Record<Role, string> = {
@@ -92,6 +94,7 @@ export const ROLE_DEFAULT_PERMISSIONS: Record<Role, Permission[]> = {
     "manage_channels",
     "view_dashboard",
     "view_assets",
+    "view_archive",
   ],
   editor: [
     "view_content",
@@ -105,8 +108,8 @@ export const ROLE_DEFAULT_PERMISSIONS: Record<Role, Permission[]> = {
     "view_assets",
   ],
   publisher: ["view_content", "publish_now", "schedule_content", "view_analytics", "view_workflow", "manage_publications", "view_content_room", "view_assets"],
-  analyst: ["view_content", "view_analytics", "export_data", "view_workflow", "view_content_room", "view_assets"],
-  viewer: ["view_content", "view_workflow", "view_content_room", "view_assets"],
+  analyst: ["view_content", "view_analytics", "export_data", "view_workflow", "view_content_room", "view_assets", "view_archive"],
+  viewer: ["view_content", "view_workflow", "view_content_room", "view_assets", "view_archive"],
 };
 
 export interface PermissionSubject {

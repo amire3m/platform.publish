@@ -13,5 +13,6 @@ export async function GET() {
     telegramId: user.telegramId,
     permissions: Array.from(effectivePermissions(user)),
     allowedAccountIds: user.allowedAccountIds,
+    allowedChannels: (user as unknown as { allowedChannels?: string[] }).allowedChannels ?? [],
   });
 }

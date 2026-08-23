@@ -301,11 +301,27 @@ export async function handleDashboardSummaryRequest(
     if (!d.assigneeUserId) continue;
     deliverableCountByUser.set(d.assigneeUserId, (deliverableCountByUser.get(d.assigneeUserId) ?? 0) + 1);
   }
+  // overdue per user: content overdue (by createdBy) + deliverable overdue (by assignee)
+  const overdueCountByUser = new Map<string, number>();
+  for (const p of overdueProducts) {
+    const creator = products.find((prod) => prod.id === p.id)?.createdBy;
+    if (!creator) continue;
+    overdueCountByUser.set(creator, (overdueCountByUser.get(creator) ?? 0) + 1);
+  }
+  for (const d of deliverables) {
+    if (!d.assigneeUserId || !d.dueAt) continue;
+    const dueTime = d.dueAt instanceof Date ? d.dueAt.getTime() : new Date(d.dueAt as string).getTime();
+    if (!Number.isFinite(dueTime) || dueTime >= nowTime) continue;
+    if (d.productionStatus === "ready" || d.productionStatus === "cancelled") continue;
+    if (d.archivedAt) continue;
+    overdueCountByUser.set(d.assigneeUserId, (overdueCountByUser.get(d.assigneeUserId) ?? 0) + 1);
+  }
 
   // union of user ids that have workload or exist as users
   const workloadUserIds = new Set<string>([
     ...contentCountByUser.keys(),
     ...deliverableCountByUser.keys(),
+    ...overdueCountByUser.keys(),
   ]);
 
   // Also include all known users with zero workload for completeness? Only workload>0 to keep attention focused.
@@ -319,6 +335,7 @@ export async function handleDashboardSummaryRequest(
       name: userMap.get(uid)?.name ?? null,
       assignedContents: contentCountByUser.get(uid) ?? 0,
       assignedDeliverables: deliverableCountByUser.get(uid) ?? 0,
+      overdue: overdueCountByUser.get(uid) ?? 0,
     }))
     // sort by total workload desc, then userId asc for stability
     .sort((a, b) => b.assignedContents + b.assignedDeliverables - (a.assignedContents + a.assignedDeliverables) || a.userId.localeCompare(b.userId))
@@ -328,7 +345,7 @@ export async function handleDashboardSummaryRequest(
 
   // Keep only users with at least one assignment OR if no assignments at all, keep all users (so empty state is visible)
   const hasAnyWorkload = [...contentCountByUser.values(), ...deliverableCountByUser.values()].some((v) => v > 0);
-  const filteredWorkload = hasAnyWorkload ? teamWorkload.filter((w) => w.assignedContents > 0 || w.assignedDeliverables > 0) : teamWorkload;
+  const filteredWorkload = hasAnyWorkload ? teamWorkload.filter((w) => w.assignedContents > 0 || w.assignedDeliverables > 0 || w.overdue > 0) : teamWorkload;
 
   // --- attention ---
   const attention = {

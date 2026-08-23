@@ -47,6 +47,7 @@ export const users = pgTable("users", {
   active: boolean("active").notNull().default(true),
   allowedAccountIds: jsonb("allowed_account_ids").$type<string[]>().notNull().default([]),
   allowedActions: jsonb("allowed_actions").$type<string[]>().notNull().default([]),
+  allowedChannels: jsonb("allowed_channels").$type<string[]>().notNull().default([]),
   avatarUrl: text("avatar_url"),
   isOwnerProtected: boolean("is_owner_protected").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

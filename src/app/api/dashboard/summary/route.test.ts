@@ -11,6 +11,8 @@ function makeDeps(overrides: Partial<DashboardSummaryDependencies> = {}): Dashbo
     fetchPublications: vi.fn().mockResolvedValue([]),
     fetchUsers: vi.fn().mockResolvedValue([]),
     fetchMailUnread: vi.fn().mockResolvedValue(0),
+    fetchYoutubeSummary: vi.fn().mockResolvedValue({ totalViews30d: 0, byChannel: [], topVideos: [] }),
+    fetchInstagramSummary: vi.fn().mockResolvedValue({ status: "awaiting_connection", byPage: [], connectedCount: 0 }),
     now: () => new Date("2026-08-20T00:00:00.000Z"),
     ...overrides,
   } as unknown as DashboardSummaryDependencies;
@@ -166,5 +168,65 @@ describe("GET /api/dashboard/summary", () => {
     expect(body.data.kpis.contentProductsTotal).toBe(0);
     expect(body.data.kpis.programsTotal).toBe(0);
     expect(body.data.kpis.progress?.empty).toBe(true);
+    // youtube/instagram grace handling
+    expect(body.data.youtube).toEqual({ totalViews30d: 0, byChannel: [], topVideos: [] });
+    expect(body.data.instagram).toEqual({ status: "awaiting_connection", byPage: [], connectedCount: 0 });
+  });
+
+  it("returns youtube summary with totalViews30d, byChannel and topVideos (handles empty gracefully)", async () => {
+    const youtube = {
+      totalViews30d: 15000,
+      byChannel: [
+        { channelId: "UC1", label: "کانال یک", views: 10000 },
+        { channelId: "UC2", label: "کانال دو", views: 5000 },
+      ],
+      topVideos: [
+        { videoId: "vid1", title: "ویدیو ۱", views: 7000, channel: "کانال یک" },
+        { videoId: "vid2", title: "ویدیو ۲", views: 3000, channel: "کانال دو" },
+      ],
+    };
+    const deps = makeDeps({
+      fetchYoutubeSummary: vi.fn().mockResolvedValue(youtube as never),
+      fetchInstagramSummary: vi.fn().mockResolvedValue({ status: "awaiting_connection", byPage: [], connectedCount: 0 } as never),
+    });
+    const res = await handleDashboardSummaryRequest(new Request("http://test/api/dashboard/summary"), deps);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.data.youtube).toEqual(youtube);
+    expect(body.data.youtube.totalViews30d).toBe(15000);
+    expect(body.data.youtube.byChannel).toHaveLength(2);
+    expect(body.data.youtube.topVideos[0].videoId).toBe("vid1");
+    // instagram placeholder
+    expect(body.data.instagram.status).toBe("awaiting_connection");
+    expect(body.data.instagram.byPage).toEqual([]);
+  });
+
+  it("returns instagram placeholder when not connected and connected status when accounts exist", async () => {
+    const depsAwaiting = makeDeps({
+      fetchInstagramSummary: vi.fn().mockResolvedValue({ status: "awaiting_connection", byPage: [], connectedCount: 0 } as never),
+    });
+    const res1 = await handleDashboardSummaryRequest(new Request("http://test/api/dashboard/summary"), depsAwaiting);
+    expect((await res1.json()).data.instagram).toEqual({ status: "awaiting_connection", byPage: [], connectedCount: 0 });
+
+    const depsConnected = makeDeps({
+      fetchInstagramSummary: vi.fn().mockResolvedValue({ status: "connected", byPage: [{ pageId: "ig1", label: "پیج تست", views: 0 }], connectedCount: 1 } as never),
+    });
+    const res2 = await handleDashboardSummaryRequest(new Request("http://test/api/dashboard/summary"), depsConnected);
+    const data2 = (await res2.json()).data;
+    expect(data2.instagram.status).toBe("connected");
+    expect(data2.instagram.byPage).toHaveLength(1);
+    expect(data2.instagram.connectedCount).toBe(1);
+  });
+
+  it("handles youtube fetch failure gracefully (returns zeros)", async () => {
+    const deps = makeDeps({
+      fetchYoutubeSummary: vi.fn().mockRejectedValue(new Error("db down")) as never,
+      fetchInstagramSummary: vi.fn().mockRejectedValue(new Error("db down")) as never,
+    });
+    const res = await handleDashboardSummaryRequest(new Request("http://test/api/dashboard/summary"), deps);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.data.youtube).toEqual({ totalViews30d: 0, byChannel: [], topVideos: [] });
+    expect(body.data.instagram).toEqual({ status: "awaiting_connection", byPage: [], connectedCount: 0 });
   });
 });

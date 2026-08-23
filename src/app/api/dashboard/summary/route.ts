@@ -48,6 +48,32 @@ export interface UserSummary {
   name?: string | null;
 }
 
+export interface YoutubeChannelViews {
+  channelId: string;
+  label: string;
+  views: number;
+}
+
+export interface YoutubeTopVideo {
+  videoId: string;
+  title: string;
+  views: number;
+  channel: string;
+  channelId?: string;
+}
+
+export interface YoutubeSummary {
+  totalViews30d: number;
+  byChannel: YoutubeChannelViews[];
+  topVideos: YoutubeTopVideo[];
+}
+
+export interface InstagramSummary {
+  status: "awaiting_connection" | "connected";
+  byPage: Array<{ pageId: string; label: string; views: number }>;
+  connectedCount: number;
+}
+
 export interface DashboardSummaryDependencies {
   requireDashboardAccess: () => Promise<{ user: unknown | null; response: Response | null }>;
   fetchContentProducts: () => Promise<ContentProductSummary[]>;
@@ -56,6 +82,8 @@ export interface DashboardSummaryDependencies {
   fetchPublications: () => Promise<WorkflowPublicationSummary[]>;
   fetchUsers: () => Promise<UserSummary[]>;
   fetchMailUnread: (account: "info" | "support") => Promise<number>;
+  fetchYoutubeSummary?: (now: Date) => Promise<YoutubeSummary>;
+  fetchInstagramSummary?: () => Promise<InstagramSummary>;
   now: () => Date;
 }
 
@@ -156,6 +184,116 @@ async function defaultFetchMailUnread(_account: "info" | "support"): Promise<num
   return 0;
 }
 
+async function defaultFetchYoutubeSummary(now: Date): Promise<YoutubeSummary> {
+  try {
+    const windowStart = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    // Prefer analytics repository (unifies youtube_analytics_snapshots / analytics_snapshots)
+    const { analyticsRepository } = await import("@/lib/analytics/repository");
+    const rows = await analyticsRepository.readSnapshots({
+      startDateInclusive: windowStart,
+      endDateExclusive: now,
+    });
+    if (!rows || rows.length === 0) {
+      // fallback: direct drizzle query if repository empty (e.g. no join metadata)
+      return { totalViews30d: 0, byChannel: [], topVideos: [] };
+    }
+    const accountRows = rows.filter((r) => (r as unknown as { scopeType: string }).scopeType === "account");
+    const contentRows = rows.filter((r) => (r as unknown as { scopeType: string }).scopeType === "content");
+
+    let byChannelMap = new Map<string, { label: string; views: number }>();
+    let total = 0;
+
+    if (accountRows.length > 0) {
+      for (const r of accountRows as unknown as Array<{ accountId: string; channelId: string; channelTitle: string; views: number }>) {
+        const channelId = (r.channelId ?? r.accountId) as string;
+        const label = (r.channelTitle ?? channelId) as string;
+        const v = Number((r as unknown as { views: number }).views ?? 0);
+        total += v;
+        const existing = byChannelMap.get(channelId) ?? { label, views: 0 };
+        // keep first label if conflict
+        existing.views += v;
+        byChannelMap.set(channelId, existing);
+      }
+    } else if (contentRows.length > 0) {
+      for (const r of contentRows as unknown as Array<{ accountId: string; channelId: string; channelTitle: string; views: number }>) {
+        const channelId = (r.channelId ?? r.accountId) as string;
+        const label = (r.channelTitle ?? channelId) as string;
+        const v = Number((r as unknown as { views: number }).views ?? 0);
+        total += v;
+        const existing = byChannelMap.get(channelId) ?? { label, views: 0 };
+        existing.views += v;
+        byChannelMap.set(channelId, existing);
+      }
+    }
+
+    if (total === 0 && rows.length > 0) {
+      for (const r of rows as unknown as Array<{ views: number }>) total += Number(r.views ?? 0);
+      if (byChannelMap.size === 0) {
+        const fallback = new Map<string, { label: string; views: number }>();
+        for (const r of rows as unknown as Array<{ accountId: string; channelId: string; channelTitle: string; views: number }>) {
+          const cid = (r.channelId ?? r.accountId) as string;
+          const lab = (r.channelTitle ?? cid) as string;
+          const v = Number(r.views ?? 0);
+          const e = fallback.get(cid) ?? { label: lab, views: 0 };
+          e.views += v;
+          fallback.set(cid, e);
+        }
+        byChannelMap = fallback;
+      }
+    }
+
+    const byChannel: YoutubeChannelViews[] = [...byChannelMap.entries()]
+      .map(([channelId, { label, views }]) => ({ channelId, label, views }))
+      .sort((a, b) => b.views - a.views);
+
+    const videoMap = new Map<string, { title: string; channel: string; channelId: string; views: number }>();
+    for (const r of contentRows as unknown as Array<{ videoId: string; scopeId: string; title: string; contentTitle: string | null; channelTitle: string; channelId: string; accountId: string; views: number }>) {
+      const vid = (r.videoId ?? r.scopeId) as string;
+      if (!vid) continue;
+      const title = (r.title ?? r.contentTitle ?? vid) as string;
+      const channel = (r.channelTitle ?? r.channelId ?? "") as string;
+      const channelId = (r.channelId ?? r.accountId ?? "") as string;
+      const v = Number(r.views ?? 0);
+      const existing = videoMap.get(vid);
+      if (existing) existing.views += v;
+      else videoMap.set(vid, { title, channel, channelId, views: v });
+    }
+
+    const topVideos: YoutubeTopVideo[] = [...videoMap.entries()]
+      .map(([videoId, val]) => ({ videoId, ...val }))
+      .sort((a, b) => b.views - a.views || a.videoId.localeCompare(b.videoId))
+      .slice(0, 5);
+
+    return { totalViews30d: total, byChannel, topVideos };
+  } catch {
+    return { totalViews30d: 0, byChannel: [], topVideos: [] };
+  }
+}
+
+async function defaultFetchInstagramSummary(): Promise<InstagramSummary> {
+  try {
+    const { db } = await import("@/db");
+    const { socialAccounts } = await import("@/db/schema");
+    const { eq, and } = await import("drizzle-orm");
+    const rows = await db
+      .select({ id: socialAccounts.id, displayName: socialAccounts.displayName })
+      .from(socialAccounts)
+      .where(and(eq(socialAccounts.platform, "instagram"), eq(socialAccounts.connectionStatus, "connected")));
+    const connectedCount = rows.length;
+    if (connectedCount === 0) {
+      return { status: "awaiting_connection", byPage: [], connectedCount: 0 };
+    }
+    // Instagram analytics not yet available — placeholder with per-page 0 views
+    return {
+      status: "connected",
+      byPage: rows.map((r) => ({ pageId: r.id, label: r.displayName ?? r.id, views: 0 })),
+      connectedCount,
+    };
+  } catch {
+    return { status: "awaiting_connection", byPage: [], connectedCount: 0 };
+  }
+}
+
 const defaultDependencies: DashboardSummaryDependencies = {
   requireDashboardAccess: defaultRequireDashboardAccess,
   fetchContentProducts: defaultFetchContentProducts,
@@ -164,6 +302,8 @@ const defaultDependencies: DashboardSummaryDependencies = {
   fetchPublications: defaultFetchPublications,
   fetchUsers: defaultFetchUsers,
   fetchMailUnread: defaultFetchMailUnread,
+  fetchYoutubeSummary: defaultFetchYoutubeSummary,
+  fetchInstagramSummary: defaultFetchInstagramSummary,
   now: () => new Date(),
 };
 
@@ -180,7 +320,14 @@ export async function handleDashboardSummaryRequest(
   const now = deps.now();
   const nowTime = now.getTime();
 
-  const [products, programs, deliverables, publications, users, mailInfo, mailSupport] = await Promise.all([
+  const youtubePromise = deps.fetchYoutubeSummary
+    ? deps.fetchYoutubeSummary(now).catch(() => ({ totalViews30d: 0, byChannel: [], topVideos: [] }) as YoutubeSummary)
+    : Promise.resolve({ totalViews30d: 0, byChannel: [], topVideos: [] } as YoutubeSummary);
+  const instagramPromise = deps.fetchInstagramSummary
+    ? deps.fetchInstagramSummary().catch(() => ({ status: "awaiting_connection", byPage: [], connectedCount: 0 }) as InstagramSummary)
+    : Promise.resolve({ status: "awaiting_connection", byPage: [], connectedCount: 0 } as InstagramSummary);
+
+  const [products, programs, deliverables, publications, users, mailInfo, mailSupport, youtube, instagram] = await Promise.all([
     deps.fetchContentProducts(),
     deps.fetchPrograms(),
     deps.fetchDeliverables(),
@@ -188,6 +335,8 @@ export async function handleDashboardSummaryRequest(
     deps.fetchUsers(),
     deps.fetchMailUnread("info"),
     deps.fetchMailUnread("support"),
+    youtubePromise,
+    instagramPromise,
   ]);
 
   // --- content_products aggregates ---
@@ -383,6 +532,8 @@ export async function handleDashboardSummaryRequest(
     attention,
     teamWorkload: filteredWorkload,
     mailUnread,
+    youtube,
+    instagram,
     // also expose workflow breakdowns for convenience (not required but useful)
     workflow: {
       programsCount,

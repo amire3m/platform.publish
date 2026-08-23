@@ -2,11 +2,12 @@
 
 import useSWR from "swr";
 import Link from "next/link";
-import { AlertTriangle, BarChart3, Clock3, Mail, Package, TrendingUp, XCircle } from "lucide-react";
+import { AlertTriangle, BarChart3, Clock3, Eye, Mail, Package, TrendingUp, XCircle } from "lucide-react";
 import { Card, EmptyState, ErrorState, Skeleton } from "@/components/ui";
 import { fetchWorkflowApi } from "@/lib/workflow/client";
 import { CHANNELS, getChannelLabelFa } from "@/lib/channels";
 import { formatJalaliDateTime } from "@/lib/date/jalali";
+import { InstagramIcon, YoutubeIcon } from "@/components/brand-icons";
 
 type IconType = React.ComponentType<{ className?: string }>;
 
@@ -31,6 +32,8 @@ interface DashboardSummary {
   };
   teamWorkload: Array<{ userId: string; name: string | null; assignedContents: number; assignedDeliverables: number; overdue: number }>;
   mailUnread: { info: number; support: number; total: number };
+  youtube: { totalViews30d: number; byChannel: Array<{ channelId: string; label: string; views: number }>; topVideos: Array<{ videoId: string; title: string; views: number; channel: string; channelId?: string }> };
+  instagram: { status: "awaiting_connection" | "connected"; byPage: Array<{ pageId: string; label: string; views: number }>; connectedCount: number };
 }
 
 const STATUS_LABELS_FA: Record<string, string> = {
@@ -249,6 +252,116 @@ export default function DashboardPage() {
             )}
           </div>
         </div>
+      </Card>
+
+      {/* YouTube 30d */}
+      <Card>
+        <h2 className="mb-3 flex items-center gap-2 font-semibold text-tg-text">
+          <YoutubeIcon className="h-4 w-4 text-rose-500" aria-hidden="true" />
+          بازدید یوتیوب ۳۰ روزه
+          <span className="ms-auto text-sm font-bold text-tg-text">{(data.youtube?.totalViews30d ?? 0).toLocaleString("fa-IR")} بازدید</span>
+        </h2>
+        {data.youtube?.byChannel?.length ? (
+          <div role="img" aria-label="بازدید یوتیوب به تفکیک کانال">
+            <ul className="space-y-3" aria-label="بازدید یوتیوب به تفکیک کانال">
+              {(() => {
+                const max = Math.max(1, ...data.youtube.byChannel.map((c) => c.views));
+                return data.youtube.byChannel.map((c) => {
+                  const pct = Math.round((c.views / max) * 100);
+                  return (
+                    <li key={c.channelId} className="space-y-1">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="font-medium text-tg-text">{c.label}</span>
+                        <span className="text-tg-secondary" aria-label={`${c.label} ${c.views} بازدید`}>{c.views.toLocaleString("fa-IR")}</span>
+                      </div>
+                      <div className="h-2 w-full rounded-full bg-tg-hover" role="progressbar" aria-valuenow={c.views} aria-valuemin={0} aria-valuemax={max} aria-label={`${c.label}: ${c.views}`}>
+                        <div className="h-2 rounded-full bg-rose-500 transition-all" style={{ width: `${pct}%` }} />
+                      </div>
+                    </li>
+                  );
+                });
+              })()}
+            </ul>
+          </div>
+        ) : (
+          <p className="rounded-lg border border-dashed border-tg-border p-4 text-center text-sm text-tg-secondary">داده بازدید ۳۰ روزه موجود نیست.</p>
+        )}
+      </Card>
+
+      {/* Top videos */}
+      <Card>
+        <h2 className="mb-3 flex items-center gap-2 font-semibold text-tg-text">
+          <Eye className="h-4 w-4 text-tg-secondary" aria-hidden="true" />
+          تاپ ویدیوها
+        </h2>
+        {data.youtube?.topVideos?.length ? (
+          <div className="overflow-x-auto rounded-lg border border-tg-border">
+            <table className="w-full text-sm" aria-label="جدول تاپ ویدیوها">
+              <thead className="bg-tg-hover text-right text-xs text-tg-secondary">
+                <tr>
+                  <th scope="col" className="p-2.5 font-semibold">ویدیو</th>
+                  <th scope="col" className="p-2.5 font-semibold">کانال</th>
+                  <th scope="col" className="p-2.5 font-semibold">بازدید</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.youtube.topVideos.map((v) => (
+                  <tr key={v.videoId} className="border-t border-tg-border">
+                    <td className="p-2.5">
+                      <span className="font-medium text-tg-text">{v.title || v.videoId}</span>
+                      <span className="block font-mono text-[11px] text-tg-secondary">{v.videoId}</span>
+                    </td>
+                    <td className="p-2.5 text-xs text-tg-secondary">{v.channel || v.channelId || "—"}</td>
+                    <td className="p-2.5 text-center font-semibold text-tg-text">{v.views.toLocaleString("fa-IR")}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="rounded-lg border border-dashed border-tg-border p-4 text-center text-sm text-tg-secondary">ویدیویی برای نمایش وجود ندارد.</p>
+        )}
+      </Card>
+
+      {/* Instagram placeholder */}
+      <Card>
+        <h2 className="mb-3 flex items-center gap-2 font-semibold text-tg-text">
+          <InstagramIcon className="h-4 w-4 text-pink-500" aria-hidden="true" />
+          اینستاگرام — منتظر اتصال
+        </h2>
+        {data.instagram?.status === "awaiting_connection" || (data.instagram?.connectedCount ?? 0) === 0 ? (
+          <div className="rounded-lg border border-dashed border-tg-border p-6 text-center">
+            <p className="text-sm text-tg-secondary">هنوز حساب اینستاگرام متصل نشده است.</p>
+            <p className="mt-1 text-xs text-tg-secondary">برای مشاهده آمار اینستاگرام، ابتدا حساب خود را متصل کنید.</p>
+            <Link href="/settings/instagram" className="mt-3 inline-flex text-sm text-tg-accent underline">
+              رفتن به تنظیمات اینستاگرام
+            </Link>
+          </div>
+        ) : data.instagram?.byPage?.length ? (
+          <div role="img" aria-label="بازدید اینستاگرام به تفکیک پیج">
+            <ul className="space-y-3">
+              {(() => {
+                const max = Math.max(1, ...data.instagram.byPage.map((p) => p.views));
+                return data.instagram.byPage.map((p) => {
+                  const pct = Math.round((p.views / max) * 100);
+                  return (
+                    <li key={p.pageId} className="space-y-1">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="font-medium text-tg-text">{p.label}</span>
+                        <span className="text-tg-secondary">{p.views.toLocaleString("fa-IR")}</span>
+                      </div>
+                      <div className="h-2 w-full rounded-full bg-tg-hover" role="progressbar" aria-valuenow={p.views} aria-valuemin={0} aria-valuemax={max} aria-label={`${p.label}: ${p.views}`}>
+                        <div className="h-2 rounded-full bg-pink-500 transition-all" style={{ width: `${pct}%` }} />
+                      </div>
+                    </li>
+                  );
+                });
+              })()}
+            </ul>
+          </div>
+        ) : (
+          <p className="rounded-lg border border-dashed border-tg-border p-4 text-center text-sm text-tg-secondary">داده‌ای برای نمایش وجود ندارد.</p>
+        )}
       </Card>
 
       {/* Team workload table */}

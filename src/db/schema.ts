@@ -31,6 +31,7 @@ import {
   text,
   timestamp,
   uniqueIndex,
+  varchar,
 } from "drizzle-orm/pg-core";
 
 // ---------------------------------------------------------------------------
@@ -536,5 +537,52 @@ export const workflowImportPreviews = pgTable(
   },
   (table) => ({
     expiryIdx: index("workflow_import_preview_expiry_idx").on(table.expiresAt),
+  }),
+);
+
+// ---------------------------------------------------------------------------
+// Content Room (intake → publication room) — PostgreSQL-authoritative
+// ---------------------------------------------------------------------------
+export const contentProducts = pgTable(
+  "content_products",
+  {
+    id: text("id").primaryKey(), // CPR-1405-000001
+    title: varchar("title", { length: 200 }).notNull(),
+    productType: text("product_type").notNull(), // serial | documentary | tv_program | film | short_film | educational
+    channel: text("channel").notNull(), // zed_revayat | zaviye_no | tamashin | iranian_frame | shock | tinazh
+    partsCount: integer("parts_count").notNull(),
+    status: text("status").notNull().default("imported"), // imported | editing_youtube | copyright_fix | highlight_done | reel_done | cover_ready | ready_to_send
+    version: integer("version").notNull().default(1),
+    createdBy: text("created_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+    dueAt: timestamp("due_at", { withTimezone: true }),
+    notes: text("notes"),
+  },
+  (table) => ({
+    productTypeIdx: index("content_product_type_idx").on(table.productType),
+    channelIdx: index("content_product_channel_idx").on(table.channel),
+    statusIdx: index("content_product_status_idx").on(table.status),
+  }),
+);
+
+export const contentParts = pgTable(
+  "content_parts",
+  {
+    id: text("id").primaryKey(), // CPP-1405-000001
+    productId: text("product_id")
+      .notNull()
+      .references(() => contentProducts.id, { onDelete: "cascade" }),
+    partNumber: integer("part_number").notNull(),
+    fileRef: text("file_ref"),
+    status: text("status"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    productIdx: index("content_part_product_idx").on(table.productId),
+    productPartUnique: uniqueIndex("content_part_product_part_unique").on(table.productId, table.partNumber),
   }),
 );

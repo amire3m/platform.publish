@@ -28,7 +28,9 @@ export function generateEntityId(
     | "WTM"
     | "WEV"
     | "WNT"
-    | "WIB",
+    | "WIB"
+    | "CPR"
+    | "CPP",
 ): string {
   const { jy } = todayJalali();
   const suffix = prefix === "ANS" ? analyticsSnapshotSuffix() : legacySuffix();

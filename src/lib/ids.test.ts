@@ -23,4 +23,8 @@ describe("generateEntityId", () => {
       expect(generateEntityId(prefix)).toMatch(new RegExp(`^${prefix}-\\d{4}-\\d{6}$`));
     },
   );
+
+  it.each(["CPR", "CPP"] as const)("generates content room IDs for %s", (prefix) => {
+    expect(generateEntityId(prefix)).toMatch(new RegExp(`^${prefix}-\\d{4}-\\d{6}$`));
+  });
 });

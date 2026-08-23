@@ -20,7 +20,10 @@ export type Permission =
   | "manage_workflow_templates"
   | "import_workflow"
   | "view_mail"
-  | "manage_mail";
+  | "manage_mail"
+  | "view_content_room"
+  | "update_assigned_content"
+  | "manage_content_room";
 
 export type Role = "owner" | "manager" | "editor" | "publisher" | "analyst" | "viewer";
 
@@ -46,6 +49,9 @@ export const ALL_PERMISSIONS: Permission[] = [
   "import_workflow",
   "view_mail",
   "manage_mail",
+  "view_content_room",
+  "update_assigned_content",
+  "manage_content_room",
 ];
 
 export const ROLE_LABELS_FA: Record<Role, string> = {
@@ -74,11 +80,23 @@ export const ROLE_DEFAULT_PERMISSIONS: Record<Role, Permission[]> = {
     "manage_publications",
     "manage_workflow_templates",
     "import_workflow",
+    "view_content_room",
+    "update_assigned_content",
+    "manage_content_room",
   ],
-  editor: ["view_content", "upload_content", "edit_content", "submit_for_review", "view_workflow", "update_assigned_deliverables"],
-  publisher: ["view_content", "publish_now", "schedule_content", "view_analytics", "view_workflow", "manage_publications"],
-  analyst: ["view_content", "view_analytics", "export_data", "view_workflow"],
-  viewer: ["view_content", "view_workflow"],
+  editor: [
+    "view_content",
+    "upload_content",
+    "edit_content",
+    "submit_for_review",
+    "view_workflow",
+    "update_assigned_deliverables",
+    "view_content_room",
+    "update_assigned_content",
+  ],
+  publisher: ["view_content", "publish_now", "schedule_content", "view_analytics", "view_workflow", "manage_publications", "view_content_room"],
+  analyst: ["view_content", "view_analytics", "export_data", "view_workflow", "view_content_room"],
+  viewer: ["view_content", "view_workflow", "view_content_room"],
 };
 
 export interface PermissionSubject {

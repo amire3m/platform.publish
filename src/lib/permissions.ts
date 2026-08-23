@@ -23,7 +23,8 @@ export type Permission =
   | "manage_mail"
   | "view_content_room"
   | "update_assigned_content"
-  | "manage_content_room";
+  | "manage_content_room"
+  | "manage_channels";
 
 export type Role = "owner" | "manager" | "editor" | "publisher" | "analyst" | "viewer";
 
@@ -52,6 +53,7 @@ export const ALL_PERMISSIONS: Permission[] = [
   "view_content_room",
   "update_assigned_content",
   "manage_content_room",
+  "manage_channels",
 ];
 
 export const ROLE_LABELS_FA: Record<Role, string> = {
@@ -83,6 +85,7 @@ export const ROLE_DEFAULT_PERMISSIONS: Record<Role, Permission[]> = {
     "view_content_room",
     "update_assigned_content",
     "manage_content_room",
+    "manage_channels",
   ],
   editor: [
     "view_content",

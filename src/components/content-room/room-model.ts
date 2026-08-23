@@ -1,6 +1,7 @@
 import type { ContentRoomProductSummary, ContentRoomFilters } from "./types";
 import { CONTENT_STATUS_ORDER, contentStatusPresentation } from "@/lib/content-room/presentation";
 import type { ContentStatus } from "@/lib/content-room/presentation";
+import { CHANNELS } from "@/lib/channels";
 
 export const PRODUCT_TYPE_LABELS: Record<string, string> = {
   serial: "سریال",
@@ -11,14 +12,7 @@ export const PRODUCT_TYPE_LABELS: Record<string, string> = {
   educational: "آموزشی",
 };
 
-export const CHANNEL_LABELS: Record<string, string> = {
-  zed_revayat: "ضد روایت",
-  zaviye_no: "زاویه نو",
-  tamashin: "تماشین",
-  iranian_frame: "Iranian Frame",
-  shock: "شوک",
-  tinazh: "تیناژ",
-};
+export const CHANNEL_LABELS: Record<string, string> = Object.fromEntries(CHANNELS.map((c) => [c.id, c.labelFa]));
 
 export const STATUS_LABELS: Record<string, string> = {
   imported: "واردشده",

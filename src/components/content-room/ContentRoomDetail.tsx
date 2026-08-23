@@ -2,6 +2,7 @@
 
 import { useState, useRef } from "react";
 import Link from "next/link";
+import useSWR from "swr";
 import { Button, Card } from "@/components/ui";
 import { WorkflowReasonDialog } from "@/components/workflow/WorkflowReasonDialog";
 import { fetchContentRoomApi, ContentRoomApiError } from "@/lib/content-room/client";
@@ -9,6 +10,7 @@ import { contentStatusPresentation, CONTENT_STATUSES, CONTENT_STATUS_ORDER } fro
 import type { ContentStatus } from "@/lib/content-room/presentation";
 import type { ContentRoomProductDetail } from "./types";
 import { CHANNEL_LABELS, PRODUCT_TYPE_LABELS, getProductProgress } from "./room-model";
+import { DELIVERABLE_KIND_TO_PLATFORM, getChannelAccounts, getChannelConfig } from "@/lib/channels";
 
 function requiresReason(from: string, to: string): boolean {
   const fromIdx = CONTENT_STATUS_ORDER[from as ContentStatus];
@@ -42,6 +44,26 @@ export function ContentRoomDetail({ product, onRefresh }: Props) {
   const progress = getProductProgress(product.status);
 
   const isReadyToSend = product.status === "ready_to_send";
+  const channelConfig = getChannelConfig(product.channel);
+  const channelAccounts = getChannelAccounts(product.channel);
+  // live status from API (fallback to sync)
+  const { data: channelsData } = useSWR<{ channels: Array<{ id: string; labelFa: string; youtubeAccountId: string | null; instagramAccountId: string | null; telegramTopicId: string | null; linked?: { youtube: boolean; instagram: boolean; telegram: boolean } }> }>(
+    "/api/channels",
+    async (url: string) => {
+      try {
+        const res = await fetch(url);
+        const body = await res.json();
+        if (body.ok) return body.data;
+        return null;
+      } catch {
+        return null;
+      }
+    },
+  );
+  const liveChannel = channelsData?.channels?.find((c) => c.id === product.channel);
+  const ytId = liveChannel?.youtubeAccountId ?? channelAccounts.youtubeAccountId;
+  const igId = liveChannel?.instagramAccountId ?? channelAccounts.instagramAccountId;
+  const tgId = liveChannel?.telegramTopicId ?? channelAccounts.telegramTopicId;
 
   function openStatusDialog(target: ContentStatus) {
     const needReason = requiresReason(product.status, target);
@@ -151,6 +173,44 @@ export function ContentRoomDetail({ product, onRefresh }: Props) {
               </div>
             </div>
             {product.notes && <p className="mt-3 text-sm leading-relaxed text-tg-text/80">{product.notes}</p>}
+            {/* Channel -> social accounts mapping */}
+            <div className="mt-4 rounded-lg border border-tg-border bg-tg-surface p-3">
+              <p className="text-xs font-semibold text-tg-secondary">حساب‌های مقصد برای کانال «{channelConfig?.labelFa ?? product.channel}»</p>
+              <div className="mt-2 grid gap-2 sm:grid-cols-3">
+                <div className="rounded-md bg-tg-hover/30 px-2.5 py-2">
+                  <p className="text-[11px] font-semibold text-tg-secondary">یوتیوب</p>
+                  <p className="mt-1 truncate font-mono text-xs text-tg-text" title={ytId ?? ""}>
+                    {ytId ? ytId.slice(0, 24) : "تنظیم نشده (null)"}
+                  </p>
+                  <p className="mt-1 text-[11px] text-tg-secondary">
+                    یوتیوب کامل + هایلایت → {DELIVERABLE_KIND_TO_PLATFORM["youtube_full"]}, {DELIVERABLE_KIND_TO_PLATFORM["highlight"]}
+                  </p>
+                  <span className={`mt-1 inline-block rounded-full px-2 py-0.5 text-[11px] ${ytId ? "bg-emerald-500/15 text-emerald-700" : "bg-amber-500/15 text-amber-700"}`}>
+                    {ytId ? "متصل" : "بدون حساب - fallback null"}
+                  </span>
+                </div>
+                <div className="rounded-md bg-tg-hover/30 px-2.5 py-2">
+                  <p className="text-[11px] font-semibold text-tg-secondary">اینستاگرام</p>
+                  <p className="mt-1 truncate font-mono text-xs text-tg-text" title={igId ?? ""}>
+                    {igId ? igId.slice(0, 24) : "تنظیم نشده (null)"}
+                  </p>
+                  <p className="mt-1 text-[11px] text-tg-secondary">ریلز + کاور → {DELIVERABLE_KIND_TO_PLATFORM["reel"]}, {DELIVERABLE_KIND_TO_PLATFORM["cover"]}</p>
+                  <span className={`mt-1 inline-block rounded-full px-2 py-0.5 text-[11px] ${igId ? "bg-emerald-500/15 text-emerald-700" : "bg-amber-500/15 text-amber-700"}`}>
+                    {igId ? "متصل" : "بدون حساب - fallback null"}
+                  </span>
+                </div>
+                <div className="rounded-md bg-tg-hover/30 px-2.5 py-2">
+                  <p className="text-[11px] font-semibold text-tg-secondary">تلگرام</p>
+                  <p className="mt-1 truncate font-mono text-xs text-tg-text" title={tgId ?? ""}>
+                    {tgId ? tgId : "تنظیم نشده (null)"}
+                  </p>
+                  <span className={`mt-1 inline-block rounded-full px-2 py-0.5 text-[11px] ${tgId ? "bg-emerald-500/15 text-emerald-700" : "bg-slate-500/10 text-slate-500"}`}>
+                    {tgId ? "متصل" : "اختیاری"}
+                  </span>
+                </div>
+              </div>
+              <p className="mt-2 text-[11px] text-tg-secondary">در ارسال به انتشار، هر خروجی (deliverable) یک انتشار (publication) با پلتفرم نگاشت‌شده و شناسه حساب کانال ایجاد می‌کند؛ در صورت عدم اتصال، socialAccountId برابر null خواهد بود.</p>
+            </div>
           </div>
         </div>
 

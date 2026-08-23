@@ -8,6 +8,7 @@ import type {
   WorkflowProgramRecord,
   WorkflowPublicationRecord,
 } from "@/lib/workflow/repository";
+import { DELIVERABLE_KIND_TO_PLATFORM, resolveChannelAccountId } from "@/lib/channels";
 
 // ---------------------------------------------------------------------------
 // Errors
@@ -49,6 +50,13 @@ const DELIVERABLE_KINDS = [
 ] as const;
 
 const PUBLICATION_PLATFORMS = ["youtube", "instagram", "telegram"] as const;
+// Mapping per spec: youtube_full->youtube, highlight->youtube, reel->instagram, cover->instagram
+const KIND_PLATFORM_MAP: Record<string, (typeof PUBLICATION_PLATFORMS)[number]> = {
+  youtube_full: "youtube",
+  highlight: "youtube",
+  reel: "instagram",
+  cover: "instagram",
+};
 
 export function createContentRoomService(options: {
   contentPort: ContentRoomDatabasePort;
@@ -150,45 +158,43 @@ export function createContentRoomService(options: {
             createdAt: now,
           });
 
-          // For each deliverable create publications for 3 platforms
-          // For cover, still create 3; platform distinction remains
-          for (const platform of PUBLICATION_PLATFORMS) {
-            // channel mapping to dummy account: currently null (task says dummy or null)
-            const pubId = generateEntityId("WPB");
-            const pub: WorkflowPublicationRecord = {
-              id: pubId,
-              deliverableId,
-              platform,
-              socialAccountId: null,
-              status: "waiting_for_production",
-              createdSource: "manual",
-              terminalOwner: null,
-              scheduledAt: null,
-              publishedAt: null,
-              externalId: null,
-              permalink: null,
-              lastErrorCode: null,
-              lastErrorMessage: null,
-              manualReason: null,
-              version: 1,
-              updatedBy: null,
-              createdAt: now,
-              updatedAt: now,
-            };
-            publications.push(pub);
-            events.push({
-              id: generateEntityId("WEV"),
-              entityType: "workflow_publication",
-              entityId: pubId,
-              action: "created",
-              before: null,
-              after: { ...pub } as unknown as Record<string, unknown>,
-              actorUserId: command.actorUserId,
-              source: "api",
-              reason: null,
-              createdAt: now,
-            });
-          }
+          // Create single publication per deliverable mapped to channel's social account
+          const platform = (KIND_PLATFORM_MAP[kindDef.kind] ?? DELIVERABLE_KIND_TO_PLATFORM[kindDef.kind as keyof typeof DELIVERABLE_KIND_TO_PLATFORM] ?? "youtube") as (typeof PUBLICATION_PLATFORMS)[number];
+          const socialAccountId = resolveChannelAccountId(product.channel, platform as "youtube" | "instagram" | "telegram");
+          const pubId = generateEntityId("WPB");
+          const pub: WorkflowPublicationRecord = {
+            id: pubId,
+            deliverableId,
+            platform,
+            socialAccountId: socialAccountId ?? null,
+            status: "waiting_for_production",
+            createdSource: "manual",
+            terminalOwner: null,
+            scheduledAt: null,
+            publishedAt: null,
+            externalId: null,
+            permalink: null,
+            lastErrorCode: null,
+            lastErrorMessage: null,
+            manualReason: null,
+            version: 1,
+            updatedBy: null,
+            createdAt: now,
+            updatedAt: now,
+          };
+          publications.push(pub);
+          events.push({
+            id: generateEntityId("WEV"),
+            entityType: "workflow_publication",
+            entityId: pubId,
+            action: "created",
+            before: null,
+            after: { ...pub } as unknown as Record<string, unknown>,
+            actorUserId: command.actorUserId,
+            source: "api",
+            reason: null,
+            createdAt: now,
+          });
         }
       }
 

@@ -98,15 +98,23 @@ describe("content room sendToPublication service", () => {
     const orders = result.deliverables.map((d) => d.sortOrder);
     expect(orders).toEqual([...Array(4 * partsCount).keys()]);
 
-    // publications: 3 per deliverable = 12*N
-    expect(result.publications).toHaveLength(4 * partsCount * 3);
-    expect(workflowPort.publications).toHaveLength(4 * partsCount * 3);
-    // each deliverable should have 3 publications
+    // publications: 1 per deliverable (mapped via channel -> social account)
+    expect(result.publications).toHaveLength(4 * partsCount);
+    expect(workflowPort.publications).toHaveLength(4 * partsCount);
+    // each deliverable should have 1 publication with correct platform mapping
+    const kindToPlatform: Record<string, string> = {
+      youtube_full: "youtube",
+      highlight: "youtube",
+      reel: "instagram",
+      cover: "instagram",
+    };
     for (const d of result.deliverables) {
       const pubs = result.publications.filter((p) => p.deliverableId === d.id);
-      expect(pubs).toHaveLength(3);
-      const platforms = pubs.map((p) => p.platform).sort();
-      expect(platforms).toEqual(["instagram", "telegram", "youtube"]);
+      expect(pubs).toHaveLength(1);
+      const expected = kindToPlatform[d.kind ?? ""] ?? "youtube";
+      expect(pubs[0].platform).toBe(expected);
+      // socialAccountId fallback null when channel not linked
+      expect(pubs[0].socialAccountId).toBeNull();
     }
 
     // cover deliverable is image type? check kind cover exists
@@ -124,7 +132,7 @@ describe("content room sendToPublication service", () => {
     await advanceToReady(contentPort, contentRepo, product.id);
     const result = await service.sendToPublication({ productId: product.id, expectedVersion: 7, actorUserId: "u1" });
     expect(result.deliverables).toHaveLength(4);
-    expect(result.publications).toHaveLength(12);
+    expect(result.publications).toHaveLength(4);
   });
 
   it("version conflict leaves no partial workflow on second send attempt", async () => {

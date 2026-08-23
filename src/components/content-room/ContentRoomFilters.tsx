@@ -2,6 +2,7 @@
 
 import { Input, Select } from "@/components/ui";
 import type { ContentRoomFilters } from "./types";
+import { CHANNELS } from "@/lib/channels";
 
 interface Props {
   value: ContentRoomFilters;
@@ -64,12 +65,11 @@ export function ContentRoomFilters({ value, onChange }: Props) {
             aria-label="فیلتر کانال"
           >
             <option value="">همه کانال‌ها</option>
-            <option value="zed_revayat">ضد روایت</option>
-            <option value="zaviye_no">زاویه نو</option>
-            <option value="tamashin">تماشین</option>
-            <option value="iranian_frame">Iranian Frame</option>
-            <option value="shock">شوک</option>
-            <option value="tinazh">تیناژ</option>
+            {CHANNELS.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.labelFa}
+              </option>
+            ))}
           </Select>
         </div>
 

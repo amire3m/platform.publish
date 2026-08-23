@@ -1248,7 +1248,40 @@ export function createWorkflowRepository(port?: WorkflowDatabasePort): WorkflowR
         reason: null,
         createdAt: now,
       };
-      return dbPort.transactCreateDeliverable(deliverable, event);
+      const created = await dbPort.transactCreateDeliverable(deliverable, event);
+      // Enqueue due reminder (24h before due) and assignment notification best-effort
+      void (async () => {
+        try {
+          if (created.dueAt) {
+            const { enqueueWorkflowNotificationDb } = await import("./notifications");
+            await enqueueWorkflowNotificationDb({
+              type: "due_24h",
+              deliverableId: created.id,
+              dueAt: created.dueAt,
+              assigneeUserId: created.assigneeUserId ?? undefined,
+              recipientUserId: created.assigneeUserId ?? undefined,
+              payload: { deliverableName: created.name, dueAt: created.dueAt.toISOString() },
+            });
+            console.log(`[workflow-notifications] due reminder scheduled for new deliverable ${created.id} due ${created.dueAt.toISOString()}`);
+          }
+          if (created.assigneeUserId) {
+            try {
+              const { enqueueWorkflowNotificationDb } = await import("./notifications");
+              await enqueueWorkflowNotificationDb({
+                type: "assignment",
+                deliverableId: created.id,
+                assigneeUserId: created.assigneeUserId,
+                version: created.version,
+                recipientUserId: created.assigneeUserId,
+                payload: { deliverableName: created.name },
+              });
+            } catch {}
+          }
+        } catch (err) {
+          console.error("[workflow-notifications] createDeliverable enqueue failed:", (err as Error).message);
+        }
+      })();
+      return created;
     },
 
     async updateDeliverable(command) {
@@ -1275,7 +1308,62 @@ export function createWorkflowRepository(port?: WorkflowDatabasePort): WorkflowR
         reason: null,
         createdAt: now,
       };
-      return dbPort.transactUpdateDeliverable(command.id, command.expectedVersion, patch, event);
+      const updated = await dbPort.transactUpdateDeliverable(command.id, command.expectedVersion, patch, event);
+      // Handle due date change: cancel old due notification, schedule new; handle assignee change
+      void (async () => {
+        try {
+          const oldDue = existing.dueAt;
+          const newDue = (patch.dueAt !== undefined ? patch.dueAt : existing.dueAt) as Date | null;
+          const oldDueIso = oldDue ? (oldDue instanceof Date ? oldDue.toISOString() : String(oldDue)) : null;
+          const newDueIso = newDue ? (newDue instanceof Date ? newDue.toISOString() : String(newDue)) : null;
+          if (oldDueIso !== newDueIso) {
+            if (oldDue) {
+              try {
+                const { cancelDueNotification } = await import("./notifications");
+                // In-memory fallback: if port has notifications array, cancel via helper; otherwise DB cancel handled inside cancelDueNotification
+                const maybePort = dbPort as unknown as { notifications?: unknown[] };
+                if (maybePort.notifications) {
+                  await cancelDueNotification(maybePort as never, updated.id, oldDue as Date);
+                } else {
+                  // DB cancel via cancelDueNotification (it does DB update)
+                  const fakePort: { notifications: unknown[] } = { notifications: [] };
+                  await cancelDueNotification(fakePort as never, updated.id, oldDue as Date);
+                }
+              } catch {}
+            }
+            if (newDue) {
+              const { enqueueWorkflowNotificationDb } = await import("./notifications");
+              await enqueueWorkflowNotificationDb({
+                type: "due_24h",
+                deliverableId: updated.id,
+                dueAt: newDue as Date,
+                assigneeUserId: (updated.assigneeUserId as string) ?? undefined,
+                recipientUserId: (updated.assigneeUserId as string) ?? undefined,
+                payload: { deliverableName: updated.name, dueAt: (newDue as Date).toISOString() },
+              });
+              console.log(`[workflow-notifications] due reminder rescheduled for ${updated.id} new due ${(newDue as Date).toISOString()}`);
+            }
+          }
+          const oldAssignee = existing.assigneeUserId ?? null;
+          const newAssignee = (updated.assigneeUserId as string) ?? null;
+          if (oldAssignee !== newAssignee && newAssignee) {
+            try {
+              const { enqueueWorkflowNotificationDb } = await import("./notifications");
+              await enqueueWorkflowNotificationDb({
+                type: "assignee_changed",
+                deliverableId: updated.id,
+                assigneeUserId: newAssignee,
+                version: updated.version,
+                recipientUserId: newAssignee,
+                payload: { deliverableName: updated.name },
+              });
+            } catch {}
+          }
+        } catch (err) {
+          console.error("[workflow-notifications] updateDeliverable enqueue failed:", (err as Error).message);
+        }
+      })();
+      return updated;
     },
 
     async reorderDeliverables(command) {
@@ -1429,7 +1517,67 @@ export function createWorkflowRepository(port?: WorkflowDatabasePort): WorkflowR
         reason: command.reason ?? null,
         createdAt: now,
       };
-      return dbPort.transactUpdatePublication(command.id, command.expectedVersion, patch, event);
+      const updated = await dbPort.transactUpdatePublication(command.id, command.expectedVersion, patch, event);
+      // Enqueue failure alert when publication transitions to failed (via publish_failed or reflect)
+      if (updated.status === "failed") {
+        void (async () => {
+          try {
+            const { enqueueWorkflowNotificationDb } = await import("./notifications");
+            const deliverableName = (deliverable as { name?: string }).name ?? updated.id;
+            const recipients = new Set<string>();
+            const assigneeId = (deliverable as { assigneeUserId?: string | null }).assigneeUserId ?? null;
+            if (assigneeId) recipients.add(assigneeId as string);
+            if (command.actorUserId) recipients.add(command.actorUserId);
+            // Also include manager fallback via DB query if no recipients
+            if (recipients.size === 0) {
+              try {
+                const { db } = await import("@/db");
+                const { users } = await import("@/db/schema");
+                const rows = await db.select().from(users).limit(50);
+                for (const u of rows) {
+                  const role = (u as unknown as { role?: string }).role;
+                  if (role === "manager" || role === "owner") {
+                    const uid = (u as unknown as { id?: string }).id;
+                    if (uid) recipients.add(uid);
+                    if (recipients.size >= 3) break;
+                  }
+                }
+              } catch {}
+            }
+            const failureReason = (updated as { lastErrorMessage?: string | null }).lastErrorMessage ?? command.reason ?? "publish_failed";
+            const platform = (updated as { platform?: string }).platform ?? "unknown";
+            for (const recipient of recipients) {
+              try {
+                await enqueueWorkflowNotificationDb({
+                  type: "failure",
+                  publicationId: updated.id,
+                  version: updated.version,
+                  recipientUserId: recipient,
+                  payload: { deliverableName: deliverableName as string, reason: failureReason as string, platform: platform as string },
+                });
+              } catch {}
+            }
+            // If still no recipient (e.g., in-memory test without DB users), enqueue generic with no recipient so delivery can fallback to manager
+            if (recipients.size === 0) {
+              await enqueueWorkflowNotificationDb({
+                type: "failure",
+                publicationId: updated.id,
+                version: updated.version,
+                payload: { deliverableName: deliverableName as string, reason: failureReason as string, platform: platform as string },
+              });
+            }
+            console.log(`[workflow-notifications] failure alert enqueued for publication ${updated.id} status=failed recipients=${Array.from(recipients).join(",")}`);
+            // Group audit log via TGDB
+            try {
+              const { appendAuditEvent } = await import("@/lib/telegram/tgdb");
+              await appendAuditEvent({ action: "workflow_publish_failed", entityType: "workflow_publication", entityId: updated.id, after: { status: "failed", reason: failureReason } });
+            } catch {}
+          } catch (err) {
+            console.error("[workflow-notifications] failure enqueue failed:", (err as Error).message);
+          }
+        })();
+      }
+      return updated;
     },
 
     async createTemplate(command) {

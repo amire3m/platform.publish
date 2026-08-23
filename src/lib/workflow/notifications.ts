@@ -157,6 +157,11 @@ export async function enqueueWorkflowNotification(
     port.notifications.push(rec);
   }
 
+  // Log for deadline/failure audit
+  if (event.type === "due_24h" || event.type === "due24h" || event.type === "failure" || event.type === "publish_failed" || event.type === "overdue_daily") {
+    console.log(`[workflow-notifications] enqueued ${event.type} for ${event.deliverableId ?? event.publicationId} key=${key} recipient=${rec.recipientUserId ?? "none"}`);
+  }
+
   return rec;
 }
 
@@ -171,14 +176,79 @@ export async function cancelDueNotification(
   if (existing) {
     existing.status = "cancelled";
     existing.updatedAt = new Date();
+    console.log(`[workflow-notifications] cancelled due notification ${oldKey}`);
   }
   if (port.update) {
     // if DB port, update as well – but array capture suffices for tests
   }
+  // DB-backed cancel (best-effort)
+  try {
+    const { db } = await import("@/db");
+    const { workflowNotifications } = await import("@/db/schema");
+    const { eq } = await import("drizzle-orm");
+    await db.update(workflowNotifications).set({ status: "cancelled", updatedAt: new Date() } as never).where(eq(workflowNotifications.idempotencyKey, oldKey) as never);
+  } catch {}
 }
 
 const LEASE_MS = 60_000;
 const MAX_ATTEMPTS = 5;
+
+async function sendWorkflowGroupAlert(text: string, eventType?: string): Promise<void> {
+  try {
+    const { getTelegramConfig, TelegramClient } = await import("@/lib/telegram/client");
+    const cfg = getTelegramConfig();
+    if (!cfg) {
+      console.log(`[workflow-notifications] group alert (no config): ${eventType} - ${text.slice(0,200)}`);
+      return;
+    }
+    const client = new TelegramClient(cfg);
+    let threadId: number | undefined;
+    try {
+      const { db } = await import("@/db");
+      const { telegramTopics } = await import("@/db/schema");
+      const { eq } = await import("drizzle-orm");
+      for (const key of ["queue_workflow_alerts", "workflow_alerts", "logs", "errors"]) {
+        try {
+          const [topic] = await db.select().from(telegramTopics).where(eq(telegramTopics.key, key)).limit(1);
+          if (topic?.messageThreadId) { threadId = topic.messageThreadId as number; break; }
+        } catch {}
+      }
+    } catch {}
+    const prefix = eventType === "failure" || eventType === "publish_failed" ? "❌ هشدار انتشار ناموفق" : eventType === "due_24h" || eventType === "due24h" ? "⚠️ یادآوری سررسید" : eventType === "overdue_daily" ? "⏰ تاخیر سررسید" : "[workflow]";
+    const msg = `${prefix}\n${text}`;
+    await client.sendMessage(msg, threadId);
+    try {
+      const { appendAuditEvent } = await import("@/lib/telegram/tgdb");
+      await appendAuditEvent({ action: `workflow_${eventType ?? "alert"}`, entityType: "workflow", entityId: null, after: { text } });
+    } catch {}
+    console.log(`[workflow-notifications] group alert sent: ${eventType} thread=${threadId ?? "main"} - ${text.slice(0,120)}`);
+  } catch (err) {
+    console.error("[workflow-notifications] group alert failed:", (err as Error).message);
+  }
+}
+
+async function resolveTelegramIdWithManagerFallback(
+  port: NotificationPort & { notifications: WorkflowNotificationRecord[] },
+  n: WorkflowNotificationRecord,
+  currentResolved: string | null,
+): Promise<string | null> {
+  if (currentResolved) return currentResolved;
+  // fallback to managers/owners via DB
+  try {
+    const { db } = await import("@/db");
+    const { users } = await import("@/db/schema");
+    // drizzle inArray not always available, fallback to manual filter
+    const allUsers = await db.select().from(users).limit(100);
+    for (const u of allUsers) {
+      const role = (u as unknown as { role?: string }).role as string;
+      if (role === "manager" || role === "owner") {
+        const tid = (u as unknown as { telegramId?: string | null }).telegramId ?? null;
+        if (tid) return tid as string;
+      }
+    }
+  } catch {}
+  return currentResolved;
+}
 
 export async function runWorkflowNotificationDelivery(
   port: NotificationPort & { notifications: WorkflowNotificationRecord[] },
@@ -218,33 +288,56 @@ export async function runWorkflowNotificationDelivery(
         resolvedTelegramId = (user?.telegramId as string | null) ?? null;
       } catch {}
     }
+    // Fallback to DB lookup for recipientUserId if getUser not provided
+    if (!resolvedTelegramId && n.recipientUserId) {
+      try {
+        const { db } = await import("@/db");
+        const { users } = await import("@/db/schema");
+        const { eq } = await import("drizzle-orm");
+        const [u] = await db.select().from(users).where(eq(users.id, n.recipientUserId)).limit(1);
+        if (u) resolvedTelegramId = (u as unknown as { telegramId?: string | null }).telegramId ?? null;
+      } catch {}
+    }
+    // Final fallback to manager telegramId for deadline/failure types
+    if (!resolvedTelegramId && (n.eventType === "due_24h" || n.eventType === "due24h" || n.eventType === "failure" || n.eventType === "publish_failed" || n.eventType === "overdue_daily")) {
+      resolvedTelegramId = await resolveTelegramIdWithManagerFallback(port, n, resolvedTelegramId);
+    }
 
     if (!resolvedTelegramId) {
       n.status = "skipped_no_recipient";
       n.lastError = "no_telegram_recipient";
       skipped++;
+      console.log(`[workflow-notifications] skipped ${n.eventType} ${n.idempotencyKey} - no recipient`);
       continue;
     }
 
     // Attempt delivery via Telegram
     const sendFn = deps?.sendPrivateMessage ?? (await import("@/lib/telegram/tgdb").then((m) => m.notifyUser).catch(() => null));
     // notifyUser expects (telegramId, text)
+    const text = buildNotificationText(n);
     try {
       let ok = false;
       if (typeof sendFn === "function") {
         // sendPrivateMessage vs notifyUser signature
         // detect if deps.sendPrivateMessage provided (expects (id,text))
         if (deps?.sendPrivateMessage) {
-          ok = await deps.sendPrivateMessage(resolvedTelegramId, buildNotificationText(n));
+          ok = await deps.sendPrivateMessage(resolvedTelegramId, text);
         } else {
           // notifyUser returns boolean
           const notifyUser = sendFn as unknown as (id: string, text: string) => Promise<boolean>;
-          ok = await notifyUser(resolvedTelegramId, buildNotificationText(n));
+          ok = await notifyUser(resolvedTelegramId, text);
         }
       }
       if (ok) {
         n.status = "sent";
         delivered++;
+        console.log(`[workflow-notifications] delivered private ${n.eventType} to ${resolvedTelegramId} key=${n.idempotencyKey}`);
+        // Explicit group alert for deadline/failure (best-effort)
+        if (n.eventType === "due_24h" || n.eventType === "due24h" || n.eventType === "failure" || n.eventType === "publish_failed" || n.eventType === "overdue_daily") {
+          try {
+            await sendWorkflowGroupAlert(text, n.eventType);
+          } catch {}
+        }
       } else {
         throw new Error("delivery_failed");
       }
@@ -255,12 +348,14 @@ export async function runWorkflowNotificationDelivery(
         n.status = "failed";
         n.lastError = msg.slice(0, 500);
         failed++;
+        console.error(`[workflow-notifications] delivery permanently failed ${n.eventType} ${n.idempotencyKey}: ${msg}`);
       } else {
         // release claim for retry (keep pending but clear claim? keep claimed but allow retry after lease)
         n.status = "pending";
         n.lastError = msg.slice(0, 500);
         // keep claimedAt to enforce lease
         failed++;
+        console.error(`[workflow-notifications] delivery retry ${n.attempts}/5 for ${n.eventType} ${n.idempotencyKey}: ${msg}`);
       }
     }
   }
@@ -271,7 +366,26 @@ export async function runWorkflowNotificationDelivery(
 function buildNotificationText(n: WorkflowNotificationRecord): string {
   const p = n.payload as Record<string, unknown>;
   const title = (p.title as string) ?? (p.deliverableName as string) ?? n.eventType;
-  return `اعلان workflow: ${n.eventType} - ${title}`;
+  const dueStr = (p.dueAt as string) ? ` موعد: ${String(p.dueAt).slice(0,16)}` : "";
+  const platform = (p.platform as string) ? ` بستر: ${p.platform}` : "";
+  const reason = (p.reason as string) ? ` دلیل: ${String(p.reason).slice(0,200)}` : "";
+  switch (n.eventType) {
+    case "due_24h":
+    case "due24h":
+      return `⚠️ یادآوری سررسید: خروجی «${title}» تا ۲۴ ساعت دیگر سررسید دارد.${dueStr}`;
+    case "overdue_daily":
+      return `⏰ تاخیر سررسید: خروجی «${title}» از موعد گذشته است.${dueStr}`;
+    case "failure":
+    case "publish_failed":
+      return `❌ انتشار ناموفق: «${title}»${platform}${reason}${dueStr}`;
+    case "assignment":
+    case "assignee_changed":
+      return `📌 مسئول جدید: شما به خروجی «${title}» تخصیص یافتید.`;
+    case "changes_requested":
+      return `📝 درخواست اصلاح: خروجی «${title}» نیاز به اصلاح دارد.${reason}`;
+    default:
+      return `اعلان workflow: ${n.eventType} - ${title}${dueStr}${reason}`;
+  }
 }
 
 // DB-backed enqueue helper (for real usage without port)
@@ -300,9 +414,11 @@ export async function enqueueWorkflowNotificationDb(event: NotificationEvent): P
       createdAt: now,
       updatedAt: now,
     } as never);
+    console.log(`[workflow-notifications] DB enqueued ${event.type} key=${key} recipient=${event.recipientUserId ?? event.assigneeUserId ?? "none"}`);
   } catch (err) {
     // unique violation -> idempotent skip
     const msg = (err as Error).message ?? "";
     if (!msg.includes("unique") && !msg.includes("duplicate")) throw err;
+    console.log(`[workflow-notifications] DB enqueue idempotent skip ${key}`);
   }
 }

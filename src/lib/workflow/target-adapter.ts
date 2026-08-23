@@ -188,7 +188,55 @@ export async function reflectTargetState(
 
   if (deps?.transactUpdatePublication) {
     try {
-      return await deps.transactUpdatePublication(input.publicationId, version, patch, event);
+      const updated = await deps.transactUpdatePublication(input.publicationId, version, patch, event);
+      // Failure alert: when desired is failed, enqueue notification best-effort (does not roll back)
+      if (desired === "failed" && updated) {
+        void (async () => {
+          try {
+            const { enqueueWorkflowNotificationDb } = await import("./notifications");
+            const pubVersion = (updated as { version?: number }).version ?? version + 1;
+            const failureReason = safeErrorMessage((input.target?.last_error as string) ?? null) ?? "publish_failed";
+            const platform = (updated as { platform?: string }).platform ?? (publication as { platform?: string })?.platform ?? "unknown";
+            // Try to resolve assignee via deliverable if possible
+            let assigneeId: string | null = null;
+            try {
+              if (deps?.getDeliverable) {
+                const deliverableId = (publication as { deliverableId?: string; deliverable_id?: string })?.deliverableId ?? (publication as { deliverable_id?: string })?.deliverable_id ?? null;
+                if (deliverableId) {
+                  const del = await deps.getDeliverable(deliverableId);
+                  assigneeId = (del as { assigneeUserId?: string | null; assignee_user_id?: string | null })?.assigneeUserId ?? (del as { assignee_user_id?: string | null })?.assignee_user_id ?? null;
+                }
+              } else {
+                const { db } = await import("@/db");
+                const { workflowPublications: wpPub, workflowDeliverables } = await import("@/db/schema");
+                const { eq } = await import("drizzle-orm");
+                const [pubRow] = await db.select().from(wpPub).where(eq(wpPub.id, input.publicationId)).limit(1);
+                const delId = (pubRow as unknown as { deliverableId?: string; deliverable_id?: string })?.deliverableId ?? (pubRow as unknown as { deliverable_id?: string })?.deliverable_id;
+                if (delId) {
+                  const [delRow] = await db.select().from(workflowDeliverables).where(eq(workflowDeliverables.id, delId)).limit(1);
+                  assigneeId = (delRow as unknown as { assigneeUserId?: string | null; assignee_user_id?: string | null })?.assigneeUserId ?? (delRow as unknown as { assignee_user_id?: string | null })?.assignee_user_id ?? null;
+                }
+              }
+            } catch {}
+            const recipient = assigneeId ?? null;
+            await enqueueWorkflowNotificationDb({
+              type: "failure",
+              publicationId: input.publicationId,
+              version: pubVersion as number,
+              recipientUserId: recipient ?? undefined,
+              payload: { deliverableName: publication?.id as string ?? input.publicationId, reason: failureReason, platform },
+            });
+            console.log(`[workflow-notifications] reflect failure alert enqueued for ${input.publicationId} (transact)`);
+            try {
+              const { appendAuditEvent } = await import("@/lib/telegram/tgdb");
+              await appendAuditEvent({ action: "workflow_publish_failed_reflect", entityType: "workflow_publication", entityId: input.publicationId, after: { status: "failed", reason: failureReason } });
+            } catch {}
+          } catch (err) {
+            console.error("[workflow-notifications] reflect failure enqueue failed:", (err as Error).message);
+          }
+        })();
+      }
+      return updated as unknown as Record<string, unknown>;
     } catch (err) {
       console.error("[workflow-target-adapter] reflect failed:", (err as Error).message);
       return null;
@@ -206,6 +254,25 @@ export async function reflectTargetState(
       .returning();
     if (updated) {
       await db.insert(workflowEvents).values(event as never);
+      if (desired === "failed") {
+        void (async () => {
+          try {
+            const { enqueueWorkflowNotificationDb } = await import("./notifications");
+            const pubVersion = (updated as unknown as { version?: number }).version ?? version + 1;
+            const failureReason = safeErrorMessage((input.target?.last_error as string) ?? null) ?? "publish_failed";
+            const platform = (updated as unknown as { platform?: string }).platform ?? "unknown";
+            await enqueueWorkflowNotificationDb({
+              type: "failure",
+              publicationId: input.publicationId,
+              version: pubVersion as number,
+              payload: { deliverableName: input.publicationId, reason: failureReason, platform },
+            });
+            console.log(`[workflow-notifications] reflect failure alert enqueued for ${input.publicationId} (db)`);
+          } catch (err) {
+            console.error("[workflow-notifications] reflect failure enqueue (db) failed:", (err as Error).message);
+          }
+        })();
+      }
       return updated as unknown as Record<string, unknown>;
     }
     return null;

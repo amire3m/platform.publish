@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import Link from "next/link";
 import { Button, Card } from "@/components/ui";
 import { WorkflowReasonDialog } from "@/components/workflow/WorkflowReasonDialog";
@@ -216,15 +216,11 @@ export function ContentRoomDetail({ product, onRefresh }: Props) {
       <Card className="space-y-3">
         <h2 className="text-sm font-bold text-tg-text">قسمت‌ها</h2>
         {product.parts && product.parts.length > 0 ? (
-          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {[...product.parts]
               .sort((a, b) => a.partNumber - b.partNumber)
               .map((part) => (
-                <div key={part.id} className="rounded-lg border border-tg-border bg-tg-hover/20 px-3 py-2">
-                  <p className="text-sm font-medium text-tg-text">قسمت {part.partNumber}</p>
-                  <p className="text-xs text-tg-secondary">part_number: {part.partNumber}</p>
-                  {part.fileRef && <p className="mt-1 text-xs text-tg-secondary">{part.fileRef}</p>}
-                </div>
+                <PartUploadCard key={part.id} part={part} onRefresh={onRefresh} onError={setActionError} onToast={setToast} />
               ))}
           </div>
         ) : (
@@ -247,6 +243,193 @@ export function ContentRoomDetail({ product, onRefresh }: Props) {
         loading={dialog.loading}
         conflictMessage={dialog.conflict}
       />
+    </div>
+  );
+}
+
+function PartUploadCard({
+  part,
+  onRefresh,
+  onError,
+  onToast,
+}: {
+  part: { id: string; partNumber: number; fileRef?: string | null; coverFileRef?: string | null; version?: number | null; status?: string | null };
+  onRefresh: () => Promise<void> | void;
+  onError: (msg: string | null) => void;
+  onToast: (msg: string | null) => void;
+}) {
+  const [videoFile, setVideoFile] = useState<File | null>(null);
+  const [coverFile, setCoverFile] = useState<File | null>(null);
+  const [uploading, setUploading] = useState<"video" | "cover" | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [coverPreviewUrl, setCoverPreviewUrl] = useState<string | null>(null);
+  const videoInputRef = useRef<HTMLInputElement>(null);
+  const coverInputRef = useRef<HTMLInputElement>(null);
+
+  const hasVideo = Boolean(part.fileRef);
+  const hasCover = Boolean(part.coverFileRef);
+
+  function handleVideoSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0] ?? null;
+    setVideoFile(f);
+    if (f) {
+      const url = URL.createObjectURL(f);
+      setPreviewUrl(url);
+    } else {
+      setPreviewUrl(null);
+    }
+  }
+
+  function handleCoverSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0] ?? null;
+    setCoverFile(f);
+    if (f) {
+      const url = URL.createObjectURL(f);
+      setCoverPreviewUrl(url);
+    } else {
+      setCoverPreviewUrl(null);
+    }
+  }
+
+  async function upload(type: "video" | "cover") {
+    const file = type === "video" ? videoFile : coverFile;
+    if (!file) {
+      onError("لطفاً ابتدا فایل را انتخاب کنید.");
+      return;
+    }
+    setUploading(type);
+    onError(null);
+    try {
+      const form = new FormData();
+      form.set("file", file);
+      form.set("type", type);
+      if (part.version) form.set("expectedVersion", String(part.version));
+      const res = await fetch(`/api/content-room/parts/${part.id}/upload`, {
+        method: "POST",
+        body: form,
+      });
+      const body = await res.json();
+      if (!res.ok || !body.ok) {
+        throw new Error(body.error ?? "خطا در آپلود");
+      }
+      onToast(type === "video" ? `ویدئو قسمت ${part.partNumber} با موفقیت آپلود شد.` : `کاور قسمت ${part.partNumber} با موفقیت آپلود شد.`);
+      setTimeout(() => onToast(null), 3000);
+      if (type === "video") {
+        setVideoFile(null);
+        setPreviewUrl(null);
+        if (videoInputRef.current) videoInputRef.current.value = "";
+      } else {
+        setCoverFile(null);
+        setCoverPreviewUrl(null);
+        if (coverInputRef.current) coverInputRef.current.value = "";
+      }
+      await onRefresh();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "خطا در آپلود فایل";
+      onError(message);
+      if (message.includes("نسخه قدیمی") || message.includes("409")) {
+        await onRefresh();
+      }
+    } finally {
+      setUploading(null);
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-3 rounded-lg border border-tg-border bg-tg-hover/20 px-3 py-3">
+      <div className="flex items-center justify-between">
+        <p className="text-sm font-semibold text-tg-text">قسمت {part.partNumber}</p>
+        <div className="flex gap-1">
+          <span
+            className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${hasVideo ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400" : "bg-slate-500/10 text-slate-500"}`}
+          >
+            {hasVideo ? "ویدئو ✓" : "بدون ویدئو"}
+          </span>
+          <span
+            className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${hasCover ? "bg-sky-500/15 text-sky-700 dark:text-sky-400" : "bg-slate-500/10 text-slate-500"}`}
+          >
+            {hasCover ? "کاور ✓" : "بدون کاور"}
+          </span>
+        </div>
+      </div>
+
+      {part.fileRef && (
+        <p className="truncate rounded bg-tg-surface px-2 py-1 font-mono text-[11px] text-tg-secondary" title={part.fileRef}>
+          ویدئو: {part.fileRef.slice(0, 32)}
+          {part.fileRef.length > 32 ? "..." : ""}
+        </p>
+      )}
+      {part.coverFileRef && (
+        <div className="space-y-1">
+          <p className="truncate rounded bg-tg-surface px-2 py-1 font-mono text-[11px] text-tg-secondary" title={part.coverFileRef}>
+            کاور: {part.coverFileRef.slice(0, 32)}
+            {part.coverFileRef.length > 32 ? "..." : ""}
+          </p>
+          {/* cover preview - show stored ref as text; if recent upload preview available show image */}
+          {coverPreviewUrl && (
+            <img src={coverPreviewUrl} alt={`کاور قسمت ${part.partNumber}`} className="h-24 w-full rounded object-cover" />
+          )}
+        </div>
+      )}
+
+      {previewUrl && (
+        <div className="space-y-1">
+          <p className="text-xs font-medium text-tg-secondary">پیش‌نمایش ویدئو انتخاب‌شده:</p>
+          <video src={previewUrl} controls className="h-28 w-full rounded bg-black" />
+          {videoFile && (
+            <p className="text-[11px] text-tg-secondary">
+              {(videoFile.size / (1024 * 1024)).toFixed(1)} MB — {videoFile.type || "نامشخص"}
+            </p>
+          )}
+        </div>
+      )}
+      {coverPreviewUrl && !part.coverFileRef && (
+        <div className="space-y-1">
+          <p className="text-xs font-medium text-tg-secondary">پیش‌نمایش کاور:</p>
+          <img src={coverPreviewUrl} alt={`پیش‌نمایش کاور ${part.partNumber}`} className="h-28 w-full rounded object-cover" />
+        </div>
+      )}
+
+      <div className="space-y-2 border-t border-tg-border pt-2">
+        <div className="flex flex-col gap-2">
+          <label className="text-xs font-medium text-tg-secondary">ویدئوی خام (حداکثر ۱۰۰MB — mp4/mov/avi/webm/mkv)</label>
+          <input
+            ref={videoInputRef}
+            type="file"
+            accept="video/mp4,video/quicktime,video/x-msvideo,video/avi,video/webm,video/x-matroska,video/*"
+            onChange={handleVideoSelect}
+            className="w-full text-xs file:mr-2 file:rounded file:border-0 file:bg-tg-accent file:px-3 file:py-1 file:text-xs file:text-tg-accent-fg"
+          />
+          <Button
+            size="sm"
+            onClick={() => upload("video")}
+            disabled={!videoFile || uploading !== null}
+            className="w-full min-h-[36px] text-xs"
+          >
+            {uploading === "video" ? "در حال آپلود ویدئو..." : hasVideo ? "جایگزینی ویدئو" : "آپلود ویدئو"}
+          </Button>
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <label className="text-xs font-medium text-tg-secondary">کاور (حداکثر ۱۰MB — jpeg/png)</label>
+          <input
+            ref={coverInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/jpg,image/webp"
+            onChange={handleCoverSelect}
+            className="w-full text-xs file:mr-2 file:rounded file:border-0 file:bg-tg-accent file:px-3 file:py-1 file:text-xs file:text-tg-accent-fg"
+          />
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() => upload("cover")}
+            disabled={!coverFile || uploading !== null}
+            className="w-full min-h-[36px] text-xs"
+          >
+            {uploading === "cover" ? "در حال آپلود کاور..." : hasCover ? "جایگزینی کاور" : "آپلود کاور"}
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }

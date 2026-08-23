@@ -22,6 +22,8 @@ export interface ContentPart {
   productId: string;
   partNumber: number;
   fileRef?: string | null;
+  coverFileRef?: string | null;
+  version?: number | null;
   status?: string | null;
   createdAt?: string | Date | null;
   updatedAt?: string | Date | null;

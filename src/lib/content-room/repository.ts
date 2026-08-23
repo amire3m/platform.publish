@@ -80,6 +80,8 @@ export interface ContentPartRecord {
   productId: string;
   partNumber: number;
   fileRef: string | null;
+  coverFileRef: string | null;
+  version: number;
   status: string | null;
   createdAt: Date;
   updatedAt: Date;
@@ -152,6 +154,13 @@ export interface ContentRoomDatabasePort {
     patch: Partial<ContentProductRecord>,
     event: ContentRoomEventRecord,
   ): Promise<ContentProductRecord>;
+  getPart?(id: string): Promise<ContentPartRecord | null>;
+  transactUpdatePartFile?(
+    partId: string,
+    expectedVersion: number | null,
+    patch: Partial<Pick<ContentPartRecord, "fileRef" | "coverFileRef">>,
+    event: ContentRoomEventRecord,
+  ): Promise<ContentPartRecord>;
 }
 
 // ---------------------------------------------------------------------------
@@ -236,6 +245,39 @@ export class InMemoryContentRoomPort implements ContentRoomDatabasePort {
     if (idx >= 0) this.products[idx] = updated;
     this.events.push(event);
     event.after = { ...updated } as unknown as Record<string, unknown>;
+    return updated;
+  }
+
+  async getPart(id: string): Promise<ContentPartRecord | null> {
+    return this.parts.find((p) => p.id === id) ?? null;
+  }
+
+  async transactUpdatePartFile(
+    partId: string,
+    expectedVersion: number | null,
+    patch: Partial<Pick<ContentPartRecord, "fileRef" | "coverFileRef">>,
+    event: ContentRoomEventRecord,
+  ): Promise<ContentPartRecord> {
+    const idx = this.parts.findIndex((p) => p.id === partId);
+    if (idx < 0) throw new ContentRoomRepositoryError("NOT_FOUND", "قسمت یافت نشد.");
+    const existing = this.parts[idx];
+    if (expectedVersion !== null && existing.version !== expectedVersion) {
+      throw new ContentRoomRepositoryError("VERSION_CONFLICT", "نسخه قدیمی است.");
+    }
+    const updated: ContentPartRecord = {
+      ...existing,
+      ...patch,
+      version: existing.version + 1,
+      updatedAt: new Date(),
+    };
+    this.parts[idx] = updated;
+    // update by product map
+    const list = this.partsByProduct.get(existing.productId);
+    if (list) {
+      const li = list.findIndex((p) => p.id === partId);
+      if (li >= 0) list[li] = updated;
+    }
+    this.events.push(event);
     return updated;
   }
 }
@@ -357,6 +399,52 @@ function createDrizzleContentRoomPort(): ContentRoomDatabasePort {
         throw new ContentRoomRepositoryError("VERSION_CONFLICT", "نسخه قدیمی است.");
       });
     },
+
+    async getPart(id) {
+      const db = await getDb();
+      const { contentParts } = await import("@/db/schema");
+      const { eq } = await import("drizzle-orm");
+      const [row] = await db.select().from(contentParts).where(eq(contentParts.id, id)).limit(1);
+      return row ? mapPartRow(row as unknown as Record<string, unknown>) : null;
+    },
+
+    async transactUpdatePartFile(partId, expectedVersion, patch, event) {
+      const db = await getDb();
+      const { contentParts, workflowEvents } = await import("@/db/schema");
+      const { eq, and } = await import("drizzle-orm");
+      return db.transaction(async (tx) => {
+        const setPatch: Record<string, unknown> = {};
+        if (patch.fileRef !== undefined) setPatch.fileRef = patch.fileRef;
+        if (patch.coverFileRef !== undefined) setPatch.coverFileRef = patch.coverFileRef;
+        setPatch.updatedAt = new Date();
+        // version handling
+        if (expectedVersion !== null) {
+          setPatch.version = expectedVersion + 1;
+          const [updated] = await tx
+            .update(contentParts)
+            .set(setPatch as never)
+            .where(and(eq(contentParts.id, partId), eq(contentParts.version, expectedVersion)))
+            .returning();
+          if (updated) {
+            await tx.insert(workflowEvents).values(toEventInsert(event) as never);
+            return mapPartRow(updated as unknown as Record<string, unknown>);
+          }
+          const [existing] = await tx.select({ id: contentParts.id }).from(contentParts).where(eq(contentParts.id, partId)).limit(1);
+          if (!existing) throw new ContentRoomRepositoryError("NOT_FOUND", "قسمت یافت نشد.");
+          throw new ContentRoomRepositoryError("VERSION_CONFLICT", "نسخه قدیمی است.");
+        } else {
+          // no version check, just update and bump
+          const [existingRow] = await tx.select().from(contentParts).where(eq(contentParts.id, partId)).limit(1);
+          if (!existingRow) throw new ContentRoomRepositoryError("NOT_FOUND", "قسمت یافت نشد.");
+          const currentVersion = (existingRow as unknown as { version: number }).version ?? 1;
+          setPatch.version = currentVersion + 1;
+          const [updated] = await tx.update(contentParts).set(setPatch as never).where(eq(contentParts.id, partId)).returning();
+          if (!updated) throw new ContentRoomRepositoryError("NOT_FOUND", "قسمت یافت نشد.");
+          await tx.insert(workflowEvents).values(toEventInsert(event) as never);
+          return mapPartRow(updated as unknown as Record<string, unknown>);
+        }
+      });
+    },
   };
 }
 
@@ -386,6 +474,8 @@ function mapPartRow(row: Record<string, unknown>): ContentPartRecord {
     productId: (row.productId as string) ?? (row.product_id as string),
     partNumber: (row.partNumber as number) ?? (row.part_number as number),
     fileRef: (row.fileRef as string | null) ?? (row.file_ref as string | null) ?? null,
+    coverFileRef: (row.coverFileRef as string | null) ?? (row.cover_file_ref as string | null) ?? null,
+    version: (row.version as number) ?? 1,
     status: (row.status as string | null) ?? null,
     createdAt: (row.createdAt as Date) ?? (row.created_at as Date),
     updatedAt: (row.updatedAt as Date) ?? (row.updated_at as Date),
@@ -429,6 +519,8 @@ function toPartInsert(p: ContentPartRecord): Record<string, unknown> {
     productId: p.productId,
     partNumber: p.partNumber,
     fileRef: p.fileRef,
+    coverFileRef: p.coverFileRef,
+    version: p.version,
     status: p.status,
     createdAt: p.createdAt,
     updatedAt: p.updatedAt,
@@ -488,6 +580,8 @@ export interface ContentRoomRepository {
   createProduct(command: CreateProductCommand): Promise<ContentProductDetail>;
   updateProductStatus(command: UpdateProductStatusCommand): Promise<ContentProductRecord>;
   getParts(productId: string): Promise<ContentPartRecord[]>;
+  getPart?(id: string): Promise<ContentPartRecord | null>;
+  updatePartFile?(command: { partId: string; fileRef?: string | null; coverFileRef?: string | null; expectedVersion?: number | null; actorUserId: string }): Promise<ContentPartRecord>;
 }
 
 export function createContentRoomRepository(port?: ContentRoomDatabasePort): ContentRoomRepository {
@@ -548,6 +642,8 @@ export function createContentRoomRepository(port?: ContentRoomDatabasePort): Con
           productId: id,
           partNumber: i,
           fileRef: null,
+          coverFileRef: null,
+          version: 1,
           status: null,
           createdAt: now,
           updatedAt: now,
@@ -592,6 +688,43 @@ export function createContentRoomRepository(port?: ContentRoomDatabasePort): Con
         createdAt: now,
       };
       return dbPort.transactUpdateProduct(command.id, command.expectedVersion, patch, event);
+    },
+
+    async getPart(id) {
+      if (dbPort.getPart) return dbPort.getPart(id);
+      // fallback search via list
+      const allProducts = await dbPort.listProducts();
+      for (const p of allProducts) {
+        const parts = await dbPort.listPartsForProduct(p.id);
+        const found = parts.find((x) => x.id === id);
+        if (found) return found;
+      }
+      return null;
+    },
+
+    async updatePartFile(command) {
+      const expectedVersion = command.expectedVersion ?? null;
+      const patch: Partial<Pick<ContentPartRecord, "fileRef" | "coverFileRef">> = {};
+      if (command.fileRef !== undefined) patch.fileRef = command.fileRef;
+      if (command.coverFileRef !== undefined) patch.coverFileRef = command.coverFileRef;
+      if (!dbPort.transactUpdatePartFile) throw new ContentRoomRepositoryError("NOT_FOUND", "ذخیره فایل پشتیبانی نمی‌شود.");
+      // fetch existing for before snapshot
+      const existing = dbPort.getPart ? await dbPort.getPart(command.partId) : null;
+      const now = new Date();
+      const after = existing ? { ...existing, ...patch, version: (existing.version ?? 1) + 1, updatedAt: now } : patch;
+      const event: ContentRoomEventRecord = {
+        id: generateEntityId("WEV"),
+        entityType: "content_part",
+        entityId: command.partId,
+        action: "file_updated",
+        before: (existing as unknown as Record<string, unknown>) ?? null,
+        after: after as unknown as Record<string, unknown>,
+        actorUserId: command.actorUserId,
+        source: "api",
+        reason: null,
+        createdAt: now,
+      };
+      return dbPort.transactUpdatePartFile(command.partId, expectedVersion, patch, event);
     },
   };
 }

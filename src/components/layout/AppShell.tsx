@@ -16,6 +16,7 @@ import {
   Mail,
   Menu,
   Moon,
+  Package,
   PlusCircle,
   ScrollText,
   Send,
@@ -60,6 +61,7 @@ export function AppShell({
   const [open, setOpen] = useState(false);
   const [canViewWorkflow, setCanViewWorkflow] = useState(false);
   const [canViewMail, setCanViewMail] = useState(false);
+  const [canViewContentRoom, setCanViewContentRoom] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const [showNotifications, setShowNotifications] = useState(false);
 
@@ -74,6 +76,7 @@ export function AppShell({
         if (!cancelled && Array.isArray(permissions)) {
           if (permissions.includes("view_workflow")) setCanViewWorkflow(true);
           if (permissions.includes("view_mail") || permissions.includes("manage_mail")) setCanViewMail(true);
+          if (permissions.includes("view_content_room")) setCanViewContentRoom(true);
         }
       } catch {
         // keep hidden on error
@@ -115,10 +118,14 @@ export function AppShell({
 
   const workflowNavItem = { href: "/workflow", label: "اتاق انتشار", icon: ListChecks } as const;
   const mailNavItem = { href: "/inbox", label: "صندوق", icon: Mail } as const;
+  const contentRoomNavItem = { href: "/content-room", label: "اتاق محتوا", icon: Package } as const;
   const withWorkflow = canViewWorkflow
     ? ([NAV_ITEMS[0], workflowNavItem, ...NAV_ITEMS.slice(1)] as typeof NAV_ITEMS)
     : NAV_ITEMS;
-  const visibleNavItems = canViewMail ? ([...withWorkflow.slice(0, 2), mailNavItem, ...withWorkflow.slice(2)] as typeof NAV_ITEMS) : withWorkflow;
+  const withContentRoom = canViewContentRoom
+    ? ([withWorkflow[0], contentRoomNavItem, ...withWorkflow.slice(1)] as typeof NAV_ITEMS)
+    : withWorkflow;
+  const visibleNavItems = canViewMail ? ([...withContentRoom.slice(0, 2), mailNavItem, ...withContentRoom.slice(2)] as typeof NAV_ITEMS) : withContentRoom;
 
   return (
     <div className="flex min-h-screen">

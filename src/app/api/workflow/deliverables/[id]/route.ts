@@ -1,4 +1,4 @@
-import { jsonError, jsonOk } from "@/lib/api-helpers";
+import { jsonError, jsonInternalError, jsonOk } from "@/lib/api-helpers";
 import { hasPermission, type PermissionSubject } from "@/lib/permissions";
 import { workflowRepository, type WorkflowRepository } from "@/lib/workflow/repository";
 import { updateDeliverableSchema } from "@/lib/workflow/validation";
@@ -54,7 +54,7 @@ export async function handleDeliverableRequest(
     } catch (e) {
       const m = mapError(e);
       if (m) return m;
-      return jsonError((e as Error).message ?? "خطای سرور", 500);
+      return jsonInternalError(e, "api/workflow/deliverables/[id] GET");
     }
   }
 
@@ -67,7 +67,7 @@ export async function handleDeliverableRequest(
     }
     const parsed = updateDeliverableSchema.safeParse(body);
     if (!parsed.success) {
-      return jsonError(parsed.error.issues[0]?.message ?? "ورودی نامعتبر است.", 422, "VALIDATION_ERROR");
+      return jsonError("ورودی نامعتبر است. اطلاعات واردشده را بررسی کنید.", 422, "VALIDATION_ERROR");
     }
 
     // Permission: manage_programs OR (update_assigned_deliverables + assignment match)
@@ -107,7 +107,7 @@ export async function handleDeliverableRequest(
     } catch (e) {
       const m = mapError(e);
       if (m) return m;
-      return jsonError((e as Error).message ?? "خطای سرور", 500);
+      return jsonInternalError(e, "api/workflow/deliverables/[id] PATCH");
     }
   }
 

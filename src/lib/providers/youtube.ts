@@ -82,9 +82,10 @@ async function publish(input: PublishInput): Promise<PublishResult> {
       raw: { status: res.data.status, snippet: res.data.snippet },
     };
   } catch (err) {
-    const message = (err as { message?: string })?.message ?? "خطای ناشناخته در انتشار یوتیوب";
-    const retryable = /rate|quota|5\d\d/i.test(message);
-    return { ok: false, errorCode: "YOUTUBE_API_ERROR", message, retryable };
+    const rawMessage = (err as { message?: string })?.message ?? "خطای ناشناخته در انتشار یوتیوب";
+    const retryable = /rate|quota|5\d\d/i.test(rawMessage);
+    console.error("[youtube-provider] publish failed:", err);
+    return { ok: false, errorCode: "YOUTUBE_API_ERROR", message: "انتشار در YouTube انجام نشد. دوباره تلاش کنید.", retryable };
   }
 }
 

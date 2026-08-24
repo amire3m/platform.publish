@@ -18,7 +18,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ conten
   }
 
   const parsed = rescheduleSchema.safeParse(await req.json());
-  if (!parsed.success) return jsonError(parsed.error.issues[0]?.message ?? "داده نامعتبر است.", 422);
+  if (!parsed.success) return jsonError("ورودی نامعتبر است. اطلاعات واردشده را بررسی کنید.", 422, "VALIDATION_ERROR");
 
   if (isPast(parsed.data.scheduledAtUtc)) {
     return jsonError("امکان زمان‌بندی در گذشته وجود ندارد.", 400);

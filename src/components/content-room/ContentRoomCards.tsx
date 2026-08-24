@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { Card } from "@/components/ui";
 import type { ContentRoomProductSummary } from "./types";
-import { CHANNEL_LABELS, PRODUCT_TYPE_LABELS, getProductProgress, getNextAction } from "./room-model";
+import { channelLabelFa, productTypeLabelFa, getProductProgress, getNextAction } from "./room-model";
 import { contentStatusPresentation } from "@/lib/content-room/presentation";
 
 interface Props {
@@ -27,7 +27,7 @@ export function ContentRoomCards({ products, onArchive, onUnarchive }: Props) {
                   {p.title}
                 </Link>
                 <p className="text-xs text-tg-secondary">
-                  {PRODUCT_TYPE_LABELS[p.productType] ?? p.productType} · {CHANNEL_LABELS[p.channel] ?? p.channel}
+                  {productTypeLabelFa(p.productType)} · {channelLabelFa(p.channel)}
                 </p>
               </div>
               <span

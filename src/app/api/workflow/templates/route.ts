@@ -1,4 +1,4 @@
-import { jsonError, jsonOk, requirePermission } from "@/lib/api-helpers";
+import { jsonError, jsonInternalError, jsonOk, requirePermission } from "@/lib/api-helpers";
 import { workflowRepository, type WorkflowRepository } from "@/lib/workflow/repository";
 import { createTemplateSchema } from "@/lib/workflow/validation";
 
@@ -59,7 +59,7 @@ export async function handleTemplatesRequest(
     } catch (error) {
       const mapped = mapRepositoryError(error);
       if (mapped) return mapped;
-      return jsonError((error as Error).message ?? "خطای سرور", 500);
+      return jsonInternalError(error, "api/workflow/templates GET");
     }
   }
 
@@ -76,7 +76,7 @@ export async function handleTemplatesRequest(
 
     const parsed = createTemplateSchema.safeParse(body);
     if (!parsed.success) {
-      return jsonError(parsed.error.issues[0]?.message ?? "ورودی نامعتبر است.", 422, "VALIDATION_ERROR");
+      return jsonError("ورودی نامعتبر است. اطلاعات واردشده را بررسی کنید.", 422, "VALIDATION_ERROR");
     }
 
     try {
@@ -97,7 +97,7 @@ export async function handleTemplatesRequest(
     } catch (error) {
       const mapped = mapRepositoryError(error);
       if (mapped) return mapped;
-      return jsonError((error as Error).message ?? "خطای سرور", 500);
+      return jsonInternalError(error, "api/workflow/templates POST");
     }
   }
 

@@ -18,7 +18,7 @@ export async function POST(req: Request) {
 
   const body = await req.json();
   const parsed = createUserSchema.safeParse(body);
-  if (!parsed.success) return jsonError(parsed.error.issues[0]?.message ?? "داده ورودی نامعتبر است.", 422);
+  if (!parsed.success) return jsonError("ورودی نامعتبر است. اطلاعات واردشده را بررسی کنید.", 422, "VALIDATION_ERROR");
 
   const [created] = await db
     .insert(users)

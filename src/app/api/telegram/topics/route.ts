@@ -72,7 +72,7 @@ export async function POST(req: Request) {
         id: generateEntityId("TPC"),
         key: body.key,
         label: body.label,
-        purpose: "Topic اختصاصی تعریف‌شده توسط کاربر",
+        purpose: "تاپیک اختصاصی تعریف‌شده توسط کاربر",
         messageThreadId,
         isFixed: false,
       })

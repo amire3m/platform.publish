@@ -22,8 +22,7 @@ export default function YoutubeSettingsPage() {
           <StatusBadge status={settings?.googleOauthConfigured ? "connected" : "disconnected"} />
         </div>
         <p className="mt-2 text-sm text-tg-text/75">
-          برای اتصال رسمی، متغیرهای محیطی <code>GOOGLE_CLIENT_ID</code>، <code>GOOGLE_CLIENT_SECRET</code> و <code>GOOGLE_REDIRECT_URI</code> را
-          طبق راهنمای پروژه تنظیم کنید. بدون این مقادیر، اتصال حساب‌های YouTube فقط در «حالت آزمایشی» ممکن است.
+          برای اتصال رسمی، اطلاعات پیکربندی اتصال Google را طبق راهنمای پروژه در تنظیمات سرور وارد کنید. بدون این اطلاعات، اتصال حساب‌های YouTube فقط در «حالت آزمایشی» ممکن است.
         </p>
         <ul className="mt-4 list-inside list-disc space-y-1 text-xs text-tg-secondary">
           <li>سهمیه روزانه API باید در Google Cloud Console پایش شود.</li>

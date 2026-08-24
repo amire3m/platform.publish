@@ -7,6 +7,7 @@ import { Button, Card, ConfirmModal, Modal, StatusBadge, Textarea } from "@/comp
 import { useToast } from "@/components/providers";
 import { formatJalaliDateTime } from "@/lib/date/jalali";
 import { JalaliDateTimePicker } from "@/components/JalaliDateTimePicker";
+import { deliverableKindLabelFa, platformLabelFa } from "@/lib/presentation-fa";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
@@ -132,7 +133,7 @@ export default function ContentDetailPage({ params }: { params: Promise<{ id: st
             <div key={i} className="rounded-xl border border-tg-border p-3 text-sm">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <span>
-                  {t.platform === "youtube" ? "یوتیوب" : "اینستاگرام"} · {t.content_type} — {t.account_id}
+                  {platformLabelFa(t.platform)} · {deliverableKindLabelFa(t.content_type)} — {t.account_id}
                 </span>
                 <StatusBadge status={t.status} />
               </div>

@@ -11,7 +11,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ public
   const { publicationId } = await params;
 
   const parsed = rescheduleSchema.safeParse(await req.json());
-  if (!parsed.success) return jsonError(parsed.error.issues[0]?.message ?? "داده نامعتبر است.", 422);
+  if (!parsed.success) return jsonError("ورودی نامعتبر است. اطلاعات واردشده را بررسی کنید.", 422, "VALIDATION_ERROR");
 
   if (isPast(parsed.data.scheduledAtUtc)) {
     return jsonError("امکان زمان‌بندی در گذشته وجود ندارد.", 400);
@@ -61,7 +61,7 @@ export async function handleTargetRescheduleRequest(
   if (!user) return jsonError("ابتدا وارد حساب کاربری خود شوید.", 401);
   const { publicationId } = await ctx.params;
   const parsed = rescheduleSchema.safeParse(await req.json());
-  if (!parsed.success) return jsonError(parsed.error.issues[0]?.message ?? "داده نامعتبر است.", 422);
+  if (!parsed.success) return jsonError("ورودی نامعتبر است. اطلاعات واردشده را بررسی کنید.", 422, "VALIDATION_ERROR");
   if (isPast(parsed.data.scheduledAtUtc)) return jsonError("امکان زمان‌بندی در گذشته وجود ندارد.", 400);
   const version = await deps.getPublicationVersion(publicationId);
   if (version == null) return jsonError("انتشار یافت نشد.", 404);

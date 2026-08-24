@@ -43,13 +43,13 @@ export default function GeneralSettingsPage() {
         <div>
           <Label>منطقه زمانی پیش‌فرض</Label>
           <Input value={defaultTimezone} onChange={(e) => setDefaultTimezone(e.target.value)} />
-          <p className="mt-1 text-xs text-tg-secondary/80">تمام محاسبات زمان‌بندی بر اساس این منطقه انجام و به‌صورت UTC ذخیره می‌شود.</p>
+          <p className="mt-1 text-xs text-tg-secondary/80">تمام محاسبات زمان‌بندی بر اساس این منطقه انجام و با زمان هماهنگ جهانی ذخیره می‌شود.</p>
         </div>
         <div>
           <Label>محدودیت حجم فایل ربات تلگرام (مگابایت)</Label>
           <Input type="number" value={fileSizeLimitMb} onChange={(e) => setFileSizeLimitMb(Number(e.target.value))} />
           <p className="mt-1 text-xs text-tg-secondary/80">
-            محدودیت پیش‌فرض Bot API معمولی ۵۰ مگابایت است. برای فایل‌های حجیم‌تر باید یک سرور محلی Bot API راه‌اندازی شود (به راهنمای پروژه مراجعه کنید).
+            محدودیت پیش‌فرض API ربات معمولی ۵۰ مگابایت است. برای فایل‌های حجیم‌تر باید یک سرور محلی API ربات راه‌اندازی شود (به راهنمای پروژه مراجعه کنید).
           </p>
         </div>
         <Button onClick={save}>ذخیره تنظیمات</Button>

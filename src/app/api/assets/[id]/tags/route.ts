@@ -1,4 +1,4 @@
-import { jsonError, jsonOk, requirePermission } from "@/lib/api-helpers";
+import { jsonError, jsonInternalError, jsonOk, requirePermission } from "@/lib/api-helpers";
 import { addTag } from "@/lib/assets/repository";
 
 export const dynamic = "force-dynamic";
@@ -22,6 +22,6 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
   } catch (err) {
     const msg = (err as Error).message ?? "خطای سرور";
     if (msg.includes("یافت نشد")) return jsonError(msg, 404, "NOT_FOUND");
-    return jsonError(msg, 400);
+    return jsonInternalError(err, "api/assets/[id]/tags");
   }
 }

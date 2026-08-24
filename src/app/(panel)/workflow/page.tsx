@@ -132,7 +132,7 @@ export default function WorkflowRoomPage() {
           <ErrorState
             message={
               isNotFound
-                ? "اتاق انتشار هنوز فعال نشده است (GET /api/workflow/programs در دسترس نیست). پس از انتشار فاز یک، داده‌ها اینجا نمایش داده می‌شوند."
+                ? "اتاق انتشار هنوز فعال نشده است. پس از فعال‌سازی، داده‌ها اینجا نمایش داده می‌شوند."
                 : (error.message ?? "خطا در دریافت برنامه‌ها")
             }
           />

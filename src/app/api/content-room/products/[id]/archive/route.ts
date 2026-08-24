@@ -1,4 +1,4 @@
-import { jsonError, jsonOk, requirePermission } from "@/lib/api-helpers";
+import { jsonError, jsonInternalError, jsonOk, requirePermission } from "@/lib/api-helpers";
 import { contentRoomRepository, type ContentRoomRepository } from "@/lib/content-room/repository";
 
 export interface ArchiveRouteDependencies {
@@ -56,7 +56,7 @@ export async function handleArchiveRequest(
   } catch (error) {
     const mapped = mapRepositoryError(error);
     if (mapped) return mapped;
-    return jsonError((error as Error).message ?? "خطای سرور", 500);
+    return jsonInternalError(error, "api/content-room/products/[id]/archive");
   }
 }
 

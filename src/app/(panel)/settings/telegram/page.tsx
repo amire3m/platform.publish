@@ -89,7 +89,7 @@ export default function TelegramSettingsPage() {
           </p>
         </div>
         <p className="mt-2 text-xs text-tg-secondary/80">
-          توکن ربات و شناسه گروه از طریق متغیرهای محیطی TELEGRAM_BOT_TOKEN و TELEGRAM_GROUP_ID تنظیم می‌شوند و در پنل نمایش داده نمی‌شوند.
+          توکن ربات و شناسه گروه در تنظیمات سرور وارد می‌شوند و در پنل نمایش داده نمی‌شوند.
         </p>
         <Button className="mt-3" onClick={testConnection} disabled={testing}>
           {testing ? "در حال بررسی..." : "تست اتصال"}
@@ -127,7 +127,7 @@ export default function TelegramSettingsPage() {
       <Card>
         <h2 className="mb-3 font-semibold">نگاشت تاپیک‌ها</h2>
         <p className="mb-3 text-xs text-tg-secondary/80">
-          Bot API قابلیت فهرست کردن تاپیک‌های موجود را ندارد؛ برای هر مورد یا از دکمه «ایجاد از طریق ربات» استفاده کنید یا شناسه فنی تاپیک
+          API ربات قابلیت فهرست کردن تاپیک‌های موجود را ندارد؛ برای هر مورد یا از دکمه «ایجاد از طریق ربات» استفاده کنید یا شناسه فنی تاپیک
           موجود را دستی وارد کنید.
         </p>
         <div className="space-y-2">

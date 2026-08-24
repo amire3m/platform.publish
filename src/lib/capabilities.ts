@@ -178,7 +178,7 @@ export function validateFileAgainstCapability(
   }
   if (sizeMb > telegramLimitMb) {
     errors.push(
-      `حجم فایل از محدودیت فعلی ربات تلگرام (${telegramLimitMb} مگابایت) بیشتر است. برای فایل‌های بزرگ‌تر باید از Local Bot API Server استفاده شود (به README مراجعه کنید).`,
+      `حجم فایل از محدودیت فعلی ربات تلگرام (${telegramLimitMb} مگابایت) بیشتر است. برای فایل‌های بزرگ‌تر باید از سرور محلی API ربات استفاده شود (به راهنمای پروژه مراجعه کنید).`,
     );
   }
   if (!cap.allowedMimeTypes.includes(input.mimeType)) {

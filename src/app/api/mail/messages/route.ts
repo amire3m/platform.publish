@@ -1,4 +1,4 @@
-import { jsonError, jsonOk, requirePermission } from "@/lib/api-helpers";
+import { jsonInternalError, jsonOk, requirePermission } from "@/lib/api-helpers";
 import { fetchMessages } from "@/lib/mail/imap";
 import type { MailAccount } from "@/lib/mail/config";
 
@@ -16,7 +16,6 @@ export async function GET(request: Request) {
     const messages = await fetchMessages(account, limit);
     return jsonOk({ account, messages });
   } catch (e) {
-    console.error("[api/mail/messages] fetch failed", e);
-    return jsonError(e instanceof Error ? e.message : "خطا در دریافت پیام‌ها", 500);
+    return jsonInternalError(e, "api/mail/messages");
   }
 }

@@ -323,7 +323,11 @@ async function processContent(row: typeof content.$inferSelect, opts?: { force?:
         }
       }
     } catch (err) {
-      const reflected: PersistedPlatformTarget = { ...target, status: "failed", attempts, last_error: (err as Error).message };
+      console.error(`[worker] ${target.platform} publish threw:`, err);
+      const safeMessage = target.platform === "youtube"
+        ? "انتشار در YouTube انجام نشد. دوباره تلاش کنید."
+        : "انتشار در Instagram انجام نشد. دوباره تلاش کنید.";
+      const reflected: PersistedPlatformTarget = { ...target, status: "failed", attempts, last_error: safeMessage };
       updatedTargets.push(reflected);
       anyFailure = true;
       if (reflected.workflow_publication_id) {

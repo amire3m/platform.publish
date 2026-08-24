@@ -14,7 +14,7 @@ export async function POST(req: Request) {
 
   const botToken = process.env.TELEGRAM_BOT_TOKEN;
   if (!botToken) {
-    return jsonError("ورود با تلگرام پیکربندی نشده است (TELEGRAM_BOT_TOKEN تنظیم نشده).", 500);
+    return jsonError("ورود با تلگرام پیکربندی نشده است. اطلاعات اتصال ربات را در تنظیمات سرور وارد کنید.", 500);
   }
 
   const payload = (await req.json()) as Record<string, string | number>;

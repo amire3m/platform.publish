@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { Card } from "@/components/ui";
 import type { ContentRoomProductSummary } from "./types";
-import { CHANNEL_LABELS, PRODUCT_TYPE_LABELS, getProductProgress, getNextAction } from "./room-model";
+import { channelLabelFa, productTypeLabelFa, getProductProgress, getNextAction } from "./room-model";
 import { contentStatusPresentation } from "@/lib/content-room/presentation";
 
 interface Props {
@@ -42,8 +42,8 @@ export function ContentRoomTable({ products, onArchive, onUnarchive }: Props) {
                         {p.title}
                       </Link>
                     </td>
-                    <td className="px-3 py-3 text-tg-text">{PRODUCT_TYPE_LABELS[p.productType] ?? p.productType}</td>
-                    <td className="px-3 py-3 text-tg-text">{CHANNEL_LABELS[p.channel] ?? p.channel}</td>
+                    <td className="px-3 py-3 text-tg-text">{productTypeLabelFa(p.productType)}</td>
+                    <td className="px-3 py-3 text-tg-text">{channelLabelFa(p.channel)}</td>
                     <td className="px-3 py-3 text-center text-tg-text">{p.partsCount}</td>
                     <td className="px-3 py-3">
                       <span

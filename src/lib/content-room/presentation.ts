@@ -1,3 +1,5 @@
+import { UNKNOWN_LABEL_FA } from "@/lib/presentation-fa";
+
 export type ContentStatus =
   | "imported"
   | "editing_youtube"
@@ -26,7 +28,7 @@ const PRESENTATIONS: Record<ContentStatus, ContentStatusPresentation> = {
 export function contentStatusPresentation(status: ContentStatus): ContentStatusPresentation {
   return (
     PRESENTATIONS[status] ?? {
-      label: status,
+      label: UNKNOWN_LABEL_FA,
       tone: "neutral",
       icon: "clock",
     }

@@ -7,6 +7,7 @@ import { Search, Grid3X3, List, X, Tag, Film, Image as ImageIcon, Layers, Extern
 import { Button, Card, Input, Select, Modal, EmptyState, ErrorState, Skeleton } from "@/components/ui";
 import { CHANNELS } from "@/lib/channels";
 import type { Asset, AssetType } from "@/lib/assets/types";
+import { UNKNOWN_LABEL_FA } from "@/lib/presentation-fa";
 
 const fetcher = async (url: string) => {
   const res = await fetch(url);
@@ -23,9 +24,9 @@ const detailFetcher = async (url: string) => {
 };
 
 function formatSize(bytes: number): string {
-  if (bytes >= 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
-  if (bytes >= 1024) return `${(bytes / 1024).toFixed(0)} KB`;
-  return `${bytes} B`;
+  if (bytes >= 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} مگابایت`;
+  if (bytes >= 1024) return `${(bytes / 1024).toFixed(0)} کیلوبایت`;
+  return `${bytes} بایت`;
 }
 
 function formatDate(iso: string): string {
@@ -41,7 +42,7 @@ function typeLabel(type: AssetType): string {
   if (type === "video") return "ویدئو";
   if (type === "image") return "تصویر";
   if (type === "cover") return "کاور";
-  return type;
+  return UNKNOWN_LABEL_FA;
 }
 
 function TypeBadge({ type }: { type: AssetType }) {
@@ -256,7 +257,7 @@ export default function AssetsPage() {
                   {a.filename}
                 </p>
                 <p className="text-xs text-tg-secondary">
-                  {formatSize(a.size)} · {formatDate(a.createdAt)} {a.channelId ? `· ${CHANNELS.find((c) => c.id === a.channelId)?.labelFa ?? a.channelId}` : ""}
+                   {formatSize(a.size)} · {formatDate(a.createdAt)} {a.channelId ? `· ${CHANNELS.find((c) => c.id === a.channelId)?.labelFa ?? UNKNOWN_LABEL_FA}` : ""}
                 </p>
                 <p className="line-clamp-1 text-xs text-tg-secondary">{a.id}</p>
                 <div className="flex flex-wrap gap-1">
@@ -308,7 +309,7 @@ export default function AssetsPage() {
                   <td className="px-4 py-3">
                     <TypeBadge type={a.type} />
                   </td>
-                  <td className="px-4 py-3 text-tg-secondary">{a.channelId ? CHANNELS.find((c) => c.id === a.channelId)?.labelFa ?? a.channelId : "—"}</td>
+                  <td className="px-4 py-3 text-tg-secondary">{a.channelId ? CHANNELS.find((c) => c.id === a.channelId)?.labelFa ?? UNKNOWN_LABEL_FA : "—"}</td>
                   <td className="px-4 py-3 text-tg-secondary">{formatSize(a.size)}</td>
                   <td className="px-4 py-3 text-tg-secondary">v{a.version}</td>
                   <td className="px-4 py-3">
@@ -407,7 +408,7 @@ export default function AssetsPage() {
               </div>
               <div>
                 <p className="font-semibold text-tg-secondary">کانال</p>
-                <p className="text-tg-text">{displayAsset.channelId ? CHANNELS.find((c) => c.id === displayAsset.channelId)?.labelFa ?? displayAsset.channelId : "—"}</p>
+                <p className="text-tg-text">{displayAsset.channelId ? CHANNELS.find((c) => c.id === displayAsset.channelId)?.labelFa ?? UNKNOWN_LABEL_FA : "—"}</p>
               </div>
               <div>
                 <p className="font-semibold text-tg-secondary">تاریخ</p>

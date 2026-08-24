@@ -120,7 +120,7 @@ export default function InboxPage() {
           ) : messages.length === 0 ? (
             <div className="p-10 text-center text-sm text-tg-secondary">
               {error ? "خطا در دریافت" : "صندوق خالی است یا اطلاعات ورود تنظیم نشده است."}
-              <p className="mt-2 text-xs">برای اتصال واقعی MAIL_INFO_PASS و MAIL_SUPPORT_PASS را در /opt/emro/.env تنظیم کنید.</p>
+              <p className="mt-2 text-xs">برای اتصال واقعی، اطلاعات ورود صندوق‌های ایمیل را در تنظیمات سرور وارد کنید.</p>
               <Button variant="secondary" size="sm" className="mt-3" onClick={() => mutate()}>
                 تلاش مجدد
               </Button>
@@ -233,7 +233,7 @@ export default function InboxPage() {
           </div>
           {sendError && <p className="text-xs text-rose-600" role="alert">{sendError}</p>}
           {sendOk && <p className="text-xs text-emerald-600">{sendOk}</p>}
-          <p className="text-[11px] text-tg-secondary">ارسال از طریق {account}@litecombomovie.ir با SMTP {process.env.NEXT_PUBLIC_MAIL_SMTP_HINT ?? "mail.litecombomovie.ir:587"} — کپی به پوشه Sent ذخیره می‌شود.</p>
+          <p className="text-[11px] text-tg-secondary">پیام از طریق {account}@litecombomovie.ir ارسال می‌شود و یک نسخه در پوشه پیام‌های ارسال‌شده ذخیره خواهد شد.</p>
         </form>
       </Modal>
     </div>

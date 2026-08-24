@@ -7,7 +7,7 @@ import { Archive, RotateCcw } from "lucide-react";
 import { Button, Card, EmptyState, ErrorState, Skeleton } from "@/components/ui";
 import { fetchContentRoomApi } from "@/lib/content-room/client";
 import type { ContentRoomProductSummary } from "@/components/content-room/types";
-import { CHANNEL_LABELS, PRODUCT_TYPE_LABELS } from "@/components/content-room/room-model";
+import { channelLabelFa, productTypeLabelFa } from "@/components/content-room/room-model";
 import { contentStatusPresentation } from "@/lib/content-room/presentation";
 
 type ProductsData = ContentRoomProductSummary[] | { products: ContentRoomProductSummary[] } | { items: ContentRoomProductSummary[] } | { data: ContentRoomProductSummary[] };
@@ -93,8 +93,8 @@ export default function ArchivePage() {
                         <Link href={`/content-room/${p.id}`} className="text-tg-accent hover:underline">{p.title}</Link>
                         {p.isCold && <span className="mr-2 rounded-full bg-slate-500/10 px-2 py-0.5 text-[11px] text-slate-600 dark:text-slate-300">سرد</span>}
                       </td>
-                      <td className="px-3 py-3 text-tg-text">{PRODUCT_TYPE_LABELS[p.productType] ?? p.productType}</td>
-                      <td className="px-3 py-3 text-tg-text">{CHANNEL_LABELS[p.channel] ?? p.channel}</td>
+                      <td className="px-3 py-3 text-tg-text">{productTypeLabelFa(p.productType)}</td>
+                      <td className="px-3 py-3 text-tg-text">{channelLabelFa(p.channel)}</td>
                       <td className="px-3 py-3">
                         <span className={`inline-flex rounded-full px-2 py-1 text-xs ${pres.tone === "success" ? "bg-emerald-500/15 text-emerald-700" : "bg-slate-500/10 text-slate-600"}`}>{pres.label}</span>
                       </td>

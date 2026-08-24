@@ -28,19 +28,19 @@ export async function POST(req: Request, { params }: { params: Promise<{ platfor
 
   const body = await req.json();
   const parsed = socialAccountConnectSchema.safeParse(body);
-  if (!parsed.success) return jsonError(parsed.error.issues[0]?.message ?? "داده ورودی نامعتبر است.", 422);
+  if (!parsed.success) return jsonError("ورودی نامعتبر است. اطلاعات واردشده را بررسی کنید.", 422, "VALIDATION_ERROR");
 
   if (parsed.data.mode === "oauth") {
     if (platform === "youtube") {
       if (!process.env.GOOGLE_CLIENT_ID) {
-        return jsonError("اتصال یوتیوب پیکربندی نشده است (GOOGLE_CLIENT_ID تنظیم نشده). از حالت آزمایشی استفاده کنید.", 400);
+        return jsonError("اتصال یوتیوب پیکربندی نشده است. اطلاعات اتصال را در تنظیمات سرور وارد کنید یا از حالت آزمایشی استفاده کنید.", 400);
       }
       const oauth2Client = getGoogleOAuthClient();
       const url = oauth2Client.generateAuthUrl({ access_type: "offline", scope: YOUTUBE_OAUTH_SCOPES, prompt: "consent" });
       return jsonOk({ authUrl: url });
     }
     if (!process.env.META_APP_ID) {
-      return jsonError("اتصال اینستاگرام پیکربندی نشده است (META_APP_ID تنظیم نشده). از حالت آزمایشی استفاده کنید.", 400);
+      return jsonError("اتصال اینستاگرام پیکربندی نشده است. اطلاعات اتصال را در تنظیمات سرور وارد کنید یا از حالت آزمایشی استفاده کنید.", 400);
     }
     const redirectUri = process.env.META_REDIRECT_URI || "http://localhost:3000/api/accounts/callback/instagram";
     // Instagram API with Instagram Login (direct login, no Facebook Page needed).

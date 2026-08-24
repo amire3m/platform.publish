@@ -22,6 +22,7 @@ export async function POST() {
     if (err instanceof TelegramNotConfiguredError) {
       return jsonError(err.message, 400, "NOT_CONFIGURED");
     }
-    return jsonError((err as Error).message, 502, "TELEGRAM_ERROR");
+    console.error("[api/telegram/test-connection] failed", err);
+    return jsonError("بررسی اتصال Telegram انجام نشد. دوباره تلاش کنید.", 502, "TELEGRAM_ERROR");
   }
 }

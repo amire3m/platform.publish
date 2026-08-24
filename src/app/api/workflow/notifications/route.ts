@@ -1,4 +1,4 @@
-import { jsonError, jsonOk, requirePermission } from "@/lib/api-helpers";
+import { jsonInternalError, jsonOk, requirePermission } from "@/lib/api-helpers";
 import { db } from "@/db";
 import { workflowNotifications } from "@/db/schema";
 import { eq, and, desc, isNull } from "drizzle-orm";
@@ -42,7 +42,7 @@ export async function GET(req: Request) {
 
     return jsonOk({ items: safeRows, unreadCount: unreadCountRows.filter((r) => !r.readAt).length, total: safeRows.length });
   } catch (err) {
-    return jsonError((err as Error).message ?? "خطا", 500);
+    return jsonInternalError(err, "api/workflow/notifications");
   }
 }
 

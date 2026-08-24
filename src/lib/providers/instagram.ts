@@ -115,9 +115,10 @@ async function publish(input: PublishInput, telegramFileUrl: string): Promise<Pu
 
     return { ok: true, externalId: mediaId, permalink: permalinkRes.permalink, raw: publishRes };
   } catch (err) {
-    const message = (err as Error).message || "خطای ناشناخته در انتشار اینستاگرام";
-    const retryable = /rate|limit|5\d\d/i.test(message);
-    return { ok: false, errorCode: "INSTAGRAM_API_ERROR", message, retryable };
+    const rawMessage = (err as Error).message || "خطای ناشناخته در انتشار اینستاگرام";
+    const retryable = /rate|limit|5\d\d/i.test(rawMessage);
+    console.error("[instagram-provider] publish failed:", err);
+    return { ok: false, errorCode: "INSTAGRAM_API_ERROR", message: "انتشار در Instagram انجام نشد. دوباره تلاش کنید.", retryable };
   }
 }
 

@@ -8,7 +8,7 @@ import { Button, Card, EmptyState, ErrorState, Skeleton } from "@/components/ui"
 import { fetchWorkflowApi, WorkflowApiError } from "@/lib/workflow/client";
 import { formatJalaliDateOnly, formatJalaliDateTime } from "@/lib/date/jalali";
 import { workflowStatusPresentation } from "@/lib/workflow/presentation";
-import { platformLabelFa, workflowActionLabelFa } from "@/lib/presentation-fa";
+import { platformLabelFa, workflowActionLabelFa, UNKNOWN_LABEL_FA } from "@/lib/presentation-fa";
 import { WorkflowHistory, type WorkflowHistoryEntry } from "@/components/workflow/WorkflowHistory";
 import { WorkflowReasonDialog } from "@/components/workflow/WorkflowReasonDialog";
 import {
@@ -410,7 +410,7 @@ export default function WorkflowProgramDetailPage({ params }: { params: Promise<
             <ArrowRight className="h-4 w-4" />
             بازگشت به اتاق انتشار
           </Link>
-          <ErrorState message="دسترسی ندارید. برای مشاهده این برنامه به مجوز view_workflow نیاز است." />
+          <ErrorState message="دسترسی ندارید. برای مشاهده این برنامه به مجوز مشاهده گردش کار نیاز است." />
         </div>
       );
     }
@@ -426,7 +426,7 @@ export default function WorkflowProgramDetailPage({ params }: { params: Promise<
         <ErrorState
           message={
             isMissingApi
-              ? "جزئیات برنامه هنوز در دسترس نیست (GET /api/workflow/programs/:id در دسترس نیست)."
+              ? "جزئیات برنامه هنوز در دسترس نیست."
               : programError.message
           }
         />
@@ -534,7 +534,7 @@ export default function WorkflowProgramDetailPage({ params }: { params: Promise<
                       <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-tg-secondary">
                         <span className="inline-flex items-center gap-1">
                           <User className="h-3.5 w-3.5" />
-                          {d.assigneeLabel ?? d.assigneeName ?? d.assigneeUserId ?? "بدون مسئول"}
+                           {d.assigneeLabel ?? d.assigneeName ?? (d.assigneeUserId ? UNKNOWN_LABEL_FA : "بدون مسئول")}
                         </span>
                         <span>·</span>
                         <span className="inline-flex items-center gap-1">
@@ -655,7 +655,7 @@ export default function WorkflowProgramDetailPage({ params }: { params: Promise<
         error={
           historyError
             ? historyError instanceof WorkflowApiError && historyError.status === 404
-              ? "تاریخچه هنوز در دسترس نیست (GET /api/workflow/history در دسترس نیست)."
+              ? "تاریخچه هنوز در دسترس نیست."
               : historyError.message
             : null
         }

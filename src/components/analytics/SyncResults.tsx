@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { AccountSyncResult } from "@/lib/analytics/sync";
 import { syncResultPresentation } from "./sync-result-presentation";
+import { UNKNOWN_LABEL_FA } from "@/lib/presentation-fa";
 
 const toneClasses = {
   positive: "text-emerald-700 dark:text-emerald-400",
@@ -32,7 +33,7 @@ export function SyncResults({
             return (
               <li key={result.accountId} className="grid gap-1 py-3 first:pt-0 last:pb-0 sm:grid-cols-[minmax(10rem,1fr)_minmax(12rem,2fr)] sm:gap-4">
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold text-tg-text">{accountNames[result.accountId] ?? result.accountId}</p>
+                  <p className="truncate text-sm font-semibold text-tg-text">{accountNames[result.accountId] ?? UNKNOWN_LABEL_FA}</p>
                   <p className={`mt-0.5 text-xs font-medium ${toneClasses[presentation.tone]}`}>{presentation.label}</p>
                 </div>
                 <div className="text-xs leading-5 text-tg-secondary">

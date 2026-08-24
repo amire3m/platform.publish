@@ -1,4 +1,4 @@
-import { requirePermission, jsonOk, jsonError } from "@/lib/api-helpers";
+import { requirePermission, jsonOk, jsonError, jsonInternalError } from "@/lib/api-helpers";
 import { TelegramClient, TelegramNotConfiguredError } from "@/lib/telegram/client";
 
 // Returns a deep-link to view a message inside the Telegram group. The Bot
@@ -18,6 +18,6 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     return jsonOk({ link });
   } catch (err) {
     if (err instanceof TelegramNotConfiguredError) return jsonError(err.message, 400, "NOT_CONFIGURED");
-    return jsonError((err as Error).message, 500);
+    return jsonInternalError(err, "api/telegram/message/[id]");
   }
 }

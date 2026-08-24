@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { contentParts } from "@/db/schema";
-import { jsonError, jsonOk } from "@/lib/api-helpers";
+import { jsonError, jsonInternalError, jsonOk } from "@/lib/api-helpers";
 import { hasPermission } from "@/lib/permissions";
 import { getCurrentUser } from "@/lib/auth";
 import { TelegramClient, TelegramNotConfiguredError } from "@/lib/telegram/client";
@@ -269,6 +269,6 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     if ((err as { code?: string }).code === "VERSION_CONFLICT") {
       return jsonError(msg, 409, "VERSION_CONFLICT");
     }
-    return jsonError(msg ?? "خطا در ذخیره فایل.", 500);
+    return jsonInternalError(err, "api/content-room/parts/[id]/upload");
   }
 }

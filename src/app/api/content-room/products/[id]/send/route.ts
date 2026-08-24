@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { jsonError, jsonOk, requirePermission } from "@/lib/api-helpers";
+import { jsonError, jsonInternalError, jsonOk, requirePermission } from "@/lib/api-helpers";
 import { createContentRoomService, type ContentRoomService } from "@/lib/content-room/service";
 import { InMemoryContentRoomPort } from "@/lib/content-room/repository";
 import { InMemoryWorkflowPort } from "@/lib/workflow/repository";
@@ -81,7 +81,7 @@ export async function handleSendRequest(
 
   const parsed = sendSchema.safeParse(body);
   if (!parsed.success) {
-    return jsonError(parsed.error.issues[0]?.message ?? "ورودی نامعتبر است.", 422, "VALIDATION_ERROR");
+    return jsonError("ورودی نامعتبر است. اطلاعات واردشده را بررسی کنید.", 422, "VALIDATION_ERROR");
   }
 
   try {
@@ -96,7 +96,7 @@ export async function handleSendRequest(
     if (mapped) return mapped;
     // Fallback: check if error is INVALID_TRANSITION but should be 422 for certain cases?
     // We map both to 409 as per spec, but allow 422 for validation-like invalid transition.
-    return jsonError((error as Error).message ?? "خطای سرور", 500);
+    return jsonInternalError(error, "api/content-room/products/[id]/send");
   }
 }
 

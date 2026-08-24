@@ -51,7 +51,7 @@ export async function PATCH(request: Request) {
 
   const parsed = patchSchema.safeParse(body);
   if (!parsed.success) {
-    return jsonError(parsed.error.issues[0]?.message ?? "ورودی نامعتبر است.", 422, "VALIDATION_ERROR");
+    return jsonError("ورودی نامعتبر است. اطلاعات واردشده را بررسی کنید.", 422, "VALIDATION_ERROR");
   }
 
   const { channelId, platform, accountId } = parsed.data;

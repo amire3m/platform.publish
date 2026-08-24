@@ -106,7 +106,26 @@ describe("GET/POST /api/content-room/products", () => {
     expect(response.status).toBe(422);
     const body = await response.json();
     expect(body.code).toBe("VALIDATION_ERROR");
+    expect(body.error).toBe("ورودی نامعتبر است. اطلاعات واردشده را بررسی کنید.");
     expect(repository.createProduct).not.toHaveBeenCalled();
+  });
+
+  it("does not expose unexpected repository errors", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const repository = {
+      listProducts: vi.fn().mockRejectedValue(new Error("database connection secret")),
+      createProduct: vi.fn(),
+    };
+    const response = await handleProductsRequest(
+      new Request("http://test", { method: "GET" }),
+      deps({ repository: repository as never }),
+    );
+
+    expect(response.status).toBe(500);
+    expect(await response.json()).toMatchObject({
+      error: "خطای داخلی سرور رخ داد. دوباره تلاش کنید.",
+      code: "INTERNAL_ERROR",
+    });
   });
 
   it("returns 422 for invalid productType", async () => {

@@ -1,4 +1,4 @@
-import { jsonError, jsonOk, requirePermission } from "@/lib/api-helpers";
+import { jsonError, jsonInternalError, jsonOk, requirePermission } from "@/lib/api-helpers";
 import { contentRoomRepository, type ContentRoomRepository } from "@/lib/content-room/repository";
 import { requiresReasonForTransition, updateStatusSchema } from "@/lib/content-room/validation";
 import { getCurrentUser } from "@/lib/auth";
@@ -44,7 +44,7 @@ export async function handleProductRequest(
     } catch (error) {
       const mapped = mapRepositoryError(error);
       if (mapped) return mapped;
-      return jsonError((error as Error).message ?? "خطای سرور", 500);
+      return jsonInternalError(error, "api/content-room/products/[id] GET");
     }
   }
 
@@ -72,7 +72,7 @@ export async function handleProductRequest(
 
     const parsed = updateStatusSchema.safeParse(body);
     if (!parsed.success) {
-      return jsonError(parsed.error.issues[0]?.message ?? "ورودی نامعتبر است.", 422, "VALIDATION_ERROR");
+      return jsonError("ورودی نامعتبر است. اطلاعات واردشده را بررسی کنید.", 422, "VALIDATION_ERROR");
     }
 
     try {
@@ -99,7 +99,7 @@ export async function handleProductRequest(
     } catch (error) {
       const mapped = mapRepositoryError(error);
       if (mapped) return mapped;
-      return jsonError((error as Error).message ?? "خطای سرور", 500);
+      return jsonInternalError(error, "api/content-room/products/[id] PATCH");
     }
   }
 

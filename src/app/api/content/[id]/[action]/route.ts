@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { content } from "@/db/schema";
-import { requirePermission, jsonError, jsonOk } from "@/lib/api-helpers";
+import { requirePermission, jsonError, jsonInternalError, jsonOk } from "@/lib/api-helpers";
 import { updateContentRecord, appendAuditEvent, notifyUser } from "@/lib/telegram/tgdb";
 import { publishContentNow } from "@/lib/worker";
 import { formatJalaliDateTime, nowUtcIso } from "@/lib/date/jalali";
@@ -125,7 +125,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         return jsonError("عملیات نامعتبر است.", 404);
     }
   } catch (err) {
-    return jsonError((err as Error).message || "خطای ناشناخته", 500);
+    return jsonInternalError(err, "api/content/[id]/[action]");
   } finally {
     await appendAuditEvent({
       actorTelegramId: user.telegramId,

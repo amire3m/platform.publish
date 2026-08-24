@@ -49,7 +49,7 @@ export async function handleCommitRequest(
 
   const parsed = commitRequestSchema.safeParse(body);
   if (!parsed.success) {
-    return jsonError(parsed.error.issues[0]?.message ?? "ورودی نامعتبر است.", 422, "VALIDATION_ERROR");
+    return jsonError("ورودی نامعتبر است. اطلاعات واردشده را بررسی کنید.", 422, "VALIDATION_ERROR");
   }
 
   const subject = toSubject(user as unknown as { role: string; allowedActions?: string[]; allowedAccountIds?: string[] });
@@ -82,7 +82,7 @@ export async function handleCommitRequest(
     if (message.includes("منقضی")) return jsonError(message, 410, "PREVIEW_EXPIRED");
     if (code === "VERSION_CONFLICT") return jsonError(message, 409, code);
     console.error("[workflow-import-commit] failed:", e);
-    return jsonError("ورود داده‌ها انجام نشد. دوباره تلاش کنید.", 500);
+    return jsonError("خطای داخلی سرور رخ داد. دوباره تلاش کنید.", 500, "INTERNAL_ERROR");
   }
 }
 

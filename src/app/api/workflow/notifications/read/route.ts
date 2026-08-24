@@ -1,4 +1,4 @@
-import { jsonError, jsonOk, requirePermission } from "@/lib/api-helpers";
+import { jsonError, jsonInternalError, jsonOk, requirePermission } from "@/lib/api-helpers";
 import { db } from "@/db";
 import { workflowNotifications } from "@/db/schema";
 import { eq, and, isNull } from "drizzle-orm";
@@ -36,6 +36,6 @@ export async function POST(req: Request) {
     }
     return jsonError("شناسه نامعتبر", 422);
   } catch (err) {
-    return jsonError((err as Error).message ?? "خطا", 500);
+    return jsonInternalError(err, "api/workflow/notifications/read");
   }
 }

@@ -1,4 +1,4 @@
-import { jsonError, jsonOk, requirePermission } from "@/lib/api-helpers";
+import { jsonError, jsonInternalError, jsonOk, requirePermission } from "@/lib/api-helpers";
 import { workflowRepository, type WorkflowRepository } from "@/lib/workflow/repository";
 import { historyQuerySchema } from "@/lib/workflow/validation";
 
@@ -35,7 +35,7 @@ export async function handleHistoryRequest(request: Request, deps: HistoryRouteD
 
   const parsed = historyQuerySchema.safeParse(raw);
   if (!parsed.success) {
-    return jsonError(parsed.error.issues[0]?.message ?? "ورودی نامعتبر است.", 422, "VALIDATION_ERROR");
+    return jsonError("ورودی نامعتبر است. اطلاعات واردشده را بررسی کنید.", 422, "VALIDATION_ERROR");
   }
 
   try {
@@ -51,7 +51,7 @@ export async function handleHistoryRequest(request: Request, deps: HistoryRouteD
   } catch (e) {
     const m = mapError(e);
     if (m) return m;
-    return jsonError((e as Error).message ?? "خطای سرور", 500);
+    return jsonInternalError(e, "api/workflow/history");
   }
 }
 

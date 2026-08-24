@@ -71,7 +71,7 @@ export default function ContentRoomDetailPage({ params }: { params: Promise<{ id
             <ArrowRight className="h-4 w-4" />
             بازگشت به اتاق محتوا
           </Link>
-          <ErrorState message="دسترسی ندارید. برای مشاهده این محصول به مجوز view_content_room نیاز است." />
+          <ErrorState message="دسترسی ندارید. برای مشاهده این محصول به مجوز مشاهده اتاق محتوا نیاز است." />
         </div>
       );
     }

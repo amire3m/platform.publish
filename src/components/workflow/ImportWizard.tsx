@@ -137,7 +137,7 @@ export default function ImportWizard() {
 
   return (
     <div className="max-w-5xl mx-auto p-6 space-y-6" dir="rtl">
-      <h1 className="text-2xl font-bold">ورود از Google Sheet</h1>
+      <h1 className="text-2xl font-bold">ورود از صفحه‌گسترده Google</h1>
 
       {/* Step indicator */}
       <div className="flex gap-2 text-sm">
@@ -152,7 +152,7 @@ export default function ImportWizard() {
 
       {step === "url" && (
         <section className="space-y-4 border rounded-xl p-6 bg-white">
-          <h2 className="font-semibold">۱. آدرس Google Sheet</h2>
+          <h2 className="font-semibold">۱. آدرس صفحه‌گسترده Google</h2>
           <p className="text-sm text-gray-600">فقط آدرس‌های عمومی docs.google.com پذیرفته می‌شوند. پیش‌نمایش هیچ داده عملیاتی ایجاد نمی‌کند.</p>
           <input
             placeholder="https://docs.google.com/spreadsheets/d/..."

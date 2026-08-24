@@ -11,7 +11,7 @@ export async function POST(req: Request) {
   if (!user) return response;
 
   const parsed = bulkRescheduleSchema.safeParse(await req.json());
-  if (!parsed.success) return jsonError(parsed.error.issues[0]?.message ?? "داده نامعتبر است.", 422);
+  if (!parsed.success) return jsonError("ورودی نامعتبر است. اطلاعات واردشده را بررسی کنید.", 422, "VALIDATION_ERROR");
 
   const results = [];
   for (const item of parsed.data.items) {

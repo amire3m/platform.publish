@@ -25,8 +25,7 @@ export default function InstagramSettingsPage() {
           <StatusBadge status={settings?.metaOauthConfigured ? "connected" : "disconnected"} />
         </div>
         <p className="mt-2 text-sm text-tg-text/75">
-          برای اتصال رسمی، متغیرهای محیطی <code>META_APP_ID</code>، <code>META_APP_SECRET</code> و <code>META_REDIRECT_URI</code> را تنظیم کنید. حساب
-          حساب Instagram باید حرفه‌ای یا سازنده باشد و به یک صفحه Facebook متصل باشد.
+          برای اتصال رسمی، اطلاعات پیکربندی برنامه Meta را در تنظیمات سرور وارد کنید. حساب Instagram باید حرفه‌ای یا سازنده باشد و به یک صفحه Facebook متصل باشد.
         </p>
       </Card>
 

@@ -55,6 +55,10 @@ describe("getProductProgress", () => {
     expect(getProductProgress("imported").percent).toBe(14);
     expect(getProductProgress("ready_to_send").percent).toBe(100);
   });
+
+  it("does not expose an unknown status identifier", () => {
+    expect(getProductProgress("internal_status")).toEqual({ percent: 0, label: "مورد ناشناخته" });
+  });
 });
 
 describe("getNextAction", () => {

@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { ArrowLeft, ArrowRight, Check, GripVertical, Plus, Trash2 } from "lucide-react";
 import { Button, Card, Input, Label, Select, Textarea, ErrorState, Skeleton } from "@/components/ui";
 import { fetchWorkflowApi, WorkflowApiError } from "@/lib/workflow/client";
-import { deliverableKindLabelFa, platformLabelFa } from "@/lib/presentation-fa";
+import { deliverableKindLabelFa, platformLabelFa, UNKNOWN_LABEL_FA } from "@/lib/presentation-fa";
 import {
   addDeliverableToDraft,
   calculateDueAt,
@@ -220,7 +220,7 @@ export function ProgramWizard() {
 
           {templatesLoading && <Skeleton className="h-20" />}
           {templatesError && (
-            <ErrorState message={templatesError instanceof WorkflowApiError && templatesError.status === 404 ? "الگوها هنوز در دسترس نیستند (GET /api/workflow/templates در دسترس نیست)." : templatesError.message} />
+            <ErrorState message={templatesError instanceof WorkflowApiError && templatesError.status === 404 ? "الگوها هنوز در دسترس نیستند." : templatesError.message} />
           )}
 
           <div className="grid gap-3">
@@ -489,7 +489,7 @@ export function ProgramWizard() {
             {draft.templateId && (
               <div className="flex justify-between">
                 <span className="text-tg-secondary">الگوی مبدأ</span>
-                <span className="text-tg-text">{draft.templateName ?? draft.templateId}</span>
+                <span className="text-tg-text">{draft.templateName ?? UNKNOWN_LABEL_FA}</span>
               </div>
             )}
           </div>
@@ -501,7 +501,7 @@ export function ProgramWizard() {
                   {idx + 1}. {d.name} {d.kind ? <span className="text-xs font-normal text-tg-secondary">({deliverableKindLabelFa(d.kind)})</span> : null}
                 </p>
                 <p className="text-xs text-tg-secondary">
-                   مسئول: {d.assigneeUserId ?? "—"} · موعد: {d.dueAt ? new Date(d.dueAt).toLocaleString("fa-IR") : "—"} · مقاصد: {d.destinations.map((x) => platformLabelFa(x.platform)).join("، ") || "—"}
+                   مسئول: {d.assigneeUserId ? UNKNOWN_LABEL_FA : "بدون مسئول"} · موعد: {d.dueAt ? new Date(d.dueAt).toLocaleString("fa-IR") : "—"} · مقاصد: {d.destinations.map((x) => platformLabelFa(x.platform)).join("، ") || "—"}
                 </p>
               </div>
             ))}

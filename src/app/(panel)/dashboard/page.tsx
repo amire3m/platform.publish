@@ -8,7 +8,7 @@ import { fetchWorkflowApi } from "@/lib/workflow/client";
 import { CHANNELS, getChannelLabelFa } from "@/lib/channels";
 import { formatJalaliDateTime } from "@/lib/date/jalali";
 import { InstagramIcon, YoutubeIcon } from "@/components/brand-icons";
-import { platformLabelFa, statusLabelFa } from "@/lib/presentation-fa";
+import { platformLabelFa, statusLabelFa, UNKNOWN_LABEL_FA } from "@/lib/presentation-fa";
 
 type IconType = React.ComponentType<{ className?: string }>;
 
@@ -85,7 +85,7 @@ function BarChart({ title, data, labels, ariaLabel }: { title: string; data: Rec
                    <span className="font-medium text-tg-text">{labels[key] ?? statusLabelFa(key)}</span>
                    <span className="text-tg-secondary" aria-label={`${labels[key] ?? statusLabelFa(key)} ${value} مورد`}>{value}</span>
                 </div>
-                <div className="h-2 w-full rounded-full bg-tg-hover" role="progressbar" aria-valuenow={value} aria-valuemin={0} aria-valuemax={max} aria-label={`${labels[key] ?? key}: ${value}`}>
+                <div className="h-2 w-full rounded-full bg-tg-hover" role="progressbar" aria-valuenow={value} aria-valuemin={0} aria-valuemax={max} aria-label={`${labels[key] ?? statusLabelFa(key)}: ${value}`}>
                   <div className="h-2 rounded-full bg-tg-accent transition-all" style={{ width: `${pct}%` }} />
                 </div>
               </li>
@@ -309,10 +309,10 @@ export default function DashboardPage() {
                 {data.youtube.topVideos.map((v) => (
                   <tr key={v.videoId} className="border-t border-tg-border">
                     <td className="p-2.5">
-                      <span className="font-medium text-tg-text">{v.title || v.videoId}</span>
+                       <span className="font-medium text-tg-text">{v.title || UNKNOWN_LABEL_FA}</span>
                       <span className="block font-mono text-[11px] text-tg-secondary">{v.videoId}</span>
                     </td>
-                    <td className="p-2.5 text-xs text-tg-secondary">{v.channel || v.channelId || "—"}</td>
+                    <td className="p-2.5 text-xs text-tg-secondary">{v.channel || (v.channelId ? UNKNOWN_LABEL_FA : "—")}</td>
                     <td className="p-2.5 text-center font-semibold text-tg-text">{v.views.toLocaleString("fa-IR")}</td>
                   </tr>
                 ))}
@@ -382,7 +382,7 @@ export default function DashboardPage() {
               <tbody>
                 {data.teamWorkload.map((w) => (
                   <tr key={w.userId} className="border-t border-tg-border">
-                    <td className="p-2.5 font-medium text-tg-text">{w.name ?? w.userId}</td>
+                    <td className="p-2.5 font-medium text-tg-text">{w.name ?? UNKNOWN_LABEL_FA}</td>
                     <td className="p-2.5 text-center">{w.assignedContents}</td>
                     <td className="p-2.5 text-center">{w.assignedDeliverables}</td>
                     <td className={`p-2.5 text-center font-semibold ${w.overdue > 0 ? "text-amber-600" : "text-tg-secondary"}`}>{w.overdue}</td>

@@ -44,7 +44,7 @@ export async function handlePreviewRequest(
 
   const parsed = previewRequestSchema.safeParse(body);
   if (!parsed.success) {
-    return jsonError(parsed.error.issues[0]?.message ?? "ورودی نامعتبر است.", 422, "VALIDATION_ERROR");
+    return jsonError("ورودی نامعتبر است. اطلاعات واردشده را بررسی کنید.", 422, "VALIDATION_ERROR");
   }
 
   const { sheetUrl, csv, mapping, decisions } = parsed.data as {
@@ -64,7 +64,7 @@ export async function handlePreviewRequest(
       try {
         ref = deps.parsePublicSheetUrl(sheetUrl);
       } catch {
-        return jsonError("آدرس Google Sheet معتبر نیست.", 422, "VALIDATION_ERROR");
+        return jsonError("آدرس صفحه‌گسترده Google معتبر نیست.", 422, "VALIDATION_ERROR");
       }
       sheetId = ref.sheetId;
       sheetGid = ref.gid;
@@ -73,9 +73,9 @@ export async function handlePreviewRequest(
       } catch (e) {
         const msg = (e as Error).message ?? "خطا در دریافت شیت";
         // Do not leak URL
-        if (msg.includes("redirect") || msg.includes("مسیر انتقال")) return jsonError("مسیر انتقال Google Sheet مجاز نیست.", 422, "VALIDATION_ERROR");
+        if (msg.includes("redirect") || msg.includes("مسیر انتقال")) return jsonError("مسیر انتقال صفحه‌گسترده Google مجاز نیست.", 422, "VALIDATION_ERROR");
         if (msg.includes("حجم")) return jsonError(msg, 422, "VALIDATION_ERROR");
-        return jsonError("دریافت Google Sheet ناموفق بود. از عمومی‌بودن شیت مطمئن شوید و دوباره تلاش کنید.", 502, "FETCH_FAILED");
+        return jsonError("دریافت صفحه‌گسترده Google ناموفق بود. از عمومی‌بودن صفحه‌گسترده مطمئن شوید و دوباره تلاش کنید.", 502, "FETCH_FAILED");
       }
     }
 
@@ -110,7 +110,7 @@ export async function handlePreviewRequest(
     const code = (e as { code?: string }).code;
     if (code === "VALIDATION_ERROR") return jsonError((e as Error).message, 422, code);
     console.error("[workflow-import-preview] failed:", e);
-    return jsonError("ساخت پیش‌نمایش انجام نشد. داده ورودی را بررسی کنید و دوباره تلاش کنید.", 500);
+    return jsonError("خطای داخلی سرور رخ داد. دوباره تلاش کنید.", 500, "INTERNAL_ERROR");
   }
 }
 

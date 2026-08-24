@@ -379,7 +379,7 @@ export function TemplateEditor() {
       )}
 
       {isLoading && <Skeleton className="h-32" />}
-      {error && <ErrorState message={error instanceof WorkflowApiError && error.status === 404 ? "الگوها هنوز در دسترس نیستند (GET /api/workflow/templates)." : error.message} />}
+      {error && <ErrorState message={error instanceof WorkflowApiError && error.status === 404 ? "الگوها هنوز در دسترس نیستند." : error.message} />}
 
       {!isLoading && !error && (templates?.length ?? 0) === 0 && (
         <Card><p className="text-center text-sm text-tg-secondary">هنوز الگویی ایجاد نشده. اولین الگوی خود را بسازید.</p></Card>

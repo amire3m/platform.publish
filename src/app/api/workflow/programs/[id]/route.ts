@@ -1,4 +1,4 @@
-import { jsonError, jsonOk, requirePermission } from "@/lib/api-helpers";
+import { jsonError, jsonInternalError, jsonOk, requirePermission } from "@/lib/api-helpers";
 import { workflowRepository, type WorkflowRepository } from "@/lib/workflow/repository";
 import { updateProgramSchema } from "@/lib/workflow/validation";
 
@@ -38,7 +38,7 @@ export async function handleProgramRequest(
     } catch (error) {
       const mapped = mapRepositoryError(error);
       if (mapped) return mapped;
-      return jsonError((error as Error).message ?? "خطای سرور", 500);
+      return jsonInternalError(error, "api/workflow/programs/[id] GET");
     }
   }
 
@@ -55,7 +55,7 @@ export async function handleProgramRequest(
 
     const parsed = updateProgramSchema.safeParse(body);
     if (!parsed.success) {
-      return jsonError(parsed.error.issues[0]?.message ?? "ورودی نامعتبر است.", 422, "VALIDATION_ERROR");
+      return jsonError("ورودی نامعتبر است. اطلاعات واردشده را بررسی کنید.", 422, "VALIDATION_ERROR");
     }
 
     try {
@@ -74,7 +74,7 @@ export async function handleProgramRequest(
     } catch (error) {
       const mapped = mapRepositoryError(error);
       if (mapped) return mapped;
-      return jsonError((error as Error).message ?? "خطای سرور", 500);
+      return jsonInternalError(error, "api/workflow/programs/[id] PATCH");
     }
   }
 
@@ -147,7 +147,7 @@ export async function handleProgramRequest(
     } catch (error) {
       const mapped = mapRepositoryError(error);
       if (mapped) return mapped;
-      return jsonError((error as Error).message ?? "خطای سرور", 500);
+      return jsonInternalError(error, "api/workflow/programs/[id] DELETE");
     }
   }
 

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { jsonError, jsonOk, requirePermission } from "@/lib/api-helpers";
+import { jsonError, jsonInternalError, jsonOk, requirePermission } from "@/lib/api-helpers";
 import { sendMail } from "@/lib/mail/smtp";
 
 const schema = z.object({
@@ -25,7 +25,7 @@ export async function POST(request: Request) {
   }
   const parsed = schema.safeParse(body);
   if (!parsed.success) {
-    return jsonError(parsed.error.issues[0]?.message ?? "ورودی نامعتبر", 422, "VALIDATION_ERROR");
+    return jsonError("ورودی نامعتبر است. اطلاعات واردشده را بررسی کنید.", 422, "VALIDATION_ERROR");
   }
 
   try {
@@ -39,7 +39,10 @@ export async function POST(request: Request) {
     return jsonOk({ messageId: result.messageId });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "خطا در ارسال ایمیل";
-    const status = msg.includes("credentials") ? 503 : 500;
-    return jsonError(msg, status);
+    if (msg.includes("credentials")) {
+      console.error("[api/mail/send] mail is not configured", e);
+      return jsonError("سرویس ارسال ایمیل پیکربندی نشده است.", 503, "MAIL_NOT_CONFIGURED");
+    }
+    return jsonInternalError(e, "api/mail/send");
   }
 }

@@ -2,6 +2,7 @@ import type { ContentRoomProductSummary, ContentRoomFilters } from "./types";
 import { CONTENT_STATUS_ORDER, contentStatusPresentation } from "@/lib/content-room/presentation";
 import type { ContentStatus } from "@/lib/content-room/presentation";
 import { CHANNELS } from "@/lib/channels";
+import { UNKNOWN_LABEL_FA } from "@/lib/presentation-fa";
 
 export const PRODUCT_TYPE_LABELS: Record<string, string> = {
   serial: "سریال",
@@ -13,6 +14,9 @@ export const PRODUCT_TYPE_LABELS: Record<string, string> = {
 };
 
 export const CHANNEL_LABELS: Record<string, string> = Object.fromEntries(CHANNELS.map((c) => [c.id, c.labelFa]));
+
+export const productTypeLabelFa = (value: string) => PRODUCT_TYPE_LABELS[value] ?? UNKNOWN_LABEL_FA;
+export const channelLabelFa = (value: string) => CHANNEL_LABELS[value] ?? UNKNOWN_LABEL_FA;
 
 export const STATUS_LABELS: Record<string, string> = {
   imported: "واردشده",
@@ -63,7 +67,7 @@ export function contentRoomFilters(overrides: Partial<ContentRoomFilters> = {}):
 
 export function getProductProgress(status: string): { percent: number; label: string } {
   const order = CONTENT_STATUS_ORDER[status as ContentStatus];
-  if (order === undefined) return { percent: 0, label: status };
+  if (order === undefined) return { percent: 0, label: UNKNOWN_LABEL_FA };
   const percent = Math.round(((order + 1) / 7) * 100);
   return { percent, label: `${percent}٪` };
 }

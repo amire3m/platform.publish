@@ -6,6 +6,11 @@ export function jsonError(message: string, status = 400, code?: string) {
   return NextResponse.json({ ok: false, error: message, code }, { status });
 }
 
+export function jsonInternalError(error: unknown, context: string) {
+  console.error(`[${context}]`, error);
+  return jsonError("خطای داخلی سرور رخ داد. دوباره تلاش کنید.", 500, "INTERNAL_ERROR");
+}
+
 export function jsonOk<T>(data: T, init?: number) {
   return NextResponse.json({ ok: true, data }, { status: init ?? 200 });
 }

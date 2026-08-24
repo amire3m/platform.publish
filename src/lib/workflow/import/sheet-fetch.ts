@@ -8,10 +8,10 @@ const MAX_BYTES = 5 * 1024 * 1024;
 const MAX_REDIRECTS = 3;
 const TIMEOUT_MS = 15_000;
 
-const INVALID_URL_MESSAGE = "آدرس Google Sheet معتبر نیست.";
-const REDIRECT_MESSAGE = "مسیر انتقال Google Sheet مجاز نیست.";
+const INVALID_URL_MESSAGE = "آدرس صفحه‌گسترده Google معتبر نیست.";
+const REDIRECT_MESSAGE = "مسیر انتقال صفحه‌گسترده Google مجاز نیست.";
 const SIZE_MESSAGE = "حجم فایل بیش از حد مجاز است";
-const FETCH_FAILED_MESSAGE = "دریافت Google Sheet ناموفق بود. از عمومی‌بودن شیت مطمئن شوید و دوباره تلاش کنید.";
+const FETCH_FAILED_MESSAGE = "دریافت صفحه‌گسترده Google ناموفق بود. از عمومی‌بودن صفحه‌گسترده مطمئن شوید و دوباره تلاش کنید.";
 
 export function parsePublicSheetUrl(urlString: string): PublicSheetRef {
   let url: URL;
@@ -162,7 +162,7 @@ export async function fetchSheetCsv(ref: PublicSheetRef, deps?: SheetFetchDeps):
         } as RequestInit);
       } catch (e) {
         if ((e as Error).name === "AbortError") {
-          throw new Error("زمان دریافت Google Sheet به پایان رسید. دوباره تلاش کنید.");
+          throw new Error("زمان دریافت صفحه‌گسترده Google به پایان رسید. دوباره تلاش کنید.");
         }
         // Do not leak URL
         throw new Error(FETCH_FAILED_MESSAGE);

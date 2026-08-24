@@ -11,7 +11,7 @@ describe("parsePublicSheetUrl", () => {
   });
 
   it("rejects non-Google host", () => {
-    expect(() => parsePublicSheetUrl("https://evil.test/spreadsheets/d/abc")).toThrow("آدرس Google Sheet معتبر نیست.");
+    expect(() => parsePublicSheetUrl("https://evil.test/spreadsheets/d/abc")).toThrow("آدرس صفحه‌گسترده Google معتبر نیست.");
   });
 
   it("parses URL without gid defaults to 0", () => {
@@ -22,7 +22,7 @@ describe("parsePublicSheetUrl", () => {
   });
 
   it("rejects wrong path without /spreadsheets/d/", () => {
-    expect(() => parsePublicSheetUrl("https://docs.google.com/other/d/abc123")).toThrow("آدرس Google Sheet معتبر نیست.");
+    expect(() => parsePublicSheetUrl("https://docs.google.com/other/d/abc123")).toThrow("آدرس صفحه‌گسترده Google معتبر نیست.");
   });
 });
 
@@ -71,7 +71,7 @@ describe("fetchSheetCsv", () => {
   const ref = { sheetId: "abc123", gid: "42" };
 
   it("rejects redirect to non-allowlisted host", async () => {
-    await expect(fetchSheetCsv(ref, depsRedirectingTo("https://evil.test/data"))).rejects.toThrow("مسیر انتقال Google Sheet مجاز نیست.");
+    await expect(fetchSheetCsv(ref, depsRedirectingTo("https://evil.test/data"))).rejects.toThrow("مسیر انتقال صفحه‌گسترده Google مجاز نیست.");
   });
 
   it("rejects oversized payload", async () => {
@@ -156,6 +156,6 @@ describe("fetchSheetCsv", () => {
         text: async () => "",
       }) as unknown as Response,
     );
-    await expect(fetchSheetCsv(ref, { fetch: fetchMock as unknown as typeof fetch })).rejects.toThrow("مسیر انتقال Google Sheet مجاز نیست.");
+    await expect(fetchSheetCsv(ref, { fetch: fetchMock as unknown as typeof fetch })).rejects.toThrow("مسیر انتقال صفحه‌گسترده Google مجاز نیست.");
   });
 });

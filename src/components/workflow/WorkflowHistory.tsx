@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { Card, EmptyState, Select, Label } from "@/components/ui";
 import { formatJalaliDateTime } from "@/lib/date/jalali";
-import { auditActionLabelFa, entityTypeLabelFa, fieldLabelFa, platformLabelFa, sourceLabelFa, statusLabelFa, deliverableKindLabelFa } from "@/lib/presentation-fa";
+import { auditActionLabelFa, entityTypeLabelFa, fieldLabelFa, platformLabelFa, sourceLabelFa, statusLabelFa, deliverableKindLabelFa, UNKNOWN_LABEL_FA } from "@/lib/presentation-fa";
 
 export interface WorkflowHistoryEntry {
   id: string;
@@ -64,7 +64,7 @@ export function WorkflowHistory({ entries, isLoading, error, onRetry }: Props) {
     const set = new Map<string, string>();
     for (const e of entries) {
       const id = e.actorUserId ?? "unknown";
-      const label = e.actorName ?? e.actorLabel ?? id;
+      const label = e.actorName ?? e.actorLabel ?? UNKNOWN_LABEL_FA;
       if (!set.has(id)) set.set(id, label);
     }
     return Array.from(set.entries()).map(([id, label]) => ({ id, label }));
@@ -177,7 +177,7 @@ export function WorkflowHistory({ entries, isLoading, error, onRetry }: Props) {
                   <p className="mt-1 text-xs text-tg-secondary">
                     کنشگر:{" "}
                     <span className="font-medium text-tg-text">
-                      {entry.actorName ?? entry.actorLabel ?? entry.actorUserId ?? "نامشخص"}
+                       {entry.actorName ?? entry.actorLabel ?? UNKNOWN_LABEL_FA}
                     </span>
                     {" · "}
                     منبع: <span className="font-medium text-tg-text">{entry.source ? sourceLabelFa(entry.source) : "—"}</span>

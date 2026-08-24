@@ -1,4 +1,4 @@
-import { jsonError, jsonOk, requirePermission } from "@/lib/api-helpers";
+import { jsonInternalError, jsonOk, requirePermission } from "@/lib/api-helpers";
 import { listAssets } from "@/lib/assets/repository";
 
 export const dynamic = "force-dynamic";
@@ -22,6 +22,6 @@ export async function GET(request: Request) {
     });
     return jsonOk(assets);
   } catch (err) {
-    return jsonError((err as Error).message ?? "خطای سرور", 500);
+    return jsonInternalError(err, "api/assets");
   }
 }

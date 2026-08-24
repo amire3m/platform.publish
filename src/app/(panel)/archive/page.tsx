@@ -96,7 +96,15 @@ export default function ArchivePage() {
                       <td className="px-3 py-3 text-tg-text">{productTypeLabelFa(p.productType)}</td>
                       <td className="px-3 py-3 text-tg-text">{channelLabelFa(p.channel)}</td>
                       <td className="px-3 py-3">
-                        <span className={`inline-flex rounded-full px-2 py-1 text-xs ${pres.tone === "success" ? "bg-emerald-500/15 text-emerald-700" : "bg-slate-500/10 text-slate-600"}`}>{pres.label}</span>
+                        <span
+                          className={`inline-flex rounded-full px-2 py-1 text-xs ${
+                            pres.tone === "success"
+                              ? "bg-emerald-500/15 text-emerald-700"
+                              : "bg-slate-500/10 text-slate-600"
+                          }`}
+                        >
+                          {pres.label}
+                        </span>
                       </td>
                       <td className="px-3 py-3 text-xs text-tg-secondary">{archivedAt ? archivedAt.toLocaleDateString("fa-IR") : "—"}</td>
                       <td className="px-3 py-3 text-center">

@@ -543,7 +543,9 @@ export default function WorkflowProgramDetailPage({ params }: { params: Promise<
                         </span>
                         <span
                           className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium ${
-                            connected ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300" : "bg-slate-500/10 text-slate-600 dark:text-slate-300"
+                            connected
+                              ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
+                              : "bg-slate-500/10 text-slate-600 dark:text-slate-300"
                           }`}
                         >
                           {connected ? <Link2 className="h-3.5 w-3.5" /> : <Link2Off className="h-3.5 w-3.5" />}

@@ -205,7 +205,13 @@ export function ContentRoomDetail({ product, onRefresh }: Props) {
                   <p className="mt-1 truncate font-mono text-xs text-tg-text" title={tgId ?? ""}>
                     {tgId ? tgId : "تنظیم نشده"}
                   </p>
-                  <span className={`mt-1 inline-block rounded-full px-2 py-0.5 text-[11px] ${tgId ? "bg-emerald-500/15 text-emerald-700" : "bg-slate-500/10 text-slate-500"}`}>
+                  <span
+                    className={`mt-1 inline-block rounded-full px-2 py-0.5 text-[11px] ${
+                      tgId
+                        ? "bg-emerald-500/15 text-emerald-700"
+                        : "bg-slate-500/10 text-slate-500"
+                    }`}
+                  >
                     {tgId ? "متصل" : "اختیاری"}
                   </span>
                 </div>
@@ -402,12 +408,20 @@ function PartUploadCard({
         <p className="text-sm font-semibold text-tg-text">قسمت {part.partNumber}</p>
         <div className="flex gap-1">
           <span
-            className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${hasVideo ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400" : "bg-slate-500/10 text-slate-500"}`}
+            className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
+              hasVideo
+                ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400"
+                : "bg-slate-500/10 text-slate-500"
+            }`}
           >
             {hasVideo ? "ویدئو ✓" : "بدون ویدئو"}
           </span>
           <span
-            className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${hasCover ? "bg-sky-500/15 text-sky-700 dark:text-sky-400" : "bg-slate-500/10 text-slate-500"}`}
+            className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
+              hasCover
+                ? "bg-sky-500/15 text-sky-700 dark:text-sky-400"
+                : "bg-slate-500/10 text-slate-500"
+            }`}
           >
             {hasCover ? "کاور ✓" : "بدون کاور"}
           </span>

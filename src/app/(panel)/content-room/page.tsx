@@ -224,7 +224,7 @@ export default function ContentRoomPage() {
               </div>
 
               <div className="rounded-lg bg-tg-hover/40 p-3 text-xs text-tg-secondary">
-                برای جست‌وجوی ترکیبی پیشرفته از API سراسری <code className="rounded bg-tg-surface px-1">/api/search</code> استفاده کنید: پارامترهای q, type, channel, status, dateFrom, dateTo, includeArchived, sort.
+                برای جست‌وجوی ترکیبی پیشرفته از API سراسری <code className="rounded bg-tg-surface px-1">/api/search</code> استفاده کنید. پارامترهای فنی در مستندات API توضیح داده شده‌اند.
               </div>
             </div>
           </div>

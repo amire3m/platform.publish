@@ -104,7 +104,7 @@ export async function handleProgramRequest(
     }
 
     if (expectedVersion === undefined || !Number.isInteger(expectedVersion) || expectedVersion <= 0) {
-      return jsonError("expectedVersion الزامی است.", 422, "VALIDATION_ERROR");
+      return jsonError("نسخه برنامه الزامی است. صفحه را تازه‌سازی کنید و دوباره تلاش کنید.", 422, "VALIDATION_ERROR");
     }
 
     try {

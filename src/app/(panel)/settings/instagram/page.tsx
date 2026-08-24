@@ -16,17 +16,17 @@ export default function InstagramSettingsPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-xl font-bold text-tg-text">تنظیمات اتصال اینستاگرام</h1>
-        <p className="text-sm text-tg-secondary">فقط از طریق Instagram Graph API رسمی (حساب Business/Creator)</p>
+        <p className="text-sm text-tg-secondary">فقط از طریق Instagram Graph API رسمی (حساب حرفه‌ای یا سازنده)</p>
       </div>
 
       <Card>
         <div className="flex items-center justify-between">
-          <p className="font-semibold">وضعیت پیکربندی Meta App</p>
+          <p className="font-semibold">وضعیت پیکربندی برنامه Meta</p>
           <StatusBadge status={settings?.metaOauthConfigured ? "connected" : "disconnected"} />
         </div>
         <p className="mt-2 text-sm text-tg-text/75">
           برای اتصال رسمی، متغیرهای محیطی <code>META_APP_ID</code>، <code>META_APP_SECRET</code> و <code>META_REDIRECT_URI</code> را تنظیم کنید. حساب
-          اینستاگرام باید Business/Creator باشد و به یک صفحه فیسبوک متصل باشد.
+          حساب Instagram باید حرفه‌ای یا سازنده باشد و به یک صفحه Facebook متصل باشد.
         </p>
       </Card>
 
@@ -37,7 +37,7 @@ export default function InstagramSettingsPage() {
             <tr>
               <th className="p-2">نوع محتوا</th>
               <th className="p-2">کپشن</th>
-              <th className="p-2">Alt Text</th>
+              <th className="p-2">متن جایگزین</th>
               <th className="p-2">کاور</th>
               <th className="p-2">اولین کامنت</th>
               <th className="p-2">موقعیت مکانی</th>
@@ -64,7 +64,7 @@ export default function InstagramSettingsPage() {
           </tbody>
         </table>
         <p className="mt-3 text-xs text-tg-secondary/80">
-          استوری، موزیک، Collab و لینک قابل‌کلیک فعلاً از طریق Graph API عمومی پشتیبانی نمی‌شوند و در ویزارد آپلود نمایش داده نمی‌شوند.
+          استوری، موسیقی، همکاری مشترک و لینک قابل‌کلیک فعلاً از طریق Graph API عمومی پشتیبانی نمی‌شوند و در راهنمای بارگذاری نمایش داده نمی‌شوند.
         </p>
       </Card>
     </div>

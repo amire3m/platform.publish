@@ -8,6 +8,7 @@ import { Button, Card, EmptyState, ErrorState, Skeleton } from "@/components/ui"
 import { fetchWorkflowApi, WorkflowApiError } from "@/lib/workflow/client";
 import { formatJalaliDateOnly, formatJalaliDateTime } from "@/lib/date/jalali";
 import { workflowStatusPresentation } from "@/lib/workflow/presentation";
+import { platformLabelFa, workflowActionLabelFa } from "@/lib/presentation-fa";
 import { WorkflowHistory, type WorkflowHistoryEntry } from "@/components/workflow/WorkflowHistory";
 import { WorkflowReasonDialog } from "@/components/workflow/WorkflowReasonDialog";
 import {
@@ -124,10 +125,7 @@ async function meFetcher(url: string): Promise<MeResponse | null> {
 }
 
 function platformLabel(p: string): string {
-  if (p === "telegram") return "تلگرام";
-  if (p === "youtube") return "یوتیوب";
-  if (p === "instagram") return "اینستاگرام";
-  return p;
+  return platformLabelFa(p);
 }
 
 function orderPublications(pubs: PublicationDetail[] | undefined): PublicationDetail[] {
@@ -293,7 +291,7 @@ export default function WorkflowProgramDetailPage({ params }: { params: Promise<
 
   function handleProductionAction(deliverable: DeliverableDetail, action: WorkflowActionKind, requiresReason: boolean) {
     const version = deliverable.version ?? 1;
-    const label = (PRODUCTION_ACTION_LABELS as Record<string, { label: string }>)[action]?.label ?? action;
+    const label = (PRODUCTION_ACTION_LABELS as Record<string, { label: string }>)[action]?.label ?? workflowActionLabelFa(action);
     if (requiresReason) {
       openReasonDialog({
         mode: "production",
@@ -344,7 +342,7 @@ export default function WorkflowProgramDetailPage({ params }: { params: Promise<
 
   function handlePublicationAction(pub: PublicationDetail, action: WorkflowActionKind, requiresReason: boolean) {
     const version = pub.version ?? 1;
-    const label = (PUBLICATION_ACTION_LABELS as Record<string, { label: string }>)[action]?.label ?? action;
+    const label = (PUBLICATION_ACTION_LABELS as Record<string, { label: string }>)[action]?.label ?? workflowActionLabelFa(action);
     if (requiresReason) {
       openReasonDialog({
         mode: "publication",

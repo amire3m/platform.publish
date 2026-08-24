@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { Card, EmptyState, Select, Label } from "@/components/ui";
 import { formatJalaliDateTime } from "@/lib/date/jalali";
+import { auditActionLabelFa, entityTypeLabelFa, fieldLabelFa, platformLabelFa, sourceLabelFa, statusLabelFa, deliverableKindLabelFa } from "@/lib/presentation-fa";
 
 export interface WorkflowHistoryEntry {
   id: string;
@@ -36,60 +37,17 @@ function safeJsonSummary(value: Record<string, unknown> | null | undefined): str
     const v = value[k];
     let str: string;
     if (v === null || v === undefined) str = "—";
+    else if (typeof v === "boolean") str = v ? "بله" : "خیر";
+    else if (typeof v === "number") str = String(v);
+    else if (typeof v === "string" && (k === "status" || k.endsWith("Status"))) str = statusLabelFa(v);
+    else if (typeof v === "string" && k === "platform") str = platformLabelFa(v);
+    else if (typeof v === "string" && k === "kind") str = deliverableKindLabelFa(v);
     else if (typeof v === "string") str = v.length > 40 ? v.slice(0, 40) + "…" : v;
-    else if (typeof v === "number" || typeof v === "boolean") str = String(v);
-    else str = JSON.stringify(v).slice(0, 40);
-    preview.push(`${k}: ${str}`);
+    else str = "جزئیات ثبت‌شده";
+    preview.push(`${fieldLabelFa(k)}: ${str}`);
   }
   if (keys.length > 4) preview.push(`+${keys.length - 4} فیلد دیگر`);
   return preview.join(" | ");
-}
-
-function actionLabel(action: string): string {
-  const map: Record<string, string> = {
-    created: "ایجاد",
-    updated: "به‌روزرسانی",
-    archived: "بایگانی",
-    created_program: "ایجاد برنامه",
-    updated_program: "ویرایش برنامه",
-    create_deliverable: "ایجاد خروجی",
-    update_deliverable: "ویرایش خروجی",
-    transition_production: "تغییر وضعیت تولید",
-    transition_publication: "تغییر وضعیت انتشار",
-    start: "شروع تولید",
-    submit_review: "ارسال برای بازبینی",
-    request_changes: "درخواست اصلاح",
-    approve: "تأیید تولید",
-    reopen: "بازگشایی",
-    cancel: "لغو",
-    restore: "بازگردانی",
-    suppress: "منتشر نشود",
-    restore_suppressed: "بازگردانی انتشار",
-    manual_publish: "ثبت دستی انتشار",
-    override_terminal_status: "اصلاح پایانی",
-    prepare: "آماده‌سازی",
-    schedule: "زمان‌بندی",
-    claim_publish: "شروع انتشار",
-    publish_succeeded: "انتشار موفق",
-    publish_failed: "انتشار ناموفق",
-    cancel_schedule: "لغو زمان‌بندی",
-    attach_content: "اتصال محتوا",
-    detach_content: "جداسازی محتوا",
-  };
-  return map[action] ?? action;
-}
-
-function sourceLabel(source: string | null | undefined): string {
-  if (!source) return "—";
-  const map: Record<string, string> = {
-    manual: "دستی",
-    automatic: "خودکار",
-    imported: "واردشده",
-    worker: "کارگر انتشار",
-    api: "API",
-    sheet_import: "شیت",
-  };
-  return map[source] ?? source;
 }
 
 export function WorkflowHistory({ entries, isLoading, error, onRetry }: Props) {
@@ -174,7 +132,7 @@ export function WorkflowHistory({ entries, isLoading, error, onRetry }: Props) {
             <option value="all">همه موجودیت‌ها</option>
             {entityTypes.map((t) => (
               <option key={t} value={t}>
-                {t}
+                {entityTypeLabelFa(t)}
               </option>
             ))}
           </Select>
@@ -210,10 +168,10 @@ export function WorkflowHistory({ entries, isLoading, error, onRetry }: Props) {
                 <div className="min-w-0 flex-1">
                   <p className="flex flex-wrap items-center gap-2 text-sm font-semibold text-tg-text">
                     <span className="inline-flex items-center rounded-full bg-tg-accent/10 px-2 py-0.5 text-xs font-medium text-tg-accent">
-                      {actionLabel(entry.action)}
+                      {auditActionLabelFa(entry.action)}
                     </span>
                     <span className="text-xs font-normal text-tg-secondary">
-                      {entry.entityType} · {entry.entityId.slice(0, 8)}…
+                      {entityTypeLabelFa(entry.entityType)} · {entry.entityId.slice(0, 8)}…
                     </span>
                   </p>
                   <p className="mt-1 text-xs text-tg-secondary">
@@ -222,7 +180,7 @@ export function WorkflowHistory({ entries, isLoading, error, onRetry }: Props) {
                       {entry.actorName ?? entry.actorLabel ?? entry.actorUserId ?? "نامشخص"}
                     </span>
                     {" · "}
-                    منبع: <span className="font-medium text-tg-text">{sourceLabel(entry.source)}</span>
+                    منبع: <span className="font-medium text-tg-text">{entry.source ? sourceLabelFa(entry.source) : "—"}</span>
                   </p>
                 </div>
                 <time className="shrink-0 text-xs text-tg-secondary" dateTime={String(entry.createdAt)}>

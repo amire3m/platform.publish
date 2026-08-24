@@ -6,18 +6,11 @@ import { Card } from "@/components/ui";
 import { formatJalaliDateOnly } from "@/lib/date/jalali";
 import type { WorkflowProgramSummary } from "./types";
 import { WorkflowDeliverableRows } from "./WorkflowDeliverableRows";
+import { workflowNextActionLabelFa } from "@/lib/presentation-fa";
 
 function nextActionLabel(nextAction: WorkflowProgramSummary["nextAction"]): string {
   if (!nextAction) return "—";
-  const map: Record<string, string> = {
-    changes_requested: "اصلاح شود",
-    publication_failed: "خطای انتشار",
-    overdue_production: "تأخیر تولید",
-    overdue_publication: "تأخیر انتشار",
-    publication_ready: "آماده انتشار",
-    production_due: "موعد تولید",
-  };
-  return map[nextAction.kind] ?? nextAction.kind;
+  return workflowNextActionLabelFa(nextAction.kind);
 }
 
 function ProgressCell({ progress }: { progress: WorkflowProgramSummary["progress"] }) {

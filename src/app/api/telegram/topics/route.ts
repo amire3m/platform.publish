@@ -52,7 +52,8 @@ export async function POST(req: Request) {
       messageThreadId = topic.message_thread_id;
     } catch (err) {
       if (err instanceof TelegramNotConfiguredError) return jsonError(err.message, 400, "NOT_CONFIGURED");
-      return jsonError(`ایجاد Topic در تلگرام ناموفق بود: ${(err as Error).message}`, 502);
+      console.error("[telegram-topic] create failed:", err);
+      return jsonError("ایجاد تاپیک در Telegram انجام نشد. دوباره تلاش کنید.", 502);
     }
   }
 

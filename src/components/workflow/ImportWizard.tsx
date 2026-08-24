@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useMemo } from "react";
+import { platformLabelFa } from "@/lib/presentation-fa";
+import { presentImportResult } from "@/lib/workflow/import/presentation";
 
 type WizardStep = "url" | "mapping" | "preview" | "decisions" | "confirm" | "result";
 
@@ -40,6 +42,11 @@ export default function ImportWizard() {
     Record<number, { action: "skip" | "create" | "update"; programId?: string; skipCells: Record<string, boolean>; mappedValues: Record<string, unknown> }>
   >({});
   const [result, setResult] = useState<unknown>(null);
+  const mappingColumns = preview && typeof preview.mappingDetails === "object" && preview.mappingDetails !== null && Array.isArray((preview.mappingDetails as { columns?: unknown }).columns)
+    ? (preview.mappingDetails as { columns: Array<{ index: number; header: string; role: string; platform?: string; deliverableName?: string }> }).columns
+    : [];
+  const presentedResult = presentImportResult(result as Parameters<typeof presentImportResult>[0]);
+  const mappingRoleLabel = (role: string) => role === "title" ? "عنوان برنامه" : role === "publication" ? "انتشار" : role === "production" ? "تولید" : "ستون ناشناخته";
 
   const unresolved = useMemo(() => {
     if (!preview) return true;
@@ -172,7 +179,12 @@ export default function ImportWizard() {
       {step === "preview" && preview && (
         <section className="space-y-4 border rounded-xl p-6 bg-white">
           <h2 className="font-semibold">۲. نگاشت ستون‌ها</h2>
-          <pre className="bg-gray-50 p-3 rounded text-xs overflow-auto max-h-40" dir="ltr">{JSON.stringify(preview.mappingDetails, null, 2)}</pre>
+          <div className="overflow-auto rounded border">
+            <table className="w-full text-xs">
+              <thead className="bg-gray-50"><tr><th className="p-2 text-right">ستون</th><th className="p-2 text-right">کاربرد</th><th className="p-2 text-right">جزئیات</th></tr></thead>
+              <tbody>{mappingColumns.map((column) => <tr key={column.index} className="border-t"><td className="p-2">{column.header || `ستون ${column.index + 1}`}</td><td className="p-2">{mappingRoleLabel(column.role)}</td><td className="p-2">{column.deliverableName ?? (column.platform ? platformLabelFa(column.platform) : "—")}</td></tr>)}</tbody>
+            </table>
+          </div>
           <button onClick={() => setStep("decisions")} className="border px-4 py-2 rounded-lg">مرحله بعد: تصمیمات</button>
 
           <h2 className="font-semibold mt-6">۳. پیش‌نمایش تمام ردیف‌ها</h2>
@@ -300,7 +312,7 @@ export default function ImportWizard() {
         <section className="space-y-4 border rounded-xl p-6 bg-white">
           <h2 className="font-semibold">۵. تأیید نهایی</h2>
           <p className="text-sm text-gray-600">پیش‌نمایش ذخیره‌شده با این توکن مصرف خواهد شد و شیت دوباره خوانده نمی‌شود.</p>
-          <div className="text-xs bg-gray-50 p-3 rounded" dir="ltr">Preview ID: {preview.previewId} | Hash: {preview.csvHash.slice(0, 16)}...</div>
+          <div className="text-xs bg-gray-50 p-3 rounded"><span>شناسه پیش‌نمایش: </span><bdi dir="ltr">{preview.previewId}</bdi><span> | هش: </span><bdi dir="ltr">{preview.csvHash.slice(0, 16)}...</bdi></div>
           {unresolved && <div className="text-sm text-red-600">برخی ردیف‌ها تصمیمات ناقص دارند. لطفاً همه موارد تکراری و ناشناخته را حل کنید.</div>}
           <div className="flex gap-2">
             <button onClick={() => setStep("decisions")} className="border px-4 py-2 rounded-lg">بازگشت</button>
@@ -314,7 +326,11 @@ export default function ImportWizard() {
       {step === "result" && (
         <section className="space-y-4 border rounded-xl p-6 bg-white">
           <h2 className="font-semibold">۶. گزارش نتیجه</h2>
-          <pre className="bg-gray-50 p-3 rounded text-xs overflow-auto" dir="ltr">{JSON.stringify(result, null, 2)}</pre>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+            {presentedResult.counts.map((count) => <div key={count.label} className="rounded bg-gray-50 p-3 text-center"><div className="text-lg font-bold">{count.value.toLocaleString("fa-IR")}</div><div className="text-xs text-gray-600">{count.label}</div></div>)}
+          </div>
+          {presentedResult.batchId && <p className="text-xs text-gray-600">شناسه ورود: <bdi dir="ltr">{presentedResult.batchId}</bdi></p>}
+          <div className="overflow-auto rounded border"><table className="w-full text-sm"><thead className="bg-gray-50"><tr><th className="p-2 text-right">ردیف</th><th className="p-2 text-right">نتیجه</th><th className="p-2 text-right">جزئیات</th></tr></thead><tbody>{presentedResult.rows.map((row) => <tr key={row.row} className="border-t"><td className="p-2">{row.row.toLocaleString("fa-IR")}</td><td className="p-2">{row.status}</td><td className="p-2">{row.detail}</td></tr>)}</tbody></table></div>
           <button onClick={() => { setStep("url"); setPreview(null); setResult(null); setSheetUrl(""); setCsvDirect(""); }} className="border px-4 py-2 rounded-lg">ورود جدید</button>
         </section>
       )}

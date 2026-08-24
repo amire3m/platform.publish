@@ -8,6 +8,7 @@ import { Button, Card, ConfirmModal, EmptyState, Input, Label, Modal, Select, Sk
 import { useToast } from "@/components/providers";
 import { formatJalaliDateTime } from "@/lib/date/jalali";
 import type { PublicAccountDto } from "@/lib/accounts/public";
+import { oauthErrorMessageFa } from "@/lib/presentation-fa";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
@@ -37,7 +38,7 @@ export default function AccountsPage() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get("connected")) showToast("حساب با موفقیت متصل شد.", "success");
-    if (params.get("error")) showToast(`خطا در اتصال: ${params.get("error")}`, "error");
+    if (params.get("error")) showToast(oauthErrorMessageFa(params.get("error")), "error");
   }, [showToast]);
 
   async function connectMock() {
@@ -155,14 +156,14 @@ export default function AccountsPage() {
             </div>
             <div className="mt-4 space-y-1 text-xs text-tg-secondary">
               <p>آخرین همگام‌سازی: {a.lastSyncAt ? formatJalaliDateTime(a.lastSyncAt) : "—"}</p>
-              <label className="mb-1 block pt-1 text-[11px] font-semibold">Topic صف انتشار</label>
+              <label className="mb-1 block pt-1 text-[11px] font-semibold">تاپیک صف انتشار</label>
               <Select
                 value={a.topicId ?? ""}
                 onChange={(e) => changeTopic(a, e.target.value)}
                 disabled={savingTopicId === a.id}
                 className="text-xs"
               >
-                <option value="">— بدون Topic اختصاصی —</option>
+                <option value="">— بدون تاپیک اختصاصی —</option>
                 {topics
                   .filter((t) => t.messageThreadId && t.messageThreadId !== 1)
                   .map((t) => (
@@ -205,9 +206,9 @@ export default function AccountsPage() {
             <Input value={displayName} onChange={(e) => setDisplayName(e.target.value)} placeholder="مثلاً زاویه نو" />
           </div>
           <div>
-            <Label>Topic صف انتشار اختصاصی</Label>
+            <Label>تاپیک صف انتشار اختصاصی</Label>
             <Select value={topicId} onChange={(e) => setTopicId(e.target.value)}>
-              <option value="">بدون Topic اختصاصی</option>
+              <option value="">بدون تاپیک اختصاصی</option>
               {topics
                 .filter((t) => t.messageThreadId && t.messageThreadId !== 1)
                 .map((t) => (
@@ -226,7 +227,7 @@ export default function AccountsPage() {
             </Button>
           </div>
           <p className="text-[11px] text-tg-secondary/80">
-            اتصال OAuth نیازمند پیکربندی متغیرهای محیطی Google/Meta است؛ در غیر این صورت پیام «پیکربندی نشده» نمایش داده می‌شود.
+            اتصال OAuth نیازمند پیکربندی متغیرهای محیطی Google و Meta است؛ در غیر این صورت پیام «پیکربندی نشده» نمایش داده می‌شود.
           </p>
         </div>
       </Modal>

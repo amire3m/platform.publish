@@ -9,6 +9,7 @@ import { ROLE_LABELS_FA, type Role } from "@/lib/permissions";
 import { CHANNELS } from "@/lib/channels";
 import { fetchWorkflowApi } from "@/lib/workflow/client";
 import { formatJalaliDateTime } from "@/lib/date/jalali";
+import { roleLabelFa } from "@/lib/presentation-fa";
 
 interface UserRow {
   id: string;
@@ -225,7 +226,7 @@ export default function UsersPage() {
                     <th scope="row" className="p-3 text-right font-medium whitespace-nowrap">
                       <div className="flex flex-col">
                         <span className="text-tg-text">{u.name} {u.isOwnerProtected && <span className="text-xs text-amber-500">(مالک)</span>}</span>
-                        <span className="text-[11px] text-tg-secondary">{ROLE_LABELS_FA[u.role] ?? u.role} · {u.telegramId}</span>
+                        <span className="text-[11px] text-tg-secondary">{roleLabelFa(u.role)} · {u.telegramId}</span>
                         <span className="mt-1"><StatusBadge status={u.active ? "connected" : "disconnected"} /></span>
                       </div>
                     </th>
@@ -313,7 +314,7 @@ export default function UsersPage() {
             </Select>
           </div>
           <p className="text-[11px] text-tg-secondary/80">
-            توجه: اعضای گروه تلگرام ممکن است بتوانند Topicهای دیگر را در خود تلگرام مشاهده کنند؛ محدودیت دسترسی واقعی همیشه در همین پنل و API اعمال می‌شود.
+            توجه: اعضای گروه Telegram ممکن است بتوانند تاپیک‌های دیگر را در خود Telegram مشاهده کنند؛ محدودیت دسترسی واقعی همیشه در همین پنل و API اعمال می‌شود.
           </p>
           <Button className="w-full" onClick={createUser} disabled={!telegramId || !name}>
             ایجاد کاربر

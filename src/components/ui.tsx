@@ -3,6 +3,7 @@
 import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, TextareaHTMLAttributes } from "react";
 import { useEffect, useId, useRef } from "react";
 import { AlertTriangle, FolderOpen } from "lucide-react";
+import { statusLabelFa } from "@/lib/presentation-fa";
 
 export function Button({
   variant = "primary",
@@ -91,7 +92,7 @@ const STATUS_LABELS: Record<string, { label: string; className: string }> = {
 };
 
 export function StatusBadge({ status }: { status: string }) {
-  const meta = STATUS_LABELS[status] ?? { label: status, className: "bg-slate-500/10 text-slate-600 dark:text-slate-400" };
+  const meta = STATUS_LABELS[status] ?? { label: statusLabelFa(status), className: "bg-slate-500/10 text-slate-600 dark:text-slate-400" };
   return <span className={`inline-flex items-center rounded-md px-2.5 py-1 text-xs font-medium ${meta.className}`}>{meta.label}</span>;
 }
 

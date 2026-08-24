@@ -34,11 +34,9 @@ export function SyncResults({
                 <div className="min-w-0">
                   <p className="truncate text-sm font-semibold text-tg-text">{accountNames[result.accountId] ?? result.accountId}</p>
                   <p className={`mt-0.5 text-xs font-medium ${toneClasses[presentation.tone]}`}>{presentation.label}</p>
-                  <code className="mt-1 block text-[10px] text-tg-secondary" dir="ltr">{result.code ?? result.status.toUpperCase()}</code>
                 </div>
                 <div className="text-xs leading-5 text-tg-secondary">
-                  <p>{result.message ?? presentation.action}</p>
-                  {result.message && <p className="mt-1">{presentation.action}</p>}
+                  <p>{presentation.action}</p>
                   {result.code === "RECONNECT_REQUIRED" && (
                     <Link href="/accounts" className="mt-2 inline-flex min-h-11 items-center font-semibold text-tg-accent hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-tg-accent sm:min-h-0">
                       رفتن به کانال‌ها

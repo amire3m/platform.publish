@@ -25,6 +25,7 @@ describe("PATCH /api/calendar/targets/:publicationId/reschedule", () => {
       getPublicationVersion: getPublicationVersion as never,
     });
     expect(res.status).toBe(401);
+    expect(await res.json()).toMatchObject({ error: "ابتدا وارد حساب کاربری خود شوید." });
     expect(scheduleTarget).not.toHaveBeenCalled();
   });
 

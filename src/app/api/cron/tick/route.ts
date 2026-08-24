@@ -66,7 +66,7 @@ async function runNotificationsDelivery() {
 
 export async function POST(req: Request) {
   const secret = process.env.CRON_SECRET;
-  if (!secret) return jsonError("Cron is not configured.", 503);
+  if (!secret) return jsonError("زمان‌بندی خودکار پیکربندی نشده است.", 503);
   const provided = req.headers.get("x-cron-secret");
   if (provided !== secret) return jsonError("دسترسی غیرمجاز.", 401);
   const [publishResult, analyticsResult, reconciliationResult, remindersResult, notificationsResult] = await Promise.allSettled([
@@ -78,19 +78,19 @@ export async function POST(req: Request) {
   ]);
   const publish = publishResult.status === "fulfilled"
     ? { ok: true as const, value: publishResult.value }
-    : { ok: false as const, error: "Publish job failed." };
+    : { ok: false as const, error: "اجرای وظیفه انتشار ناموفق بود." };
   const analytics = analyticsResult.status === "fulfilled"
     ? { ok: true as const, value: analyticsResult.value }
-    : { ok: false as const, error: "Analytics job failed." };
+    : { ok: false as const, error: "اجرای وظیفه آمار ناموفق بود." };
   const reconciliation = reconciliationResult.status === "fulfilled"
     ? { ok: true as const, value: reconciliationResult.value }
-    : { ok: false as const, error: "Reconciliation job failed." };
+    : { ok: false as const, error: "اجرای وظیفه همگام‌سازی وضعیت ناموفق بود." };
   const reminders = remindersResult.status === "fulfilled"
     ? { ok: true as const, value: remindersResult.value }
-    : { ok: false as const, error: "Reminders job failed." };
+    : { ok: false as const, error: "اجرای وظیفه یادآوری‌ها ناموفق بود." };
   const notifications = notificationsResult.status === "fulfilled"
     ? { ok: true as const, value: notificationsResult.value }
-    : { ok: false as const, error: "Notifications job failed." };
+    : { ok: false as const, error: "اجرای وظیفه اعلان‌ها ناموفق بود." };
   return jsonOk({ publish, analytics, reconciliation, reminders, notifications });
 }
 

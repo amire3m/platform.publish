@@ -23,12 +23,12 @@ export default function YoutubeSettingsPage() {
         </div>
         <p className="mt-2 text-sm text-tg-text/75">
           برای اتصال رسمی، متغیرهای محیطی <code>GOOGLE_CLIENT_ID</code>، <code>GOOGLE_CLIENT_SECRET</code> و <code>GOOGLE_REDIRECT_URI</code> را
-          طبق راهنمای README تنظیم کنید. بدون این مقادیر، اتصال حساب‌های یوتیوب فقط در «حالت آزمایشی» ممکن است.
+          طبق راهنمای پروژه تنظیم کنید. بدون این مقادیر، اتصال حساب‌های YouTube فقط در «حالت آزمایشی» ممکن است.
         </p>
         <ul className="mt-4 list-inside list-disc space-y-1 text-xs text-tg-secondary">
-          <li>Quota روزانه API باید در Google Cloud Console پایش شود.</li>
-          <li>Refresh Token به‌صورت رمزنگاری‌شده در پایگاه‌داده محلی نگهداری می‌شود و هرگز به تلگرام یا مرورگر ارسال نمی‌شود.</li>
-          <li>محدودیت سنی (Age Restriction) از طریق API عمومی یوتیوب پشتیبانی نمی‌شود و در ویزارد آپلود غیرفعال است.</li>
+          <li>سهمیه روزانه API باید در Google Cloud Console پایش شود.</li>
+          <li>توکن تازه‌سازی به‌صورت رمزنگاری‌شده در پایگاه‌داده محلی نگهداری می‌شود و هرگز به Telegram یا مرورگر ارسال نمی‌شود.</li>
+          <li>محدودیت سنی از طریق API عمومی YouTube پشتیبانی نمی‌شود و در راهنمای بارگذاری غیرفعال است.</li>
         </ul>
       </Card>
 

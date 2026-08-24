@@ -244,4 +244,11 @@ describe("workflow import duplicate diff and transactional commit", () => {
     // No new programs should persist
     expect(port.programs.filter((p) => p.title.startsWith("جدید"))).toHaveLength(0);
   });
+
+  it("returns a Persian reason when a selected row no longer exists", async () => {
+    const service = createWorkflowImportService({ port });
+    const preview = await service.preview({ csv: "نام برنامه\nبرنامه جدید", actorUserId: "u1" });
+    const result = await service.commit({ token: preview.token, rows: [{ rowIndex: 99, action: "create" }], actorUserId: "u1" });
+    expect(result.results[0]).toMatchObject({ status: "skipped", reason: "ردیف در پیش‌نمایش یافت نشد." });
+  });
 });

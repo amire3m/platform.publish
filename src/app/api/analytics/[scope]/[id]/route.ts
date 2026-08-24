@@ -28,7 +28,7 @@ export async function handleAnalyticsDetailRequest(
   const { user, response } = await dependencies.requirePermission("view_analytics");
   if (!user) return response!;
   if (params.scope !== "account" && params.scope !== "content") {
-    return jsonError("scope نامعتبر است.", 422, "INVALID_SCOPE");
+    return jsonError("محدوده آمار نامعتبر است.", 422, "INVALID_SCOPE");
   }
   const range = parseAnalyticsRange(new URL(request.url).searchParams.get("range") ?? "90");
   if (!range) return jsonError("بازه آمار نامعتبر است.", 422, "INVALID_RANGE");

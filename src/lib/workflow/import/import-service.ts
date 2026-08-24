@@ -251,7 +251,7 @@ export async function commitWorkflowImport(
       const hasMapped = decision.mappedValues && (decision.mappedValues[key] !== undefined || decision.mappedValues[altKey] !== undefined);
       const isSkipped = decision.skipCells && (decision.skipCells[key] || decision.skipCells[altKey]);
       if (!hasMapped && !isSkipped) {
-        throw new ImportError("UNKNOWN_CELL_REQUIRED", `سلول ناشناخته در ردیف ${decision.rowIndex} نیازمند نگاشت یا skip است.`);
+        throw new ImportError("UNKNOWN_CELL_REQUIRED", `سلول ناشناخته در ردیف ${decision.rowIndex} باید نگاشت یا رد شود.`);
       }
     }
 
@@ -353,7 +353,7 @@ export async function commitWorkflowImport(
       const mappedRow = mapped.rows.find((r) => r.rowIndex === decision.rowIndex);
 
       if (!mappedRow) {
-        results.push({ rowIndex: decision.rowIndex, status: "skipped", reason: "row not found" });
+        results.push({ rowIndex: decision.rowIndex, status: "skipped", reason: "ردیف در پیش‌نمایش یافت نشد." });
         skipped++;
         continue;
       }
@@ -545,7 +545,8 @@ export async function commitWorkflowImport(
     }
 
     if (e instanceof ImportError) throw e;
-    throw new ImportError("IMPORT_FAILED", (e as Error).message || "خطا در ورود داده‌ها");
+    console.error("[workflow-import] commit failed:", e);
+    throw new ImportError("IMPORT_FAILED", "ورود داده‌ها انجام نشد. دوباره تلاش کنید.");
   }
 }
 

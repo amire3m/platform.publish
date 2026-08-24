@@ -81,7 +81,8 @@ export async function handleCommitRequest(
     // PreviewError codes mapped
     if (message.includes("منقضی")) return jsonError(message, 410, "PREVIEW_EXPIRED");
     if (code === "VERSION_CONFLICT") return jsonError(message, 409, code);
-    return jsonError(message, 500);
+    console.error("[workflow-import-commit] failed:", e);
+    return jsonError("ورود داده‌ها انجام نشد. دوباره تلاش کنید.", 500);
   }
 }
 

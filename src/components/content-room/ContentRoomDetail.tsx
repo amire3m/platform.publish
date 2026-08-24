@@ -209,7 +209,7 @@ export function ContentRoomDetail({ product, onRefresh }: Props) {
                   </span>
                 </div>
               </div>
-              <p className="mt-2 text-[11px] text-tg-secondary">در ارسال به انتشار، هر خروجی (deliverable) یک انتشار (publication) با پلتفرم نگاشت‌شده و شناسه حساب کانال ایجاد می‌کند؛ در صورت عدم اتصال، socialAccountId برابر null خواهد بود.</p>
+              <p className="mt-2 text-[11px] text-tg-secondary">با ارسال برای انتشار، برای هر خروجی یک مقصد انتشار در پلتفرم انتخاب‌شده ایجاد می‌شود. اگر حسابی متصل نباشد، مقصد بدون حساب باقی می‌ماند.</p>
             </div>
           </div>
         </div>
@@ -452,7 +452,7 @@ function PartUploadCard({
 
       <div className="space-y-2 border-t border-tg-border pt-2">
         <div className="flex flex-col gap-2">
-          <label className="text-xs font-medium text-tg-secondary">ویدئوی خام (حداکثر ۱۰۰MB — mp4/mov/avi/webm/mkv)</label>
+          <label className="text-xs font-medium text-tg-secondary">ویدئوی خام (حداکثر ۱۰۰ مگابایت، با فرمت mp4، mov، avi، webm یا mkv)</label>
           <input
             ref={videoInputRef}
             type="file"
@@ -471,7 +471,7 @@ function PartUploadCard({
         </div>
 
         <div className="flex flex-col gap-2">
-          <label className="text-xs font-medium text-tg-secondary">کاور (حداکثر ۱۰MB — jpeg/png)</label>
+          <label className="text-xs font-medium text-tg-secondary">کاور (حداکثر ۱۰ مگابایت، با فرمت jpeg یا png)</label>
           <input
             ref={coverInputRef}
             type="file"

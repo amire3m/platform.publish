@@ -42,7 +42,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ public
       if (err.code === "NOT_FOUND") return jsonError(err.message, 404, err.code);
       return jsonError(err.message, 400, err.code);
     }
-    return jsonError((err as Error).message || "خطای ناشناخته", 500);
+    console.error("[calendar-target-reschedule] failed:", err);
+    return jsonError("زمان‌بندی انتشار انجام نشد. دوباره تلاش کنید.", 500);
   }
 }
 
@@ -57,7 +58,7 @@ export async function handleTargetRescheduleRequest(
   },
 ) {
   const user = await deps.getCurrentUser();
-  if (!user) return jsonError("Unauthorized", 401);
+  if (!user) return jsonError("ابتدا وارد حساب کاربری خود شوید.", 401);
   const { publicationId } = await ctx.params;
   const parsed = rescheduleSchema.safeParse(await req.json());
   if (!parsed.success) return jsonError(parsed.error.issues[0]?.message ?? "داده نامعتبر است.", 422);
@@ -78,6 +79,7 @@ export async function handleTargetRescheduleRequest(
       if (err.code === "VERSION_CONFLICT") return jsonError(err.message, 409, err.code);
       return jsonError(err.message, 400, err.code);
     }
-    return jsonError((err as Error).message, 500);
+    console.error("[calendar-target-reschedule] failed:", err);
+    return jsonError("زمان‌بندی انتشار انجام نشد. دوباره تلاش کنید.", 500);
   }
 }

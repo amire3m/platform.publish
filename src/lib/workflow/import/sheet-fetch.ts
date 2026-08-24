@@ -8,30 +8,30 @@ const MAX_BYTES = 5 * 1024 * 1024;
 const MAX_REDIRECTS = 3;
 const TIMEOUT_MS = 15_000;
 
-const INVALID_URL_MESSAGE = "Invalid Google Sheet URL";
-const REDIRECT_MESSAGE = "redirect to disallowed host or too many redirects";
+const INVALID_URL_MESSAGE = "آدرس Google Sheet معتبر نیست.";
+const REDIRECT_MESSAGE = "مسیر انتقال Google Sheet مجاز نیست.";
 const SIZE_MESSAGE = "حجم فایل بیش از حد مجاز است";
-const FETCH_FAILED_MESSAGE = "Failed to fetch Google Sheet";
+const FETCH_FAILED_MESSAGE = "دریافت Google Sheet ناموفق بود. از عمومی‌بودن شیت مطمئن شوید و دوباره تلاش کنید.";
 
 export function parsePublicSheetUrl(urlString: string): PublicSheetRef {
   let url: URL;
   try {
     url = new URL(urlString);
   } catch {
-    throw new Error(`${INVALID_URL_MESSAGE}: only docs.google.com spreadsheets are allowed`);
+    throw new Error(INVALID_URL_MESSAGE);
   }
 
   if (url.hostname !== ALLOWED_HOST) {
-    throw new Error(`${INVALID_URL_MESSAGE}: only docs.google.com spreadsheets are allowed`);
+    throw new Error(INVALID_URL_MESSAGE);
   }
 
   if (url.protocol !== "https:") {
-    throw new Error(`${INVALID_URL_MESSAGE}: only https is allowed`);
+    throw new Error(INVALID_URL_MESSAGE);
   }
 
   const match = url.pathname.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
   if (!match) {
-    throw new Error(`${INVALID_URL_MESSAGE}: missing spreadsheet id`);
+    throw new Error(INVALID_URL_MESSAGE);
   }
   const sheetId = match[1];
 
@@ -162,7 +162,7 @@ export async function fetchSheetCsv(ref: PublicSheetRef, deps?: SheetFetchDeps):
         } as RequestInit);
       } catch (e) {
         if ((e as Error).name === "AbortError") {
-          throw new Error(`${FETCH_FAILED_MESSAGE}: timeout`);
+          throw new Error("زمان دریافت Google Sheet به پایان رسید. دوباره تلاش کنید.");
         }
         // Do not leak URL
         throw new Error(FETCH_FAILED_MESSAGE);

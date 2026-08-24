@@ -49,9 +49,9 @@ async function handlePermissionsUpdate(req: Request, params: Promise<{ id: strin
   // Validate allowedChannels: must be subset of CHANNEL_IDS (6)
   let allowedChannels: string[] | undefined = undefined;
   if (body.allowedChannels !== undefined) {
-    if (!Array.isArray(body.allowedChannels)) return jsonError("allowedChannels باید آرایه باشد.", 400);
+    if (!Array.isArray(body.allowedChannels)) return jsonError("فهرست کانال‌های مجاز نامعتبر است.", 400);
     const invalid = body.allowedChannels.filter((c) => !(CHANNEL_IDS as readonly string[]).includes(c));
-    if (invalid.length) return jsonError(`کانال نامعتبر: ${invalid.join(", ")}`, 400);
+    if (invalid.length) return jsonError("یک یا چند کانال انتخاب‌شده معتبر نیستند.", 400);
     allowedChannels = [...new Set(body.allowedChannels)];
   }
 

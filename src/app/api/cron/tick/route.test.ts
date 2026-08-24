@@ -118,7 +118,7 @@ describe("/api/cron/tick", () => {
     const body = await response.json();
 
     expect(runScheduledAnalyticsSync).toHaveBeenCalledOnce();
-    expect(body.data.publish).toEqual({ ok: false, error: "Publish job failed." });
+    expect(body.data.publish).toEqual({ ok: false, error: "اجرای وظیفه انتشار ناموفق بود." });
     expect(body.data.analytics).toEqual({ ok: true, value: { ran: true, results: [] } });
     expect(JSON.stringify(body)).not.toContain("secret detail");
   });

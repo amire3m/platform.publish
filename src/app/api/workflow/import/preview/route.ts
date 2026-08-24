@@ -63,8 +63,8 @@ export async function handlePreviewRequest(
       let ref: { sheetId: string; gid: string };
       try {
         ref = deps.parsePublicSheetUrl(sheetUrl);
-      } catch (e) {
-        return jsonError((e as Error).message ?? "آدرس Google Sheet نامعتبر است.", 422, "VALIDATION_ERROR");
+      } catch {
+        return jsonError("آدرس Google Sheet معتبر نیست.", 422, "VALIDATION_ERROR");
       }
       sheetId = ref.sheetId;
       sheetGid = ref.gid;
@@ -73,9 +73,9 @@ export async function handlePreviewRequest(
       } catch (e) {
         const msg = (e as Error).message ?? "خطا در دریافت شیت";
         // Do not leak URL
-        if (msg.includes("redirect")) return jsonError("آدرس تغییر مسیر غیرمجاز است.", 422, "VALIDATION_ERROR");
+        if (msg.includes("redirect") || msg.includes("مسیر انتقال")) return jsonError("مسیر انتقال Google Sheet مجاز نیست.", 422, "VALIDATION_ERROR");
         if (msg.includes("حجم")) return jsonError(msg, 422, "VALIDATION_ERROR");
-        return jsonError("خطا در دریافت Google Sheet", 502, "FETCH_FAILED");
+        return jsonError("دریافت Google Sheet ناموفق بود. از عمومی‌بودن شیت مطمئن شوید و دوباره تلاش کنید.", 502, "FETCH_FAILED");
       }
     }
 
@@ -109,7 +109,8 @@ export async function handlePreviewRequest(
   } catch (e) {
     const code = (e as { code?: string }).code;
     if (code === "VALIDATION_ERROR") return jsonError((e as Error).message, 422, code);
-    return jsonError((e as Error).message ?? "خطای سرور", 500);
+    console.error("[workflow-import-preview] failed:", e);
+    return jsonError("ساخت پیش‌نمایش انجام نشد. داده ورودی را بررسی کنید و دوباره تلاش کنید.", 500);
   }
 }
 

@@ -6,6 +6,7 @@ import Link from "next/link";
 import { Button, Card, EmptyState, StatusBadge } from "@/components/ui";
 import { useToast } from "@/components/providers";
 import { formatJalaliDateTime } from "@/lib/date/jalali";
+import { platformLabelFa } from "@/lib/presentation-fa";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
@@ -62,7 +63,7 @@ export default function ErrorsPage() {
             <div className="mt-2 space-y-1">
               {r.platformTargets?.filter((t) => t.lastError).map((t, i) => (
                 <p key={i} className="text-xs text-rose-500">
-                  {t.platform}: {t.lastError}
+                   {platformLabelFa(t.platform)}: {t.lastError}
                 </p>
               ))}
             </div>

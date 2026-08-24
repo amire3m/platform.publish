@@ -34,7 +34,7 @@ export async function handleAnalyticsExportRequest(
   if (!range) return jsonError("بازه آمار نامعتبر است.", 422, "INVALID_RANGE");
   const scope = url.searchParams.get("scope") ?? "account";
   if (scope !== "account" && scope !== "content") {
-    return jsonError("scope نامعتبر است.", 422, "INVALID_SCOPE");
+    return jsonError("محدوده خروجی نامعتبر است.", 422, "INVALID_SCOPE");
   }
   const now = dependencies.now();
   const period = buildAnalyticsPeriod(range, now, "Asia/Tehran");

@@ -157,7 +157,8 @@ export async function POST(req: Request) {
         duration: durationSeconds ?? null,
       });
     } catch (err) {
-      return jsonError(`ارسال فایل به تلگرام ناموفق بود: ${(err as Error).message}`, 502, "TELEGRAM_UPLOAD_FAILED");
+      console.error("[content-upload] Telegram upload failed:", err);
+      return jsonError("ارسال فایل به Telegram انجام نشد. دوباره تلاش کنید.", 502, "TELEGRAM_UPLOAD_FAILED");
     }
   }
 

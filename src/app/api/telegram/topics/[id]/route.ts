@@ -12,7 +12,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
   const body = (await req.json()) as { label?: string; messageThreadId?: number | null };
   const [existing] = await db.select().from(telegramTopics).where(eq(telegramTopics.id, id)).limit(1);
-  if (!existing) return jsonError("Topic یافت نشد.", 404);
+  if (!existing) return jsonError("تاپیک یافت نشد.", 404);
 
   if (body.label && existing.messageThreadId) {
     try {
@@ -52,8 +52,8 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
   const { id } = await params;
 
   const [existing] = await db.select().from(telegramTopics).where(eq(telegramTopics.id, id)).limit(1);
-  if (!existing) return jsonError("Topic یافت نشد.", 404);
-  if (existing.isFixed) return jsonError("Topicهای ثابت سیستم قابل حذف نیستند؛ فقط قابل ویرایش‌اند.", 400);
+  if (!existing) return jsonError("تاپیک یافت نشد.", 404);
+  if (existing.isFixed) return jsonError("تاپیک‌های ثابت سیستم قابل حذف نیستند؛ فقط می‌توانید آن‌ها را ویرایش کنید.", 400);
 
   await db.delete(telegramTopics).where(eq(telegramTopics.id, id));
   await appendAuditEvent({

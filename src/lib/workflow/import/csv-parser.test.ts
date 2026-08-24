@@ -47,12 +47,12 @@ describe("parseCsv", () => {
 
   it("rejects too many rows", () => {
     const many = Array.from({ length: 10001 }, () => "a,b").join("\n");
-    expect(() => parseCsv(many, limits)).toThrow();
+    expect(() => parseCsv(many, limits)).toThrow("تعداد ردیف‌های CSV از حد مجاز ۱۰۰۰۰ بیشتر است.");
   });
 
   it("rejects too many columns", () => {
     const row = Array.from({ length: 201 }, () => "a").join(",");
-    expect(() => parseCsv(row, limits)).toThrow();
+    expect(() => parseCsv(row, limits)).toThrow("تعداد ستون‌های CSV از حد مجاز ۲۰۰ بیشتر است.");
   });
 
   it("handles empty input", () => {

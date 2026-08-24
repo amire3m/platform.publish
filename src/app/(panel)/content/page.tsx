@@ -7,6 +7,7 @@ import { FileText, Film, LayoutGrid, List, Plus } from "lucide-react";
 import { InstagramIcon, YoutubeIcon } from "@/components/brand-icons";
 import { Button, Card, EmptyState, Input, Select, Skeleton, StatusBadge } from "@/components/ui";
 import { formatJalaliDateTime } from "@/lib/date/jalali";
+import { deliverableKindLabelFa, platformLabelFa } from "@/lib/presentation-fa";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
@@ -123,7 +124,7 @@ export default function ContentLibraryPage() {
                   {row.platformTargets?.map((t, i) => (
                     <span key={i} className="inline-flex items-center gap-1 rounded-full bg-tg-hover px-2 py-0.5 text-[10px] text-tg-text/75">
                       {t.platform === "youtube" ? <YoutubeIcon className="h-3 w-3" /> : <InstagramIcon className="h-3 w-3" />}
-                      {t.content_type}
+                       {deliverableKindLabelFa(t.content_type)}
                     </span>
                   ))}
                 </div>
@@ -154,7 +155,7 @@ export default function ContentLibraryPage() {
                   <td className="p-3">
                     <StatusBadge status={row.status} />
                   </td>
-                  <td className="p-3 text-xs">{row.platformTargets?.map((t) => t.platform).join("، ")}</td>
+                   <td className="p-3 text-xs">{row.platformTargets?.map((t) => platformLabelFa(t.platform)).join("، ")}</td>
                   <td className="p-3 text-xs text-tg-secondary">{formatJalaliDateTime(row.createdAt)}</td>
                 </tr>
               ))}

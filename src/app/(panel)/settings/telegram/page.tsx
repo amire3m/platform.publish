@@ -54,7 +54,7 @@ export default function TelegramSettingsPage() {
     });
     const json = await res.json();
     if (!json.ok) return showToast(json.error, "error");
-    showToast("Topic در تلگرام ایجاد و نگاشت شد.", "success");
+    showToast("تاپیک در Telegram ایجاد و نگاشت شد.", "success");
     mutate();
   }
 
@@ -66,7 +66,7 @@ export default function TelegramSettingsPage() {
     });
     const json = await res.json();
     if (!json.ok) return showToast(json.error, "error");
-    showToast("Topic نگاشت شد.", "success");
+    showToast("تاپیک نگاشت شد.", "success");
     setEditingId(null);
     mutate();
   }
@@ -113,7 +113,7 @@ export default function TelegramSettingsPage() {
               )}
             </p>
             <p className="flex items-center gap-1">
-              Topics فعال است:
+              تاپیک‌ها فعال هستند:
               {(testResult as { topicsEnabled?: boolean }).topicsEnabled ? (
                 <Check className="h-4 w-4 text-emerald-500" />
               ) : (
@@ -125,9 +125,9 @@ export default function TelegramSettingsPage() {
       </Card>
 
       <Card>
-        <h2 className="mb-3 font-semibold">نگاشت Topicها</h2>
+        <h2 className="mb-3 font-semibold">نگاشت تاپیک‌ها</h2>
         <p className="mb-3 text-xs text-tg-secondary/80">
-          Bot API قابلیت فهرست کردن Topicهای موجود را ندارد؛ برای هر مورد یا از دکمه «ایجاد از طریق ربات» استفاده کنید یا شناسه message_thread_id
+          Bot API قابلیت فهرست کردن تاپیک‌های موجود را ندارد؛ برای هر مورد یا از دکمه «ایجاد از طریق ربات» استفاده کنید یا شناسه فنی تاپیک
           موجود را دستی وارد کنید.
         </p>
         <div className="space-y-2">
@@ -145,7 +145,7 @@ export default function TelegramSettingsPage() {
                     <Input
                       value={editValue}
                       onChange={(e) => setEditValue(e.target.value)}
-                      placeholder="message_thread_id"
+                      placeholder="مثلاً ۱۲۳۴"
                       className="w-32"
                     />
                     <Button size="sm" onClick={() => mapExisting(t.key, t.label, Number(editValue))}>

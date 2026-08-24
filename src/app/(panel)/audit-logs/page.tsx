@@ -4,6 +4,7 @@ import useSWR from "swr";
 import { Check } from "lucide-react";
 import { Card, EmptyState, Skeleton } from "@/components/ui";
 import { formatJalaliDateTime } from "@/lib/date/jalali";
+import { auditActionLabelFa, entityTypeLabelFa } from "@/lib/presentation-fa";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
@@ -25,7 +26,7 @@ export default function AuditLogsPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-xl font-bold text-tg-text">لاگ فعالیت‌ها</h1>
-        <p className="text-sm text-tg-secondary">Audit Log تمام عملیات حساس، هم‌زمان در پایگاه محلی و گروه تلگرام ثبت می‌شود</p>
+        <p className="text-sm text-tg-secondary">گزارش ممیزی تمام عملیات حساس، هم‌زمان در پایگاه محلی و گروه Telegram ثبت می‌شود</p>
       </div>
 
       {isLoading && <Skeleton className="h-64" />}
@@ -46,8 +47,8 @@ export default function AuditLogsPage() {
           <tbody>
             {rows.map((r) => (
               <tr key={r.id} className="border-b border-tg-border last:border-0">
-                <td className="p-3 font-mono text-xs">{r.action}</td>
-                <td className="p-3 text-xs">{r.entityType}</td>
+                <td className="p-3 text-xs">{auditActionLabelFa(r.action)}</td>
+                <td className="p-3 text-xs">{entityTypeLabelFa(r.entityType)}</td>
                 <td className="p-3 text-xs text-tg-secondary">{r.entityId ?? "—"}</td>
                 <td className="p-3 text-xs text-tg-secondary">{r.actorTelegramId ?? "سیستم"}</td>
                 <td className="p-3 text-xs text-tg-secondary">{formatJalaliDateTime(r.createdAt)}</td>

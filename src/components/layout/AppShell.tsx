@@ -28,7 +28,7 @@ import {
 } from "lucide-react";
 import { InstagramIcon, YoutubeIcon } from "@/components/brand-icons";
 import { useTheme, useToast } from "@/components/providers";
-import { ROLE_LABELS_FA } from "@/lib/permissions";
+import { roleLabelFa } from "@/lib/presentation-fa";
 import { NotificationCenter } from "@/components/workflow/NotificationCenter";
 
 const NAV_ITEMS = [
@@ -212,7 +212,7 @@ export function AppShell({
             </button>
             <div className="hidden text-left sm:block">
               <p className="text-sm font-semibold text-tg-text">{user.name}</p>
-              <p className="text-xs text-tg-secondary">{ROLE_LABELS_FA[user.role as keyof typeof ROLE_LABELS_FA] ?? user.role}</p>
+              <p className="text-xs text-tg-secondary">{roleLabelFa(user.role)}</p>
             </div>
             <button
               onClick={logout}

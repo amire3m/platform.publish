@@ -402,7 +402,7 @@ export default function AssetsPage() {
                 <p className="text-tg-text">{formatSize(displayAsset.size)}</p>
               </div>
               <div>
-                <p className="font-semibold text-tg-secondary">MIME</p>
+                <p className="font-semibold text-tg-secondary">نوع فایل</p>
                 <p className="text-tg-text">{displayAsset.mime}</p>
               </div>
               <div>
@@ -414,7 +414,7 @@ export default function AssetsPage() {
                 <p className="text-tg-text">{formatDate(displayAsset.createdAt)}</p>
               </div>
               <div className="col-span-2">
-                <p className="font-semibold text-tg-secondary">telegramFileId</p>
+                <p className="font-semibold text-tg-secondary">شناسه فایل Telegram</p>
                 <p className="break-all font-mono text-[11px] text-tg-text">{displayAsset.telegramFileId}</p>
               </div>
             </div>
@@ -450,7 +450,7 @@ export default function AssetsPage() {
                   </div>
                 ))}
               </div>
-              <p className="mt-1 text-[11px] text-tg-secondary">نسخه‌های دارایی در تلگرام به‌صورت پیام TGDB ذخیره می‌شوند؛ `createVersion` با `telegramFileId` جدید یک رکورد جدید می‌سازد.</p>
+              <p className="mt-1 text-[11px] text-tg-secondary">نسخه‌های فایل به‌صورت پیام در Telegram ذخیره می‌شوند و هر شناسه فایل جدید، یک نسخه جداگانه می‌سازد.</p>
             </div>
 
             {displayAsset.thumbnailUrl && !isSample && (

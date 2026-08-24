@@ -49,7 +49,7 @@ export default function GeneralSettingsPage() {
           <Label>محدودیت حجم فایل ربات تلگرام (مگابایت)</Label>
           <Input type="number" value={fileSizeLimitMb} onChange={(e) => setFileSizeLimitMb(Number(e.target.value))} />
           <p className="mt-1 text-xs text-tg-secondary/80">
-            محدودیت پیش‌فرض Bot API معمولی ۵۰ مگابایت است. برای فایل‌های حجیم‌تر باید یک Local Bot API Server راه‌اندازی شود (به README مراجعه کنید).
+            محدودیت پیش‌فرض Bot API معمولی ۵۰ مگابایت است. برای فایل‌های حجیم‌تر باید یک سرور محلی Bot API راه‌اندازی شود (به راهنمای پروژه مراجعه کنید).
           </p>
         </div>
         <Button onClick={save}>ذخیره تنظیمات</Button>

@@ -74,7 +74,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   if (!(file instanceof File)) return jsonError("فایل ارسال نشده است.", 400, "FILE_REQUIRED");
   const type = typeof typeRaw === "string" ? typeRaw : "";
   if (type !== "video" && type !== "cover") {
-    return jsonError("نوع فایل نامعتبر است. باید video یا cover باشد.", 400, "INVALID_TYPE");
+    return jsonError("نوع فایل نامعتبر است. ویدئو یا کاور را انتخاب کنید.", 400, "INVALID_TYPE");
   }
 
   // Validate size and mime
@@ -86,14 +86,14 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
       return jsonError("حجم ویدئو نباید بیش از ۱۰۰ مگابایت باشد.", 422, "FILE_TOO_LARGE");
     }
     if (!isVideoMime(mime)) {
-      return jsonError(`فرمت ویدئو پشتیبانی نمی‌شود: ${mime || "نامشخص"} (مجاز: video/mp4, mov, avi, webm, mkv)`, 422, "INVALID_MIME");
+      return jsonError(`فرمت ویدئو پشتیبانی نمی‌شود: ${mime || "نامشخص"}. فرمت‌های مجاز: mp4، mov، avi، webm و mkv.`, 422, "INVALID_MIME");
     }
   } else {
     if (size > MAX_COVER_BYTES) {
       return jsonError("حجم کاور نباید بیش از ۱۰ مگابایت باشد.", 422, "FILE_TOO_LARGE");
     }
     if (!isImageMime(mime)) {
-      return jsonError(`فرمت کاور پشتیبانی نمی‌شود: ${mime || "نامشخص"} (مجاز: image/jpeg, image/png)`, 422, "INVALID_MIME");
+      return jsonError(`فرمت کاور پشتیبانی نمی‌شود: ${mime || "نامشخص"}. فرمت‌های مجاز: jpeg و png.`, 422, "INVALID_MIME");
     }
   }
 
@@ -102,7 +102,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   if (typeof expectedVersionRaw === "string" && expectedVersionRaw.trim() !== "") {
     const parsed = Number(expectedVersionRaw);
     if (!Number.isInteger(parsed) || parsed < 1) {
-      return jsonError("expectedVersion نامعتبر است.", 400, "INVALID_VERSION");
+      return jsonError("نسخه ارسالی نامعتبر است. صفحه را تازه‌سازی کنید و دوباره تلاش کنید.", 400, "INVALID_VERSION");
     }
     expectedVersion = parsed;
     const currentVersion = (part as unknown as { version?: number }).version ?? 1;
@@ -175,7 +175,8 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
       }
     }
   } catch (err) {
-    return jsonError(`ارسال فایل به تلگرام ناموفق بود: ${(err as Error).message}`, 502, "TELEGRAM_UPLOAD_FAILED");
+    console.error("[content-room-upload] Telegram upload failed:", err);
+    return jsonError("ارسال فایل به Telegram انجام نشد. دوباره تلاش کنید.", 502, "TELEGRAM_UPLOAD_FAILED");
   }
 
   if (!fileId) {

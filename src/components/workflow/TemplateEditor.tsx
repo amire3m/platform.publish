@@ -6,6 +6,7 @@ import { ArrowDown, ArrowUp, Edit2, Archive, Plus, Trash2, Save, X } from "lucid
 import { Button, Card, Input, Label, Textarea, ErrorState, Skeleton, ConfirmModal } from "@/components/ui";
 import { fetchWorkflowApi, WorkflowApiError } from "@/lib/workflow/client";
 import type { DraftPlatform, DraftDestination } from "@/lib/workflow/draft";
+import { deliverableKindLabelFa, platformLabelFa } from "@/lib/presentation-fa";
 
 interface TemplateItem {
   id: string;
@@ -319,7 +320,7 @@ export function TemplateEditor() {
       <div className="space-y-4" dir="rtl">
         <Card>
           <h2 className="text-sm font-bold text-tg-text">مدیریت الگوها</h2>
-          <p className="mt-2 text-sm text-amber-700 dark:text-amber-300">برای مدیریت الگوها به مجوز manage_workflow_templates نیاز است. نمایش فقط خواندنی است.</p>
+          <p className="mt-2 text-sm text-amber-700 dark:text-amber-300">برای مدیریت الگوها به مجوز «مدیریت الگوهای گردش کار» نیاز است. نمایش فقط خواندنی است.</p>
         </Card>
         {isLoading ? <Skeleton className="h-24" /> : null}
         {error ? <ErrorState message={error.message} /> : null}
@@ -346,7 +347,7 @@ export function TemplateEditor() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-lg font-bold text-tg-text">الگوهای برنامه</h2>
-          <p className="text-xs text-tg-secondary">الگو snapshot است؛ تغییر الگو برنامه‌های قبلی را تغییر نمی‌دهد. آرشیو الگوی دارای نمونه موجود نیازمند تأیید است.</p>
+          <p className="text-xs text-tg-secondary">الگو یک نسخه ثابت است؛ تغییر الگو برنامه‌های قبلی را تغییر نمی‌دهد. بایگانی الگوی دارای نمونه موجود نیازمند تأیید است.</p>
         </div>
         <Button onClick={() => setCreating((v) => !v)} variant={creating ? "secondary" : "primary"} className="min-h-[44px]">
           {creating ? <><X className="h-4 w-4" /> بستن</> : <><Plus className="h-4 w-4" /> ایجاد الگو</>}
@@ -424,7 +425,7 @@ export function TemplateEditor() {
 
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <p className="text-xs font-semibold text-tg-secondary">آیتم‌ها (مقصدها + offset موعد)</p>
+                <p className="text-xs font-semibold text-tg-secondary">آیتم‌ها (مقصدها و فاصله زمانی موعد)</p>
                 <Button size="sm" variant="secondary" onClick={() => setAddingItemFor(addingItemFor === t.id ? null : t.id)}>{addingItemFor === t.id ? "بستن" : "افزودن آیتم"}</Button>
               </div>
 
@@ -437,10 +438,10 @@ export function TemplateEditor() {
                     </div>
                     <div>
                       <Label>نوع</Label>
-                      <Input value={newItemKind} onChange={(e) => setNewItemKind(e.target.value)} placeholder="video" className="mt-1" />
+                       <Input value={newItemKind} onChange={(e) => setNewItemKind(e.target.value)} placeholder="ویدئو" className="mt-1" />
                     </div>
                     <div>
-                      <Label>offset موعد (دقیقه)</Label>
+                       <Label>فاصله زمانی موعد (دقیقه)</Label>
                       <Input type="number" value={newItemOffset} onChange={(e) => setNewItemOffset(e.target.value)} placeholder="مثال: -60" className="mt-1" />
                     </div>
                     <div>
@@ -476,7 +477,7 @@ export function TemplateEditor() {
                               <div className="grid gap-2 sm:grid-cols-2">
                                 <Input value={editItemName} onChange={(e) => setEditItemName(e.target.value)} placeholder="نام" />
                                 <Input value={editItemKind} onChange={(e) => setEditItemKind(e.target.value)} placeholder="نوع" />
-                                <Input type="number" value={editItemOffset} onChange={(e) => setEditItemOffset(e.target.value)} placeholder="offset دقیقه" />
+                                 <Input type="number" value={editItemOffset} onChange={(e) => setEditItemOffset(e.target.value)} placeholder="فاصله زمانی به دقیقه" />
                                 <div className="flex flex-wrap gap-1">
                                   {PLATFORMS.map((p) => (
                                     <label key={p.value} className={`inline-flex cursor-pointer items-center gap-1 rounded-full border px-2 py-1 text-xs ${editItemDestinations.includes(p.value) ? "border-tg-accent bg-tg-accent text-white" : "border-tg-border bg-tg-surface"}`}>
@@ -493,8 +494,8 @@ export function TemplateEditor() {
                             </div>
                           ) : (
                             <>
-                              <p className="text-sm font-medium text-tg-text">{idx + 1}. {it.name} {it.kind ? <span className="text-xs text-tg-secondary">({it.kind})</span> : null}</p>
-                              <p className="text-xs text-tg-secondary">offset: {it.dueOffsetMinutes != null ? `${it.dueOffsetMinutes} دقیقه` : "—"} · مقاصد: {it.destinations.length ? it.destinations.map((d) => PLATFORMS.find((p) => p.value === d.platform)?.label ?? d.platform).join("، ") : "—"}</p>
+                               <p className="text-sm font-medium text-tg-text">{idx + 1}. {it.name} {it.kind ? <span className="text-xs text-tg-secondary">({deliverableKindLabelFa(it.kind)})</span> : null}</p>
+                               <p className="text-xs text-tg-secondary">فاصله زمانی: {it.dueOffsetMinutes != null ? `${it.dueOffsetMinutes} دقیقه` : "—"} · مقاصد: {it.destinations.length ? it.destinations.map((d) => platformLabelFa(d.platform)).join("، ") : "—"}</p>
                             </>
                           )}
                         </div>

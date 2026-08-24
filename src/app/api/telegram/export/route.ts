@@ -24,6 +24,7 @@ export async function POST(req: Request) {
     });
     return jsonOk({ imported });
   } catch (err) {
-    return jsonError(`وارد کردن داده ناموفق بود: ${(err as Error).message}`, 400);
+    console.error("[telegram-import] failed:", err);
+    return jsonError("وارد کردن داده انجام نشد. فایل ورودی را بررسی کنید و دوباره تلاش کنید.", 400);
   }
 }

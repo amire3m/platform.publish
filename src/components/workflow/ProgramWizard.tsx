@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { ArrowLeft, ArrowRight, Check, GripVertical, Plus, Trash2 } from "lucide-react";
 import { Button, Card, Input, Label, Select, Textarea, ErrorState, Skeleton } from "@/components/ui";
 import { fetchWorkflowApi, WorkflowApiError } from "@/lib/workflow/client";
+import { deliverableKindLabelFa, platformLabelFa } from "@/lib/presentation-fa";
 import {
   addDeliverableToDraft,
   calculateDueAt,
@@ -215,7 +216,7 @@ export function ProgramWizard() {
       {step === 0 && (
         <Card className="space-y-4">
           <h2 className="text-sm font-bold text-tg-text">انتخاب نقطه شروع</h2>
-          <p className="text-xs text-tg-secondary">از یک الگو شروع کنید یا برنامه خالی بسازید. الگو یک snapshot است و تغییر بعدی الگو برنامه‌های قبلی را تغییر نمی‌دهد.</p>
+          <p className="text-xs text-tg-secondary">از یک الگو شروع کنید یا برنامه خالی بسازید. الگو یک نسخه ثابت است و تغییر بعدی الگو برنامه‌های قبلی را تغییر نمی‌دهد.</p>
 
           {templatesLoading && <Skeleton className="h-20" />}
           {templatesError && (
@@ -276,11 +277,11 @@ export function ProgramWizard() {
               <div>
                 <Label>موعد برنامه (اختیاری)</Label>
                 <Input type="datetime-local" value={dueAtInput} onChange={(e) => setDueAtInput(e.target.value)} className="mt-1" />
-                <p className="mt-1 text-xs text-tg-secondary">موعد خروجی‌ها با dueOffsetMinutes نسبت به این تاریخ محاسبه می‌شود.</p>
+                <p className="mt-1 text-xs text-tg-secondary">موعد خروجی‌ها با فاصله زمانی تعیین‌شده نسبت به این تاریخ محاسبه می‌شود.</p>
               </div>
             </div>
             <div>
-              <Label>مالک/مسئول کل برنامه (userId اختیاری)</Label>
+              <Label>مالک یا مسئول کل برنامه (شناسه کاربر، اختیاری)</Label>
               <Input value={ownerUserId} onChange={(e) => setOwnerUserId(e.target.value)} placeholder="شناسه کاربر" className="mt-1" />
             </div>
             <div>
@@ -358,11 +359,11 @@ export function ProgramWizard() {
                       <Input value={d.name} onChange={(e) => handleUpdate(d.draftId, { name: e.target.value })} className="mt-1" />
                     </div>
                     <div>
-                      <Label>نوع (kind اختیاری)</Label>
-                      <Input value={d.kind ?? ""} onChange={(e) => handleUpdate(d.draftId, { kind: e.target.value || null })} placeholder="video / image / ..." className="mt-1" />
+                      <Label>نوع خروجی (اختیاری)</Label>
+                      <Input value={d.kind ?? ""} onChange={(e) => handleUpdate(d.draftId, { kind: e.target.value || null })} placeholder="ویدئو / تصویر / ..." className="mt-1" />
                     </div>
                     <div>
-                      <Label>مسئول (assigneeUserId)</Label>
+                      <Label>مسئول (شناسه کاربر)</Label>
                       <Input value={d.assigneeUserId ?? ""} onChange={(e) => handleUpdate(d.draftId, { assigneeUserId: e.target.value || null })} placeholder="شناسه کاربر" className="mt-1" />
                     </div>
                     <div>
@@ -375,7 +376,7 @@ export function ProgramWizard() {
                       />
                     </div>
                     <div>
-                      <Label>offset نسبت به موعد برنامه (دقیقه)</Label>
+                      <Label>فاصله زمانی نسبت به موعد برنامه (دقیقه)</Label>
                       <Input
                         type="number"
                         value={d.dueOffsetMinutes ?? ""}
@@ -497,10 +498,10 @@ export function ProgramWizard() {
             {draft.deliverables.map((d, idx) => (
               <div key={d.draftId} className="rounded-lg border border-tg-border p-3">
                 <p className="text-sm font-semibold text-tg-text">
-                  {idx + 1}. {d.name} {d.kind ? <span className="text-xs font-normal text-tg-secondary">({d.kind})</span> : null}
+                  {idx + 1}. {d.name} {d.kind ? <span className="text-xs font-normal text-tg-secondary">({deliverableKindLabelFa(d.kind)})</span> : null}
                 </p>
                 <p className="text-xs text-tg-secondary">
-                  مسئول: {d.assigneeUserId ?? "—"} · موعد: {d.dueAt ? new Date(d.dueAt).toLocaleString("fa-IR") : "—"} · مقاصد: {d.destinations.map((x) => PLATFORMS.find((p) => p.value === x.platform)?.label ?? x.platform).join("، ") || "—"}
+                   مسئول: {d.assigneeUserId ?? "—"} · موعد: {d.dueAt ? new Date(d.dueAt).toLocaleString("fa-IR") : "—"} · مقاصد: {d.destinations.map((x) => platformLabelFa(x.platform)).join("، ") || "—"}
                 </p>
               </div>
             ))}

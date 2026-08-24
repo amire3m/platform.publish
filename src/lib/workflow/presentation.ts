@@ -1,4 +1,5 @@
 import type { ProductionStatus, PublicationStatus } from "./types";
+import { statusLabelFa } from "@/lib/presentation-fa";
 
 export type WorkflowStatus = ProductionStatus | PublicationStatus;
 
@@ -30,7 +31,7 @@ const PRESENTATIONS: Record<WorkflowStatus, WorkflowStatusPresentation> = {
 export function workflowStatusPresentation(status: WorkflowStatus): WorkflowStatusPresentation {
   return (
     PRESENTATIONS[status] ?? {
-      label: status,
+      label: statusLabelFa(status),
       tone: "neutral",
       icon: "clock",
     }

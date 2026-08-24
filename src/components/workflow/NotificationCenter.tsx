@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
+import { notificationEventLabelFa } from "@/lib/presentation-fa";
 
 interface NotificationItem {
   id: string;
@@ -129,8 +130,8 @@ export function NotificationCenter() {
               className={`flex items-start justify-between rounded-lg border p-3 ${item.readAt ? "border-tg-border bg-tg-surface" : "border-amber-200 bg-amber-50"}`}
             >
               <div className="flex-1">
-                <p className="text-sm font-medium text-tg-text">{String(item.payload?.title ?? item.payload?.deliverableName ?? item.eventType)}</p>
-                <p className="text-xs text-tg-secondary">{item.eventType} · {new Date(item.createdAt).toLocaleString("fa-IR")}</p>
+                <p className="text-sm font-medium text-tg-text">{String(item.payload?.title ?? item.payload?.deliverableName ?? notificationEventLabelFa(item.eventType))}</p>
+                <p className="text-xs text-tg-secondary">{notificationEventLabelFa(item.eventType)} · {new Date(item.createdAt).toLocaleString("fa-IR")}</p>
                 {item.links && Object.keys(item.links).length > 0 && (
                   <div className="mt-1 flex gap-2">
                     {Object.entries(item.links).map(([key, href]) => (

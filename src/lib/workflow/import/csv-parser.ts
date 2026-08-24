@@ -6,6 +6,9 @@ export interface CsvParseLimits {
 const DEFAULT_MAX_ROWS = 10000;
 const DEFAULT_MAX_COLS = 200;
 
+const rowLimitMessage = (limit: number) => `تعداد ردیف‌های CSV از حد مجاز ${limit.toLocaleString("fa-IR", { useGrouping: false })} بیشتر است.`;
+const columnLimitMessage = (limit: number) => `تعداد ستون‌های CSV از حد مجاز ${limit.toLocaleString("fa-IR", { useGrouping: false })} بیشتر است.`;
+
 export function parseCsv(text: string, limits?: CsvParseLimits): string[][] {
   const maxRows = limits?.maxRows ?? DEFAULT_MAX_ROWS;
   const maxCols = limits?.maxCols ?? DEFAULT_MAX_COLS;
@@ -68,7 +71,7 @@ export function parseCsv(text: string, limits?: CsvParseLimits): string[][] {
         field = "";
         // check col limit early? We'll check after row completes
         if (row.length > maxCols) {
-          throw new Error(`CSV exceeds column limit ${maxCols}`);
+          throw new Error(columnLimitMessage(maxCols));
         }
         i += 1;
         continue;
@@ -79,8 +82,8 @@ export function parseCsv(text: string, limits?: CsvParseLimits): string[][] {
           row.push(field);
           field = "";
           rows.push(row);
-          if (rows.length > maxRows) throw new Error(`CSV exceeds row limit ${maxRows}`);
-          if (row.length > maxCols) throw new Error(`CSV exceeds column limit ${maxCols}`);
+          if (rows.length > maxRows) throw new Error(rowLimitMessage(maxRows));
+          if (row.length > maxCols) throw new Error(columnLimitMessage(maxCols));
           row = [];
           i += 2;
           continue;
@@ -89,8 +92,8 @@ export function parseCsv(text: string, limits?: CsvParseLimits): string[][] {
           row.push(field);
           field = "";
           rows.push(row);
-          if (rows.length > maxRows) throw new Error(`CSV exceeds row limit ${maxRows}`);
-          if (row.length > maxCols) throw new Error(`CSV exceeds column limit ${maxCols}`);
+          if (rows.length > maxRows) throw new Error(rowLimitMessage(maxRows));
+          if (row.length > maxCols) throw new Error(columnLimitMessage(maxCols));
           row = [];
           i += 1;
           continue;
@@ -99,8 +102,8 @@ export function parseCsv(text: string, limits?: CsvParseLimits): string[][] {
         row.push(field);
         field = "";
         rows.push(row);
-        if (rows.length > maxRows) throw new Error(`CSV exceeds row limit ${maxRows}`);
-        if (row.length > maxCols) throw new Error(`CSV exceeds column limit ${maxCols}`);
+        if (rows.length > maxRows) throw new Error(rowLimitMessage(maxRows));
+        if (row.length > maxCols) throw new Error(columnLimitMessage(maxCols));
         row = [];
         i += 1;
         continue;
@@ -127,8 +130,8 @@ export function parseCsv(text: string, limits?: CsvParseLimits): string[][] {
   if (field !== "" || row.length > 0 || inQuotes) {
     row.push(field);
     rows.push(row);
-    if (rows.length > maxRows) throw new Error(`CSV exceeds row limit ${maxRows}`);
-    if (row.length > maxCols) throw new Error(`CSV exceeds column limit ${maxCols}`);
+    if (rows.length > maxRows) throw new Error(rowLimitMessage(maxRows));
+    if (row.length > maxCols) throw new Error(columnLimitMessage(maxCols));
   } else {
     // Edge: input ended with newline -> we already pushed; no extra row
     // But if input is like "" we already returned earlier
@@ -137,7 +140,7 @@ export function parseCsv(text: string, limits?: CsvParseLimits): string[][] {
   }
 
   // Finally, ensure each row's column count within limit already checked, but also check max rows
-  if (rows.length > maxRows) throw new Error(`CSV exceeds row limit ${maxRows}`);
+  if (rows.length > maxRows) throw new Error(rowLimitMessage(maxRows));
 
   return rows;
 }

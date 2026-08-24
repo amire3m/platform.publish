@@ -145,7 +145,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ platform
   } catch (err) {
     const message = `${oauthPhase}: ${(err as Error).message}`;
     console.error("[oauth-callback] failed:", message);
-    return redirectTo(`/accounts?error=${encodeURIComponent(message)}`, req.url);
+    return redirectTo("/accounts?error=oauth_failed", req.url);
   }
 }
 

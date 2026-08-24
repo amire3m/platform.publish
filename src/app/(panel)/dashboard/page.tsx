@@ -8,6 +8,7 @@ import { fetchWorkflowApi } from "@/lib/workflow/client";
 import { CHANNELS, getChannelLabelFa } from "@/lib/channels";
 import { formatJalaliDateTime } from "@/lib/date/jalali";
 import { InstagramIcon, YoutubeIcon } from "@/components/brand-icons";
+import { platformLabelFa, statusLabelFa } from "@/lib/presentation-fa";
 
 type IconType = React.ComponentType<{ className?: string }>;
 
@@ -81,8 +82,8 @@ function BarChart({ title, data, labels, ariaLabel }: { title: string; data: Rec
             return (
               <li key={key} className="space-y-1">
                 <div className="flex items-center justify-between text-xs">
-                  <span className="font-medium text-tg-text">{labels[key] ?? key}</span>
-                  <span className="text-tg-secondary" aria-label={`${labels[key] ?? key} ${value} مورد`}>{value}</span>
+                   <span className="font-medium text-tg-text">{labels[key] ?? statusLabelFa(key)}</span>
+                   <span className="text-tg-secondary" aria-label={`${labels[key] ?? statusLabelFa(key)} ${value} مورد`}>{value}</span>
                 </div>
                 <div className="h-2 w-full rounded-full bg-tg-hover" role="progressbar" aria-valuenow={value} aria-valuemin={0} aria-valuemax={max} aria-label={`${labels[key] ?? key}: ${value}`}>
                   <div className="h-2 rounded-full bg-tg-accent transition-all" style={{ width: `${pct}%` }} />
@@ -213,7 +214,7 @@ export default function DashboardPage() {
                             {p.title || p.id}
                           </Link>
                         </td>
-                        <td className="p-2.5 text-xs">{STATUS_LABELS_FA[p.status] ?? p.status}</td>
+                         <td className="p-2.5 text-xs">{STATUS_LABELS_FA[p.status] ?? statusLabelFa(p.status)}</td>
                         <td className="p-2.5 text-xs text-tg-secondary">{p.dueAt ? formatJalaliDateTime(p.dueAt) : "—"}</td>
                       </tr>
                     ))}
@@ -240,7 +241,7 @@ export default function DashboardPage() {
                     {data.attention.failedPublications.map((f) => (
                       <tr key={f.id} className="border-t border-tg-border">
                         <td className="p-2.5 font-mono text-xs">{f.id}</td>
-                        <td className="p-2.5 text-xs">{f.platform}</td>
+                         <td className="p-2.5 text-xs">{platformLabelFa(f.platform)}</td>
                         <td className="p-2.5 font-mono text-xs text-tg-secondary">{f.deliverableId}</td>
                       </tr>
                     ))}

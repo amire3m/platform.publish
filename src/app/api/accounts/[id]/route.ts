@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
-import { socialAccounts } from "@/db/schema";
+import { analyticsSnapshots, credentials, socialAccounts } from "@/db/schema";
 import { requirePermission, jsonError, jsonOk } from "@/lib/api-helpers";
 import { appendAuditEvent } from "@/lib/telegram/tgdb";
 import { z } from "zod";
@@ -55,8 +55,18 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
   const [existing] = await db.select().from(socialAccounts).where(eq(socialAccounts.id, id)).limit(1);
   if (!existing) return jsonError("حساب یافت نشد.", 404);
 
-  // Soft-disable rather than hard delete, to preserve historical content references.
-  await db.update(socialAccounts).set({ active: false, connectionStatus: "disconnected" }).where(eq(socialAccounts.id, id));
+  // Preserve internal content references, but remove OAuth credentials and
+  // provider analytics so the disconnected account cannot be accessed again.
+  await db.transaction(async (tx) => {
+    await tx.delete(analyticsSnapshots).where(eq(analyticsSnapshots.accountId, id));
+    await tx
+      .update(socialAccounts)
+      .set({ active: false, connectionStatus: "disconnected", credentialRef: null, updatedAt: new Date() })
+      .where(eq(socialAccounts.id, id));
+    if (existing.credentialRef) {
+      await tx.delete(credentials).where(eq(credentials.id, existing.credentialRef));
+    }
+  });
 
   await appendAuditEvent({
     actorTelegramId: user.telegramId,

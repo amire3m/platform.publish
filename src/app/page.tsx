@@ -12,8 +12,8 @@ import {
 import { InstagramIcon, YoutubeIcon } from "@/components/brand-icons";
 import { db } from "@/db";
 import { socialAccounts, analyticsSnapshots, content } from "@/db/schema";
-import { gte } from "drizzle-orm";
-import { and, eq } from "drizzle-orm";
+import { and, eq, gte, inArray } from "drizzle-orm";
+import { MAIN_REPORT_ALIAS, MAIN_REPORT_ORGANIZATION } from "@/lib/accounts/organization";
 import {
   todayJalali,
   buildJalaliMonthGrid,
@@ -58,13 +58,21 @@ function persianNumber(n: number | null | undefined): string {
 }
 
 export default async function ShowcasePage() {
-  const [accounts, snapshots, upcoming] = await Promise.all([
-    db
-      .select()
-      .from(socialAccounts)
-      .where(and(eq(socialAccounts.active, true), eq(socialAccounts.connectionStatus, "connected")))
-      .orderBy(socialAccounts.platform),
-    db.select().from(analyticsSnapshots).orderBy(analyticsSnapshots.createdAt),
+  const accounts = await db
+    .select()
+    .from(socialAccounts)
+    .where(and(
+      eq(socialAccounts.active, true),
+      eq(socialAccounts.connectionStatus, "connected"),
+      eq(socialAccounts.organization, MAIN_REPORT_ORGANIZATION),
+    ))
+    .orderBy(socialAccounts.platform);
+  const accountIds = accounts.map((account) => account.id);
+  const accountIdSet = new Set(accountIds);
+  const [snapshots, upcomingCandidates] = await Promise.all([
+    accountIds.length > 0
+      ? db.select().from(analyticsSnapshots).where(inArray(analyticsSnapshots.accountId, accountIds)).orderBy(analyticsSnapshots.createdAt)
+      : Promise.resolve([]),
     db
       .select()
       .from(content)
@@ -72,6 +80,12 @@ export default async function ShowcasePage() {
       .orderBy(content.scheduledAtUtc)
       .limit(40),
   ]);
+  const upcoming = upcomingCandidates.filter((item) =>
+    item.platformTargets.some((target) => {
+      const accountId = target.account_id;
+      return typeof accountId === "string" && accountIdSet.has(accountId);
+    }),
+  );
 
   const latestSnapshotByAccount = new Map<string, SnapshotRow>();
   for (const s of snapshots as unknown as SnapshotRow[]) {
@@ -96,6 +110,18 @@ export default async function ShowcasePage() {
   );
   const totalViews = accounts.reduce((sum, a) => sum + (latestSnapshotByAccount.get(a.id)?.views ?? 0), 0);
   const totalLikes = accounts.reduce((sum, a) => sum + (latestSnapshotByAccount.get(a.id)?.likes ?? 0), 0);
+  const publicProfiles = (["youtube", "instagram"] as const).flatMap((platform) => {
+    const platformAccounts = accounts.filter((account) => account.platform === platform);
+    if (platformAccounts.length === 0) return [];
+    return [{
+      id: platform,
+      platform,
+      followers: platformAccounts.reduce(
+        (sum, account) => sum + (latestSnapshotByAccount.get(account.id)?.followersOrSubscribers ?? 0),
+        0,
+      ),
+    }];
+  });
 
   return (
     <main className="min-h-screen bg-[#FFF1F2] font-sans text-[#881337]">
@@ -106,15 +132,19 @@ export default async function ShowcasePage() {
             <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#E11D48] text-white">
               <Send className="h-5 w-5 -scale-x-100" />
             </span>
-            <span className="text-sm font-bold text-[#881337]">YouTube EmRo</span>
+            <span className="text-sm font-bold text-[#881337]">Publish Platform Emro</span>
           </div>
-          <Link
-            href="/login"
-            className="inline-flex items-center gap-2 rounded-xl bg-[#2563EB] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#1d4ed8]"
-          >
-            ورود به پنل
-            <ArrowLeft className="h-4 w-4" />
-          </Link>
+          <nav className="flex items-center gap-3" aria-label="ناوبری عمومی">
+            <Link href="/privacy" className="hidden text-xs font-semibold text-[#881337]/70 hover:text-[#881337] sm:inline">حریم خصوصی</Link>
+            <Link href="/terms" className="hidden text-xs font-semibold text-[#881337]/70 hover:text-[#881337] sm:inline">شرایط استفاده</Link>
+            <Link
+              href="/login"
+              className="inline-flex items-center gap-2 rounded-xl bg-[#2563EB] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#1d4ed8]"
+            >
+              ورود به پنل
+              <ArrowLeft className="h-4 w-4" />
+            </Link>
+          </nav>
         </div>
       </header>
 
@@ -132,15 +162,15 @@ export default async function ShowcasePage() {
           <div className="max-w-2xl">
             <span className="inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1 text-xs font-semibold text-[#E11D48] ring-1 ring-[#FECDD3]">
               <BarChart3 className="h-3.5 w-3.5" />
-              مدیریت محتوای چندکاناله
+              سامانه رسمی موسسه امام روح‌الله
             </span>
             <h1 className="mt-5 text-4xl font-black leading-tight text-[#881337] sm:text-5xl">
-              ویترین محتوای
+              مدیریت انتشار
               <span className="text-[#E11D48]"> یوتیوب و اینستاگرام</span>
             </h1>
             <p className="mt-4 text-base leading-7 text-[#881337]/70 sm:text-lg">
-              تقویم انتشار، آمار واقعی کانالها و برنامه محتوایی — همه در یک نگاه. پلتفرم
-              انتشار با مخزن اصلی تلگرام.
+              {MAIN_REPORT_ALIAS} ابزار داخلی موسسه امام روح‌الله برای مدیریت دسترسی، زمان‌بندی،
+              انتشار و مشاهده آمار محتوای YouTube و Instagram است.
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
               <Link
@@ -170,45 +200,34 @@ export default async function ShowcasePage() {
             <p className="mt-1 text-sm text-[#881337]/60">حسابهای متصل به پلتفرم</p>
           </div>
           <span className="rounded-full bg-white px-3 py-1 text-xs font-bold text-[#E11D48] ring-1 ring-[#FECDD3]">
-            {toPersianDigits(accounts.length)} حساب
+             {toPersianDigits(publicProfiles.length)} پلتفرم
           </span>
         </div>
 
-        {accounts.length === 0 ? (
+        {publicProfiles.length === 0 ? (
           <div className="mt-6 rounded-2xl border-2 border-dashed border-[#FECDD3] bg-white/60 p-10 text-center text-sm text-[#881337]/60">
             هنوز حسابی متصل نشده است.
           </div>
         ) : (
           <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {accounts.map((a) => {
-              const snap = latestSnapshotByAccount.get(a.id);
-              const isYt = a.platform === "youtube";
+            {publicProfiles.map((profile) => {
+              const isYt = profile.platform === "youtube";
               return (
                 <div
-                  key={a.id}
+                  key={profile.id}
                   className="group rounded-2xl border border-[#FECDD3] bg-white p-5 transition hover:-translate-y-1 hover:shadow-lg hover:shadow-[#E11D48]/10"
                 >
                   <div className="flex items-center gap-3">
                     <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#FFF1F2]">
-                      {a.profileImage ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={a.profileImage}
-                          alt={a.displayName}
-                          className="h-12 w-12 rounded-xl object-cover"
-                          loading="lazy"
-                        />
-                      ) : isYt ? (
+                      {isYt ? (
                         <YoutubeIcon className="h-6 w-6 text-[#E11D48]" />
                       ) : (
                         <InstagramIcon className="h-6 w-6 text-[#E11D48]" />
                       )}
                     </div>
                     <div className="min-w-0">
-                      <p className="truncate font-bold text-[#881337]">{a.displayName}</p>
-                      <p className="truncate text-xs text-[#881337]/50" dir="ltr">
-                        @{a.username}
-                      </p>
+                      <p className="truncate font-bold text-[#881337]">{MAIN_REPORT_ALIAS}</p>
+                      <p className="truncate text-xs text-[#881337]/50">{isYt ? "YouTube" : "Instagram"}</p>
                     </div>
                   </div>
                   <div className="mt-4 flex items-center justify-between border-t border-[#FECDD3] pt-3 text-sm">
@@ -217,7 +236,7 @@ export default async function ShowcasePage() {
                       {isYt ? "مشترک" : "دنبالکننده"}:
                     </span>
                     <span className="font-black tabular-nums text-[#E11D48]">
-                      {persianNumber(snap?.followersOrSubscribers ?? 0)}
+                       {persianNumber(profile.followers)}
                     </span>
                   </div>
                 </div>
@@ -373,7 +392,7 @@ export default async function ShowcasePage() {
                 <ArrowLeft className="h-4 w-4" />
               </Link>
               <a
-                href="#"
+                href="mailto:amirandali.teams@gmail.com"
                 className="inline-flex items-center gap-2 rounded-xl bg-white/10 px-6 py-3 text-sm font-bold text-white ring-1 ring-white/30 transition hover:bg-white/20"
               >
                 <Heart className="h-4 w-4" />
@@ -386,10 +405,11 @@ export default async function ShowcasePage() {
 
       <footer className="border-t border-[#FECDD3] bg-white py-6">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 text-xs text-[#881337]/50 sm:px-6">
-          <span>© {toPersianDigits(1405)} YouTube EmRo — پلتفرم مدیریت محتوای چندکاناله</span>
-          <span className="inline-flex items-center gap-1.5">
-            <Send className="h-3.5 w-3.5 -scale-x-100" />
-            مخزن اصلی: گروه تلگرام
+           <span>© {toPersianDigits(1405)} Publish Platform Emro — موسسه امام روح‌الله</span>
+          <span className="flex flex-wrap items-center gap-3">
+            <Link href="/privacy" className="hover:text-[#881337]">حریم خصوصی</Link>
+            <Link href="/terms" className="hover:text-[#881337]">شرایط استفاده</Link>
+            <a href="mailto:amirandali.teams@gmail.com" className="hover:text-[#881337]">تماس</a>
           </span>
         </div>
       </footer>

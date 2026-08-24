@@ -11,8 +11,24 @@ const vazirmatn = Vazirmatn({
 });
 
 export const metadata: Metadata = {
-  title: "YouTube EmRo | مدیریت محتوای چندکاناله",
-  description: "پلتفرم مدیریت چند کانال یوتیوب و پیج اینستاگرام با مخزن تلگرام",
+  metadataBase: new URL("https://emamyt.litecombomovie.ir"),
+  applicationName: "Publish Platform Emro",
+  title: {
+    default: "Publish Platform Emro | مدیریت انتشار محتوا",
+    template: "%s | Publish Platform Emro",
+  },
+  description: "سامانه رسمی مدیریت، زمان‌بندی، انتشار و تحلیل محتوای YouTube و Instagram موسسه امام روح‌الله.",
+  alternates: { canonical: "/" },
+  icons: { icon: "/emro-logo.svg", apple: "/emro-logo-120.png" },
+  openGraph: {
+    type: "website",
+    locale: "fa_IR",
+    siteName: "Publish Platform Emro",
+    title: "Publish Platform Emro",
+    description: "سامانه مدیریت انتشار محتوای موسسه امام روح‌الله",
+    url: "/",
+    images: [{ url: "/emro-logo-512.png", width: 512, height: 512, alt: "Publish Platform Emro" }],
+  },
 };
 
 export const viewport: Viewport = {

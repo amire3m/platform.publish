@@ -9,6 +9,7 @@ import { useToast } from "@/components/providers";
 import { formatJalaliDateTime } from "@/lib/date/jalali";
 import type { PublicAccountDto } from "@/lib/accounts/public";
 import { oauthErrorMessageFa } from "@/lib/presentation-fa";
+import { MAIN_REPORT_ALIAS, ORGANIZATION_LABELS, type AccountOrganization } from "@/lib/accounts/organization";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
@@ -34,6 +35,7 @@ export default function AccountsPage() {
   const [deleteTarget, setDeleteTarget] = useState<Account | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [savingTopicId, setSavingTopicId] = useState<string | null>(null);
+  const [savingOrganizationId, setSavingOrganizationId] = useState<string | null>(null);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -109,8 +111,30 @@ export default function AccountsPage() {
     }
   }
 
+  async function changeOrganization(account: Account, organization: string) {
+    setSavingOrganizationId(account.id);
+    try {
+      const res = await fetch(`/api/accounts/${account.id}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ organization: organization || null }),
+      });
+      const json = await res.json();
+      if (!json.ok) return showToast(json.error, "error");
+      showToast("وابستگی سازمانی حساب به‌روزرسانی شد.", "success");
+      mutate();
+    } finally {
+      setSavingOrganizationId(null);
+    }
+  }
+
   const accounts = data?.data ?? [];
   const topics = topicsData?.data ?? [];
+  const accountGroups = [
+    { id: "emro", label: "کانال‌ها و پیج‌های موسسه امام روح‌الله", accounts: accounts.filter((account) => account.organization === "emro") },
+    { id: "sana", label: "کانال‌ها و پیج‌های سنا", accounts: accounts.filter((account) => account.organization === "sana") },
+    { id: "unassigned", label: "حساب‌های تعیین‌نشده", accounts: accounts.filter((account) => !account.organization) },
+  ].filter((group) => group.accounts.length > 0);
 
   return (
     <div className="space-y-6">
@@ -141,9 +165,13 @@ export default function AccountsPage() {
         />
       )}
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {accounts.map((a) => (
-          <Card key={a.id} className={a.active ? "" : "opacity-60"}>
+      <div className="space-y-6">
+        {accountGroups.map((group) => (
+          <section key={group.id} aria-labelledby={`account-group-${group.id}`}>
+            <h2 id={`account-group-${group.id}`} className="mb-3 text-sm font-bold text-tg-text">{group.label}</h2>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {group.accounts.map((a) => (
+                <Card key={a.id} className={a.active ? "" : "opacity-60"}>
             <div className="flex items-start justify-between">
               <div>
                 <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-tg-hover text-tg-secondary">
@@ -151,11 +179,24 @@ export default function AccountsPage() {
                 </span>
                 <p className="mt-1 font-semibold text-tg-text">{a.displayName}</p>
                 <p className="text-xs text-tg-secondary">@{a.username}</p>
+                {a.organization === "emro" && <span className="mt-2 inline-flex rounded-full bg-tg-accent-soft px-2 py-0.5 text-[11px] font-semibold text-tg-accent">گزارش اصلی: {MAIN_REPORT_ALIAS}</span>}
               </div>
               <StatusBadge status={a.active ? a.connectionStatus : "disconnected"} />
             </div>
             <div className="mt-4 space-y-1 text-xs text-tg-secondary">
               <p>آخرین همگام‌سازی: {a.lastSyncAt ? formatJalaliDateTime(a.lastSyncAt) : "—"}</p>
+              <label className="mb-1 block pt-1 text-[11px] font-semibold">وابستگی سازمانی</label>
+              <Select
+                value={a.organization ?? ""}
+                onChange={(e) => changeOrganization(a, e.target.value)}
+                disabled={savingOrganizationId === a.id}
+                className="text-xs"
+              >
+                <option value="">تعیین‌نشده (بدون نمایش در گزارش اصلی)</option>
+                {(Object.entries(ORGANIZATION_LABELS) as Array<[AccountOrganization, string]>).map(([value, label]) => (
+                  <option key={value} value={value}>{label}</option>
+                ))}
+              </Select>
               <label className="mb-1 block pt-1 text-[11px] font-semibold">تاپیک صف انتشار</label>
               <Select
                 value={a.topicId ?? ""}
@@ -184,7 +225,10 @@ export default function AccountsPage() {
                 حذف
               </Button>
             </div>
-          </Card>
+                </Card>
+              ))}
+            </div>
+          </section>
         ))}
       </div>
 

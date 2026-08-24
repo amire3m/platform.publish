@@ -3,6 +3,8 @@ import { AnalyticsAccessError, getAnalyticsExportRows } from "@/lib/analytics/qu
 import { buildAnalyticsPeriod, parseAnalyticsRange } from "@/lib/analytics/ranges";
 import { jsonError, requirePermission } from "@/lib/api-helpers";
 import { accountScopeForUser } from "@/lib/permissions";
+import { restrictAccountScopeToOrganization } from "@/lib/accounts/organization";
+import { listMainReportAccountIds } from "@/lib/accounts/organization-server";
 
 interface ExportDependencies {
   requirePermission(permission: "view_analytics" | "export_data"): Promise<{
@@ -10,6 +12,7 @@ interface ExportDependencies {
     response: Response | null;
   }>;
   getExportRows: typeof getAnalyticsExportRows;
+  listReportingAccountIds(): Promise<string[]>;
   encodeCsv: typeof encodeAnalyticsCsv;
   now(): Date;
 }
@@ -17,6 +20,7 @@ interface ExportDependencies {
 const defaultDependencies: ExportDependencies = {
   requirePermission,
   getExportRows: getAnalyticsExportRows,
+  listReportingAccountIds: () => listMainReportAccountIds(),
   encodeCsv: encodeAnalyticsCsv,
   now: () => new Date(),
 };
@@ -38,15 +42,23 @@ export async function handleAnalyticsExportRequest(
   }
   const now = dependencies.now();
   const period = buildAnalyticsPeriod(range, now, "Asia/Tehran");
+  const requestedAccountId = url.searchParams.get("accountId") || null;
+  const reportingAccountIds = restrictAccountScopeToOrganization(
+    accountScopeForUser(view.user),
+    await dependencies.listReportingAccountIds(),
+  );
+  if (requestedAccountId && !reportingAccountIds.includes(requestedAccountId)) {
+    return jsonError("این حساب در گزارش اصلی Emro YT قرار ندارد.", 403, "FORBIDDEN");
+  }
   try {
     const rows = await dependencies.getExportRows({
       scope,
       range,
-      accountId: url.searchParams.get("accountId") || null,
+      accountId: requestedAccountId,
       contentId: url.searchParams.get("contentId") || null,
       startDate: period.currentStart,
       endDate: period.currentEnd,
-      allowedAccountIds: accountScopeForUser(view.user),
+      allowedAccountIds: reportingAccountIds,
     });
     const date = now.toISOString().slice(0, 10);
     return new Response(dependencies.encodeCsv(rows), {

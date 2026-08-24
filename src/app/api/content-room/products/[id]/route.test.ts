@@ -75,6 +75,24 @@ describe("GET/PATCH /api/content-room/products/:id", () => {
     expect(body.data.id).toBe("CPR-1");
   });
 
+  it("adds playable media URLs to content parts", async () => {
+    const repository = {
+      getProduct: vi.fn().mockResolvedValue({
+        id: "CPR-1",
+        title: "a",
+        status: "imported",
+        version: 1,
+        parts: [{ id: "part-1", fileRef: "telegram-video-id", coverFileRef: "telegram-cover-id" }],
+      }),
+      updateProductStatus: vi.fn(),
+    };
+    const response = await handleProductRequest(request("GET"), { params: Promise.resolve({ id: "CPR-1" }) }, makeDeps({ repository: repository as never }));
+    const body = await response.json();
+
+    expect(body.data.parts[0].playbackUrl).toMatch(/^\/api\/media\/telegram\//);
+    expect(body.data.parts[0].coverUrl).toMatch(/^\/api\/media\/telegram\//);
+  });
+
   it("rejects PATCH without update_assigned_content or manage_content_room (403)", async () => {
     const repository = { getProduct: vi.fn(), updateProductStatus: vi.fn() };
     const response = await handleProductRequest(

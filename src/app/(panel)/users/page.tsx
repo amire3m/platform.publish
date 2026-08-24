@@ -6,7 +6,7 @@ import useSWR from "swr";
 import { Button, Card, EmptyState, Input, Label, Modal, Select, Skeleton, StatusBadge } from "@/components/ui";
 import { useToast } from "@/components/providers";
 import { ROLE_LABELS_FA, type Role } from "@/lib/permissions";
-import { CHANNELS } from "@/lib/channels";
+import { CHANNEL_GROUPS } from "@/lib/channels";
 import { fetchWorkflowApi } from "@/lib/workflow/client";
 import { formatJalaliDateTime } from "@/lib/date/jalali";
 import { roleLabelFa } from "@/lib/presentation-fa";
@@ -247,23 +247,30 @@ export default function UsersPage() {
                       );
                     })}
                     <td className="p-2">
-                      <fieldset disabled={isChannelDisabled(u)} className="flex flex-wrap gap-1.5" aria-label={`کانال‌های مجاز ${u.name}`}>
-                        {CHANNELS.map((ch) => {
-                          const checked = draft.allowedChannels.includes(ch.id);
-                          return (
-                            <label key={ch.id} className="inline-flex items-center gap-1 rounded-full border border-tg-border px-2 py-1 text-xs cursor-pointer has-[input:checked]:bg-tg-accent-soft has-[input:checked]:border-tg-accent has-[input:disabled]:opacity-40">
-                              <input
-                                type="checkbox"
-                                checked={checked}
-                                disabled={isChannelDisabled(u)}
-                                onChange={(e) => toggleChannel(u.id, ch.id, e.target.checked)}
-                                aria-label={`${u.name} - کانال ${ch.labelFa}`}
-                                className="h-3 w-3"
-                              />
-                              {ch.labelFa}
-                            </label>
-                          );
-                        })}
+                      <fieldset disabled={isChannelDisabled(u)} className="space-y-2" aria-label={`کانال‌های مجاز ${u.name}`}>
+                        {CHANNEL_GROUPS.map((group) => (
+                          <div key={group.id}>
+                            <p className="mb-1 text-[10px] font-semibold text-tg-secondary">{group.labelFa}</p>
+                            <div className="flex flex-wrap gap-1.5">
+                              {group.channels.map((ch) => {
+                                const checked = draft.allowedChannels.includes(ch.id);
+                                return (
+                                  <label key={ch.id} className="inline-flex cursor-pointer items-center gap-1 rounded-full border border-tg-border px-2 py-1 text-xs has-[input:checked]:border-tg-accent has-[input:checked]:bg-tg-accent-soft has-[input:disabled]:opacity-40">
+                                    <input
+                                      type="checkbox"
+                                      checked={checked}
+                                      disabled={isChannelDisabled(u)}
+                                      onChange={(e) => toggleChannel(u.id, ch.id, e.target.checked)}
+                                      aria-label={`${u.name} - کانال ${ch.labelFa}`}
+                                      className="h-3 w-3"
+                                    />
+                                    {ch.labelFa}
+                                  </label>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ))}
                       </fieldset>
                     </td>
                     <td className="p-2 whitespace-nowrap">

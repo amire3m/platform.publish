@@ -54,7 +54,7 @@ export function AnalyticsFilters({
           disabled={accountsLoading || syncing}
           className="min-h-11 sm:min-h-0 sm:w-60"
         >
-          <option value="">همه کانال‌های یوتیوب</option>
+          <option value="">همه حساب‌های Emro YT</option>
           {accounts.map((account) => (
             <option key={account.id} value={account.id}>{account.displayName}</option>
           ))}

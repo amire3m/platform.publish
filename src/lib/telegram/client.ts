@@ -28,6 +28,22 @@
 // pointed to via TELEGRAM_BOT_API_SERVER_URL (e.g. http://127.0.0.1:8081).
 const API_ROOT = process.env.TELEGRAM_BOT_API_SERVER_URL?.trim() || "https://api.telegram.org";
 
+export function contentTypeFromPath(path: string): string | null {
+  const extension = path.split("?")[0].split(".").pop()?.toLowerCase();
+  const types: Record<string, string> = {
+    mp4: "video/mp4",
+    webm: "video/webm",
+    mov: "video/quicktime",
+    avi: "video/x-msvideo",
+    mkv: "video/x-matroska",
+    jpg: "image/jpeg",
+    jpeg: "image/jpeg",
+    png: "image/png",
+    webp: "image/webp",
+  };
+  return extension ? types[extension] ?? null : null;
+}
+
 export class TelegramNotConfiguredError extends Error {
   constructor() {
     super("توکن ربات یا شناسه گروه تلگرام تنظیم نشده است.");
@@ -260,6 +276,20 @@ export class TelegramClient {
     if (!res.ok) throw new Error("دریافت فایل از تلگرام ناموفق بود.");
     const arrayBuffer = await res.arrayBuffer();
     return Buffer.from(arrayBuffer);
+  }
+
+  async downloadFileResponse(fileId: string, range?: string | null): Promise<Response> {
+    const info = await this.getFile(fileId);
+    if (!info.file_path) throw new Error("مسیر فایل در تلگرام یافت نشد (احتمالاً فایل قدیمی یا حجیم است).");
+    const res = await fetch(`${API_ROOT}/file/bot${this.cfg.botToken}/${info.file_path}`, {
+      headers: range ? { range } : undefined,
+    });
+    if (!res.ok && res.status !== 206) throw new Error("دریافت فایل از تلگرام ناموفق بود.");
+    const inferredType = contentTypeFromPath(info.file_path);
+    if (!inferredType || (res.headers.get("content-type") && res.headers.get("content-type") !== "application/octet-stream")) return res;
+    const headers = new Headers(res.headers);
+    headers.set("content-type", inferredType);
+    return new Response(res.body, { status: res.status, headers });
   }
 
   async pinMessage(messageId: number) {

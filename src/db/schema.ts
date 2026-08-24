@@ -89,6 +89,7 @@ export const socialAccounts = pgTable("social_accounts", {
   externalAccountId: text("external_account_id"),
   username: text("username").notNull(),
   displayName: text("display_name").notNull(),
+  organization: text("organization").$type<"emro" | "sana" | null>(),
   profileImage: text("profile_image"),
   topicId: text("topic_id"), // FK-ish reference into telegram_topics.id (per-account queue topic)
   topicMessageThreadId: integer("topic_message_thread_id"),

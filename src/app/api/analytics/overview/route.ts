@@ -2,6 +2,8 @@ import { AnalyticsAccessError, getAnalyticsOverview } from "@/lib/analytics/quer
 import { parseAnalyticsRange } from "@/lib/analytics/ranges";
 import { jsonError, jsonOk, requirePermission } from "@/lib/api-helpers";
 import { accountScopeForUser, canAccessAccount } from "@/lib/permissions";
+import { restrictAccountScopeToOrganization } from "@/lib/accounts/organization";
+import { listMainReportAccountIds } from "@/lib/accounts/organization-server";
 
 interface AnalyticsUser {
   role: string;
@@ -42,9 +44,11 @@ interface OverviewDependencies {
     response: Response | null;
   }>;
   getOverview: typeof getAnalyticsOverview;
+  listReportingAccountIds(): Promise<string[]>;
   getLegacyDashboardFields(
     user: AnalyticsUser,
     requestedAccountId?: string,
+    reportingAccountIds?: readonly string[],
   ): Promise<LegacyDashboardFields>;
 }
 
@@ -64,10 +68,12 @@ export function buildLegacyDashboardFields(input: {
   syncStatus: unknown;
   accounts: readonly CompatibilityAccount[];
   contents: readonly CompatibilityContent[];
+  reportingAccountIds?: readonly string[];
 }): LegacyDashboardFields {
   const accountScope = accountScopeForUser(input.user);
   const accountMatches = (accountId: string) =>
     canAccessAccount(input.user, accountId)
+    && (!input.reportingAccountIds || input.reportingAccountIds.includes(accountId))
     && (!input.requestedAccountId || accountId === input.requestedAccountId);
   const accounts = input.accounts.filter((account) => accountMatches(account.id));
   const contents = input.contents.flatMap((item) => {
@@ -118,6 +124,7 @@ export function buildLegacyDashboardFields(input: {
 async function getLegacyDashboardFields(
   user: AnalyticsUser,
   requestedAccountId?: string,
+  reportingAccountIds?: readonly string[],
 ): Promise<LegacyDashboardFields> {
   const [{ db }, { content, socialAccounts }, { getSyncStatus }] = await Promise.all([
     import("@/db"),
@@ -134,12 +141,14 @@ async function getLegacyDashboardFields(
     syncStatus: await getSyncStatus(),
     accounts: allAccounts,
     contents,
+    reportingAccountIds,
   });
 }
 
 const defaultDependencies: OverviewDependencies = {
   requirePermission,
   getOverview: getAnalyticsOverview,
+  listReportingAccountIds: () => listMainReportAccountIds(),
   getLegacyDashboardFields,
 };
 
@@ -153,10 +162,14 @@ export async function handleAnalyticsOverviewRequest(
   const range = parseAnalyticsRange(url.searchParams.get("range") ?? "90");
   if (!range) return jsonError("بازه آمار نامعتبر است.", 422, "INVALID_RANGE");
   const accountId = url.searchParams.get("accountId") || undefined;
-  const allowedAccountIds = accountScopeForUser(user);
+  const reportingAccountIds = await dependencies.listReportingAccountIds();
+  const allowedAccountIds = restrictAccountScopeToOrganization(accountScopeForUser(user), reportingAccountIds);
+  if (accountId && !allowedAccountIds.includes(accountId)) {
+    return jsonError("این حساب در گزارش اصلی Emro YT قرار ندارد.", 403, "FORBIDDEN");
+  }
   try {
     const analytics = await dependencies.getOverview({ range, accountId, allowedAccountIds });
-    const legacy = await dependencies.getLegacyDashboardFields(user, accountId);
+    const legacy = await dependencies.getLegacyDashboardFields(user, accountId, allowedAccountIds);
     const current = analytics.comparison.current;
     return jsonOk({
       ...analytics,

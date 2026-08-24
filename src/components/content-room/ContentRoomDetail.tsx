@@ -320,7 +320,16 @@ function PartUploadCard({
   onError,
   onToast,
 }: {
-  part: { id: string; partNumber: number; fileRef?: string | null; coverFileRef?: string | null; version?: number | null; status?: string | null };
+  part: {
+    id: string;
+    partNumber: number;
+    fileRef?: string | null;
+    coverFileRef?: string | null;
+    playbackUrl?: string | null;
+    coverUrl?: string | null;
+    version?: number | null;
+    status?: string | null;
+  };
   onRefresh: () => Promise<void> | void;
   onError: (msg: string | null) => void;
   onToast: (msg: string | null) => void;
@@ -428,11 +437,19 @@ function PartUploadCard({
         </div>
       </div>
 
-      {part.fileRef && (
-        <p className="truncate rounded bg-tg-surface px-2 py-1 font-mono text-[11px] text-tg-secondary" title={part.fileRef}>
-          ویدئو: {part.fileRef.slice(0, 32)}
-          {part.fileRef.length > 32 ? "..." : ""}
-        </p>
+      {part.playbackUrl && (
+        <div className="overflow-hidden rounded-lg border border-tg-border bg-black">
+          <video
+            src={part.playbackUrl}
+            controls
+            preload="metadata"
+            playsInline
+            poster={part.coverUrl ?? undefined}
+            className="aspect-video w-full object-contain"
+          >
+            مرورگر شما امکان پخش این ویدئو را ندارد.
+          </video>
+        </div>
       )}
       {part.coverFileRef && (
         <div className="space-y-1">
@@ -440,9 +457,8 @@ function PartUploadCard({
             کاور: {part.coverFileRef.slice(0, 32)}
             {part.coverFileRef.length > 32 ? "..." : ""}
           </p>
-          {/* cover preview - show stored ref as text; if recent upload preview available show image */}
-          {coverPreviewUrl && (
-            <img src={coverPreviewUrl} alt={`کاور قسمت ${part.partNumber}`} className="h-24 w-full rounded object-cover" />
+          {(coverPreviewUrl || part.coverUrl) && (
+            <img src={coverPreviewUrl || part.coverUrl || undefined} alt={`کاور قسمت ${part.partNumber}`} className="h-24 w-full rounded object-cover" />
           )}
         </div>
       )}

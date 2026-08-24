@@ -1,26 +1,6 @@
 import type { Asset, AssetFilters, AssetType, AssetVersion } from "./types";
 import { generateEntityId } from "@/lib/ids";
-import jwt from "jsonwebtoken";
-
-const JWT_SECRET = process.env.JWT_SECRET || "dev-only-insecure-jwt-secret-change-me";
-
-function signFileId(fileId: string): string {
-  try {
-    return jwt.sign({ fileId }, JWT_SECRET, { expiresIn: "15m" });
-  } catch {
-    return fileId;
-  }
-}
-
-function buildProxyUrl(fileId: string): string | null {
-  if (!fileId || fileId.startsWith("tg_msg_")) return null;
-  try {
-    const token = signFileId(fileId);
-    return `/api/media/telegram/${token}`;
-  } catch {
-    return null;
-  }
-}
+import { buildTelegramMediaUrl } from "@/lib/media/telegram-url";
 
 function nowIso(): string {
   return new Date().toISOString();
@@ -134,7 +114,7 @@ function seedAssets(): Asset[] {
   ];
 
   for (const s of samples) {
-    const proxied = s.telegramFileId.startsWith("sample_") ? null : buildProxyUrl(s.telegramFileId);
+    const proxied = buildTelegramMediaUrl(s.telegramFileId, s.mime);
     const asset: Asset = {
       ...s,
       thumbnailUrl: proxied,
@@ -184,7 +164,7 @@ async function tryLoadFromDb(): Promise<Asset[] | null> {
           channelId,
           tags: [],
           version: part.version ?? 1,
-          thumbnailUrl: buildProxyUrl(part.fileRef),
+          thumbnailUrl: buildTelegramMediaUrl(part.fileRef, "video/mp4"),
           versions: [
             { version: part.version ?? 1, telegramFileId: part.fileRef, createdAt: (part.createdAt ?? new Date()).toISOString(), filename: `part-${part.id}.mp4` },
           ],
@@ -202,7 +182,7 @@ async function tryLoadFromDb(): Promise<Asset[] | null> {
           channelId,
           tags: ["کاور"],
           version: part.version ?? 1,
-          thumbnailUrl: buildProxyUrl(part.coverFileRef),
+          thumbnailUrl: buildTelegramMediaUrl(part.coverFileRef, "image/jpeg"),
           versions: [
             { version: 1, telegramFileId: part.coverFileRef, createdAt: (part.updatedAt ?? new Date()).toISOString(), filename: `cover-${part.id}.jpg` },
           ],
@@ -230,7 +210,7 @@ async function tryLoadFromDb(): Promise<Asset[] | null> {
           channelId: null,
           tags: c.tags ?? [],
           version: 1,
-          thumbnailUrl: buildProxyUrl(fileId),
+          thumbnailUrl: buildTelegramMediaUrl(fileId, mime),
           versions: [{ version: 1, telegramFileId: fileId, createdAt: (c.createdAt ?? new Date()).toISOString(), filename: m.filename ?? fileId }],
         });
       }
@@ -372,7 +352,7 @@ export async function createVersion(id: string, telegramFileId?: string, meta?: 
   if (meta?.filename) asset.filename = meta.filename;
   if (meta?.size) asset.size = meta.size;
   if (meta?.mime) asset.mime = meta.mime;
-  asset.thumbnailUrl = buildProxyUrl(newFileId) ?? asset.thumbnailUrl ?? null;
+  asset.thumbnailUrl = buildTelegramMediaUrl(newFileId, asset.mime) ?? asset.thumbnailUrl ?? null;
   asset.versions = [...(asset.versions ?? []), versionEntry];
   asset.createdAt = now; // bump updated time
 

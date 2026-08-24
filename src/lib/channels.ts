@@ -14,22 +14,29 @@ export const CHANNEL_IDS = [
 ] as const;
 
 export type ChannelId = (typeof CHANNEL_IDS)[number];
+export type ChannelOrganization = "emro" | "sana";
 
 export interface ChannelConfig {
   id: ChannelId;
   labelFa: string;
+  organization: ChannelOrganization;
   youtubeAccountId: string | null;
   instagramAccountId: string | null;
   telegramTopicId: string | null;
 }
 
 export const CHANNELS: ChannelConfig[] = [
-  { id: "zed_revayat", labelFa: "ضد روایت", youtubeAccountId: null, instagramAccountId: null, telegramTopicId: null },
-  { id: "zaviye_no", labelFa: "زاویه نو", youtubeAccountId: null, instagramAccountId: null, telegramTopicId: null },
-  { id: "tamashin", labelFa: "تماشین", youtubeAccountId: null, instagramAccountId: null, telegramTopicId: null },
-  { id: "iranian_frame", labelFa: "Iranian Frame", youtubeAccountId: null, instagramAccountId: null, telegramTopicId: null },
-  { id: "shock", labelFa: "شوک", youtubeAccountId: null, instagramAccountId: null, telegramTopicId: null },
-  { id: "tinazh", labelFa: "تیناژ", youtubeAccountId: null, instagramAccountId: null, telegramTopicId: null },
+  { id: "zed_revayat", labelFa: "ضد روایت", organization: "emro", youtubeAccountId: null, instagramAccountId: null, telegramTopicId: null },
+  { id: "zaviye_no", labelFa: "زاویه نو", organization: "emro", youtubeAccountId: null, instagramAccountId: null, telegramTopicId: null },
+  { id: "tamashin", labelFa: "تماشین", organization: "emro", youtubeAccountId: null, instagramAccountId: null, telegramTopicId: null },
+  { id: "iranian_frame", labelFa: "Iranian Frame", organization: "emro", youtubeAccountId: null, instagramAccountId: null, telegramTopicId: null },
+  { id: "shock", labelFa: "شوک", organization: "sana", youtubeAccountId: null, instagramAccountId: null, telegramTopicId: null },
+  { id: "tinazh", labelFa: "تیناژ", organization: "sana", youtubeAccountId: null, instagramAccountId: null, telegramTopicId: null },
+];
+
+export const CHANNEL_GROUPS = [
+  { id: "emro" as const, labelFa: "کانال‌های موسسه امام روح‌الله", channels: CHANNELS.filter((channel) => channel.organization === "emro") },
+  { id: "sana" as const, labelFa: "کانال‌های سنا", channels: CHANNELS.filter((channel) => channel.organization === "sana") },
 ];
 
 export function getChannelConfig(channelId: string): ChannelConfig | undefined {

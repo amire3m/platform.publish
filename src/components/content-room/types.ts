@@ -25,6 +25,8 @@ export interface ContentPart {
   partNumber: number;
   fileRef?: string | null;
   coverFileRef?: string | null;
+  playbackUrl?: string | null;
+  coverUrl?: string | null;
   version?: number | null;
   status?: string | null;
   createdAt?: string | Date | null;

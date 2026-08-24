@@ -34,6 +34,7 @@ function dependencies() {
         current: { views: 0, likes: 0, comments: 0, shares: 0 },
       },
     }),
+    listReportingAccountIds: vi.fn().mockResolvedValue(["account-1", "account-2"]),
     getLegacyDashboardFields: vi.fn().mockResolvedValue({
       totals: { channels: 0, pages: 0, followers: 0, views: 0, engagement: 0 },
       statusCounts: {},
@@ -88,7 +89,7 @@ describe("GET /api/analytics/overview", () => {
       accountId: "account-1",
       allowedAccountIds: ["account-1"],
     });
-    expect(deps.getLegacyDashboardFields).toHaveBeenCalledWith(user, "account-1");
+    expect(deps.getLegacyDashboardFields).toHaveBeenCalledWith(user, "account-1", ["account-1"]);
     expect(body.data).toMatchObject({ scope: "overview", statusCounts: {}, hasAnalyticsData: false });
   });
 
@@ -124,7 +125,7 @@ describe("GET /api/analytics/overview", () => {
   it.each([
     [{ ...user, allowedAccountIds: [] }, "empty account scope"],
     [{ ...user, role: "owner", allowedAccountIds: ["account-1"] }, "owner role"],
-  ])("normalizes %s to unrestricted query scope", async (unrestrictedUser) => {
+  ])("limits unrestricted %s to Emro reporting accounts", async (unrestrictedUser) => {
     const deps = dependencies();
     deps.requirePermission.mockResolvedValue({ user: unrestrictedUser, response: null });
 
@@ -136,7 +137,7 @@ describe("GET /api/analytics/overview", () => {
     expect(deps.getOverview).toHaveBeenCalledWith({
       range: 90,
       accountId: undefined,
-      allowedAccountIds: null,
+      allowedAccountIds: ["account-1", "account-2"],
     });
   });
 

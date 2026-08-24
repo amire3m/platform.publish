@@ -3,19 +3,34 @@ import { db } from "@/db";
 import { socialAccounts } from "@/db/schema";
 import { requirePermission, jsonError, jsonOk } from "@/lib/api-helpers";
 import { appendAuditEvent } from "@/lib/telegram/tgdb";
+import { z } from "zod";
+
+const accountUpdateSchema = z.object({
+  organization: z.enum(["emro", "sana"]).nullable().optional(),
+  topicId: z.string().nullable().optional(),
+  topicMessageThreadId: z.number().int().nullable().optional(),
+  topicLabel: z.string().nullable().optional(),
+}).strict();
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { user, response } = await requirePermission("manage_accounts");
   if (!user) return response;
   const { id } = await params;
-  const body = (await req.json()) as Partial<typeof socialAccounts.$inferInsert>;
+  let body: unknown;
+  try {
+    body = await req.json();
+  } catch {
+    return jsonError("درخواست نامعتبر است.", 422, "VALIDATION_ERROR");
+  }
+  const parsed = accountUpdateSchema.safeParse(body);
+  if (!parsed.success) return jsonError("اطلاعات حساب نامعتبر است.", 422, "VALIDATION_ERROR");
 
   const [existing] = await db.select().from(socialAccounts).where(eq(socialAccounts.id, id)).limit(1);
   if (!existing) return jsonError("حساب یافت نشد.", 404);
 
   const [row] = await db
     .update(socialAccounts)
-    .set({ ...body, updatedAt: new Date() })
+    .set({ ...parsed.data, updatedAt: new Date() })
     .where(eq(socialAccounts.id, id))
     .returning();
 

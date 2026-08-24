@@ -18,6 +18,7 @@ import { runAnalyticsSync } from "@/lib/analytics/sync-controller";
 import type { PublicAccountDto } from "@/lib/accounts/public";
 import type { AnalyticsOverview, AnalyticsRange, MetricTotals } from "@/lib/analytics/types";
 import type { AccountSyncResult } from "@/lib/analytics/sync";
+import { MAIN_REPORT_ALIAS } from "@/lib/accounts/organization";
 
 type AccountRecord = PublicAccountDto & AnalyticsAccountOption;
 
@@ -64,7 +65,7 @@ function exportUrl(range: AnalyticsRange, accountId: string, scope: AnalyticsExp
 }
 
 function accountNameMap(accounts: readonly AccountRecord[]): Record<string, string> {
-  return Object.fromEntries(accounts.map((account) => [account.id, account.displayName]));
+  return Object.fromEntries(accounts.map((account) => [account.id, account.organization === "emro" ? MAIN_REPORT_ALIAS : account.displayName]));
 }
 
 function filterKeyFromLocation(): string {
@@ -107,9 +108,9 @@ function AnalyticsDashboard() {
   const { data, error, isLoading, mutate } = useSWR<AnalyticsOverview>(requestUrl, fetchApi);
   const { data: accountRecords, error: accountsError, isLoading: accountsLoading, mutate: mutateAccounts } = useSWR<AccountRecord[]>("/api/accounts", fetchApi);
   const { data: me, isLoading: permissionsLoading } = useSWR<{ permissions: string[]; allowedAccountIds: string[] | null }>("/api/auth/me", fetchApi);
-  const accounts = (accountRecords ?? []).filter((account) =>
-    account.platform === "youtube" && account.active && account.connectionStatus === "connected",
-  );
+  const accounts = (accountRecords ?? [])
+    .filter((account) => account.platform === "youtube" && account.organization === "emro" && account.active && account.connectionStatus === "connected")
+    .map((account) => ({ ...account, displayName: MAIN_REPORT_ALIAS }));
   const currentFilterState = { accountId, range, scope: exportScope } as const;
   const currentFilterKey = analyticsFilterKey(currentFilterState);
   const previousFilterKey = useRef(currentFilterKey);
@@ -183,9 +184,9 @@ function AnalyticsDashboard() {
   return (
     <div className="min-w-0 space-y-5">
       <header>
-        <h1 className="text-xl font-bold text-tg-text">آنالیز یوتیوب</h1>
+        <h1 className="text-xl font-bold text-tg-text">گزارش‌های {MAIN_REPORT_ALIAS}</h1>
         <p className="mt-1 max-w-2xl text-sm leading-6 text-tg-secondary">
-          عملکرد کانال‌ها و ویدیوها را با داده‌های رسمی همگام‌شده بررسی کنید.
+          گزارش‌های موسسه امام روح‌الله با نام {MAIN_REPORT_ALIAS}، بر پایه داده‌های رسمی YouTube و Instagram.
         </p>
       </header>
 

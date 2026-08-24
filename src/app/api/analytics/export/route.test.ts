@@ -19,6 +19,7 @@ function dependencies() {
   return {
     requirePermission: vi.fn().mockResolvedValue({ user, response: null }),
     getExportRows: vi.fn().mockResolvedValue([]),
+    listReportingAccountIds: vi.fn().mockResolvedValue(["account-1"]),
     encodeCsv: vi.fn().mockReturnValue("\uFEFFتاریخ\r\n"),
     now: () => new Date("2026-08-21T12:00:00.000Z"),
   };
@@ -92,7 +93,7 @@ describe("GET /api/analytics/export", () => {
       .toBe('attachment; filename="youtube-analytics-7d-2026-08-21.csv"');
   });
 
-  it("normalizes a real empty-list user to unrestricted export scope", async () => {
+  it("limits a real empty-list user to Emro reporting accounts", async () => {
     const deps = dependencies();
     const emptyListUser = { ...user, allowedAccountIds: [] };
     deps.requirePermission.mockResolvedValue({ user: emptyListUser, response: null });
@@ -102,6 +103,6 @@ describe("GET /api/analytics/export", () => {
       deps,
     );
 
-    expect(deps.getExportRows.mock.calls[0][0].allowedAccountIds).toBeNull();
+    expect(deps.getExportRows.mock.calls[0][0].allowedAccountIds).toEqual(["account-1"]);
   });
 });

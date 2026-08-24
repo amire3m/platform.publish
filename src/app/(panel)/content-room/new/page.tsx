@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { ArrowRight } from "lucide-react";
 import { Button, Card, Input, Select, Label, Textarea, ErrorState } from "@/components/ui";
 import { fetchContentRoomApi, ContentRoomApiError } from "@/lib/content-room/client";
-import { CHANNELS } from "@/lib/channels";
+import { ChannelOptions } from "@/components/ChannelOptions";
 
 export default function ContentRoomNewPage() {
   const router = useRouter();
@@ -126,11 +126,7 @@ export default function ContentRoomNewPage() {
                 aria-invalid={touched && Boolean(channelError) ? true : undefined}
               >
                 <option value="">انتخاب کانال</option>
-                {CHANNELS.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.labelFa}
-                  </option>
-                ))}
+                <ChannelOptions />
               </Select>
               {touched && channelError && (
                 <p className="text-xs text-rose-600" role="alert">

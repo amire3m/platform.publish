@@ -8,6 +8,7 @@ import { Button, Card, Input, Select, Modal, EmptyState, ErrorState, Skeleton } 
 import { CHANNELS } from "@/lib/channels";
 import type { Asset, AssetType } from "@/lib/assets/types";
 import { UNKNOWN_LABEL_FA } from "@/lib/presentation-fa";
+import { ChannelOptions } from "@/components/ChannelOptions";
 
 const fetcher = async (url: string) => {
   const res = await fetch(url);
@@ -143,11 +144,7 @@ export default function AssetsPage() {
           </Select>
           <Select value={channel} onChange={(e) => setChannel(e.target.value)} className="min-h-[44px]" aria-label="فیلتر کانال">
             <option value="">همه کانال‌ها</option>
-            {CHANNELS.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.labelFa}
-              </option>
-            ))}
+            <ChannelOptions />
           </Select>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -244,7 +241,7 @@ export default function AssetsPage() {
                 {/* overlay hint */}
                 <span className="absolute bottom-1 left-1 rounded bg-black/60 px-1.5 py-0.5 text-[10px] text-white">پیش‌نمایش</span>
                 {/* show proxy image if available */}
-                {a.thumbnailUrl && !a.telegramFileId.startsWith("sample_") ? (
+                {a.type !== "video" && a.thumbnailUrl && !a.telegramFileId.startsWith("sample_") ? (
                   <img src={a.thumbnailUrl} alt={a.filename} className="absolute inset-0 h-full w-full object-cover" />
                 ) : null}
               </div>
@@ -454,9 +451,7 @@ export default function AssetsPage() {
               <p className="mt-1 text-[11px] text-tg-secondary">نسخه‌های فایل به‌صورت پیام در Telegram ذخیره می‌شوند و هر شناسه فایل جدید، یک نسخه جداگانه می‌سازد.</p>
             </div>
 
-            {displayAsset.thumbnailUrl && !isSample && (
-              <p className="text-[11px] text-tg-secondary">پروکسی: <span className="font-mono break-all">{displayAsset.thumbnailUrl}</span> (۱۵ دقیقه اعتبار)</p>
-            )}
+            {displayAsset.thumbnailUrl && !isSample && <p className="text-[11px] text-tg-secondary">فایل از مخزن امن Telegram نمایش داده می‌شود.</p>}
           </div>
         )}
       </Modal>

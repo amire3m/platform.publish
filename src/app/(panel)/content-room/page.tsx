@@ -13,7 +13,7 @@ import { ContentRoomFilters as BasicFilters } from "@/components/content-room/Co
 import { ContentRoomTable } from "@/components/content-room/ContentRoomTable";
 import { ContentRoomCards } from "@/components/content-room/ContentRoomCards";
 import type { ContentRoomFilters as FiltersType } from "@/components/content-room/types";
-import { CHANNELS } from "@/lib/channels";
+import { ChannelOptions } from "@/components/ChannelOptions";
 
 type ProductsData = ContentRoomProductSummary[] | { products: ContentRoomProductSummary[] } | { items: ContentRoomProductSummary[] } | { data: ContentRoomProductSummary[] };
 
@@ -183,9 +183,7 @@ export default function ContentRoomPage() {
                 <label className="text-xs font-semibold text-tg-secondary">کانال</label>
                 <Select value={filters.channel} onChange={(e) => setFilters((f) => ({ ...f, channel: e.target.value }))} className="min-h-[44px]">
                   <option value="">همه کانال‌ها</option>
-                  {CHANNELS.map((c) => (
-                    <option key={c.id} value={c.id}>{c.labelFa}</option>
-                  ))}
+                  <ChannelOptions />
                 </Select>
               </div>
               <div className="flex flex-col gap-1">

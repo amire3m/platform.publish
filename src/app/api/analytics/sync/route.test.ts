@@ -27,6 +27,7 @@ function dependencies(user: TestUser = restrictedUser) {
   return {
     requirePermission: vi.fn().mockResolvedValue({ user, response: null }),
     listSyncableAccounts: vi.fn().mockResolvedValue([{ id: "account-1" }, { id: "account-2" }]),
+    listReportingAccountIds: vi.fn().mockResolvedValue(["account-1", "account-2"]),
     syncAccounts: vi.fn().mockResolvedValue([
       { accountId: "account-1", status: "synced", snapshotCount: 2 },
       { accountId: "account-2", status: "skipped", snapshotCount: 0 },
@@ -41,6 +42,7 @@ describe("POST /api/analytics/sync", () => {
       allowedAccountIds: ["yt-connected", "instagram", "disconnected", "missing"],
     };
     const deps = dependencies(scopedUser);
+    deps.listReportingAccountIds.mockResolvedValue(["yt-connected"]);
     deps.listSyncableAccounts.mockResolvedValue([{ id: "yt-connected" }]);
     deps.syncAccounts.mockResolvedValue([
       { accountId: "yt-connected", status: "synced", snapshotCount: 2 },
@@ -52,12 +54,7 @@ describe("POST /api/analytics/sync", () => {
     );
     const body = await response.json();
 
-    expect(deps.listSyncableAccounts).toHaveBeenCalledWith([
-      "yt-connected",
-      "instagram",
-      "disconnected",
-      "missing",
-    ]);
+    expect(deps.listSyncableAccounts).toHaveBeenCalledWith(["yt-connected"]);
     expect(deps.syncAccounts).toHaveBeenCalledWith(["yt-connected"]);
     expect(JSON.stringify(deps.syncAccounts.mock.calls)).not.toContain("instagram");
     expect(JSON.stringify(deps.syncAccounts.mock.calls)).not.toContain("disconnected");
@@ -111,7 +108,7 @@ describe("POST /api/analytics/sync", () => {
 
     expect(deps.requirePermission.mock.calls.map(([permission]) => permission))
       .toEqual(["view_analytics", "manage_accounts"]);
-    expect(deps.listSyncableAccounts).toHaveBeenCalledWith();
+    expect(deps.listSyncableAccounts).toHaveBeenCalledWith(["account-1", "account-2"]);
     expect(deps.syncAccounts).toHaveBeenCalledWith(["account-1", "account-2"]);
   });
 });

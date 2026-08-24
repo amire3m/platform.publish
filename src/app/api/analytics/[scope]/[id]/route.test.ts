@@ -21,6 +21,7 @@ function dependencies() {
     requirePermission: vi.fn().mockResolvedValue({ user, response: null }),
     getContent: vi.fn().mockResolvedValue({ scope: "content", videoId: "video-1" }),
     getExportRows: vi.fn().mockResolvedValue([{ accountId: "account-1" }]),
+    listReportingAccountIds: vi.fn().mockResolvedValue(["account-1"]),
     now: () => new Date("2026-08-21T12:00:00.000Z"),
   };
 }
@@ -85,7 +86,7 @@ describe("GET /api/analytics/:scope/:id", () => {
     expect(deps.getExportRows).not.toHaveBeenCalled();
   });
 
-  it("normalizes a real empty-list user to unrestricted content scope", async () => {
+  it("limits a real empty-list user to Emro content scope", async () => {
     const deps = dependencies();
     deps.requirePermission.mockResolvedValue({
       user: { ...user, allowedAccountIds: [] },
@@ -101,7 +102,7 @@ describe("GET /api/analytics/:scope/:id", () => {
     expect(deps.getContent).toHaveBeenCalledWith({
       externalVideoId: "video-1",
       range: 7,
-      allowedAccountIds: null,
+      allowedAccountIds: ["account-1"],
     });
   });
 });

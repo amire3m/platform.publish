@@ -189,9 +189,14 @@ async function defaultFetchYoutubeSummary(now: Date): Promise<YoutubeSummary> {
     const windowStart = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
     // Prefer analytics repository (unifies youtube_analytics_snapshots / analytics_snapshots)
     const { analyticsRepository } = await import("@/lib/analytics/repository");
+    const { listMainReportAccountIds } = await import("@/lib/accounts/organization-server");
+    const { MAIN_REPORT_ALIAS } = await import("@/lib/accounts/organization");
+    const accountIds = await listMainReportAccountIds("youtube");
+    if (accountIds.length === 0) return { totalViews30d: 0, byChannel: [], topVideos: [] };
     const rows = await analyticsRepository.readSnapshots({
       startDateInclusive: windowStart,
       endDateExclusive: now,
+      accountIds,
     });
     if (!rows || rows.length === 0) {
       // fallback: direct drizzle query if repository empty (e.g. no join metadata)
@@ -242,17 +247,17 @@ async function defaultFetchYoutubeSummary(now: Date): Promise<YoutubeSummary> {
       }
     }
 
-    const byChannel: YoutubeChannelViews[] = [...byChannelMap.entries()]
-      .map(([channelId, { label, views }]) => ({ channelId, label, views }))
-      .sort((a, b) => b.views - a.views);
+    const byChannel: YoutubeChannelViews[] = total > 0
+      ? [{ channelId: "emro", label: MAIN_REPORT_ALIAS, views: total }]
+      : [];
 
     const videoMap = new Map<string, { title: string; channel: string; channelId: string; views: number }>();
     for (const r of contentRows as unknown as Array<{ videoId: string; scopeId: string; title: string; contentTitle: string | null; channelTitle: string; channelId: string; accountId: string; views: number }>) {
       const vid = (r.videoId ?? r.scopeId) as string;
       if (!vid) continue;
       const title = (r.title ?? r.contentTitle ?? vid) as string;
-      const channel = (r.channelTitle ?? r.channelId ?? "") as string;
-      const channelId = (r.channelId ?? r.accountId ?? "") as string;
+      const channel = MAIN_REPORT_ALIAS;
+      const channelId = "emro";
       const v = Number(r.views ?? 0);
       const existing = videoMap.get(vid);
       if (existing) existing.views += v;
@@ -275,10 +280,15 @@ async function defaultFetchInstagramSummary(): Promise<InstagramSummary> {
     const { db } = await import("@/db");
     const { socialAccounts } = await import("@/db/schema");
     const { eq, and } = await import("drizzle-orm");
+    const { MAIN_REPORT_ALIAS, MAIN_REPORT_ORGANIZATION } = await import("@/lib/accounts/organization");
     const rows = await db
       .select({ id: socialAccounts.id, displayName: socialAccounts.displayName })
       .from(socialAccounts)
-      .where(and(eq(socialAccounts.platform, "instagram"), eq(socialAccounts.connectionStatus, "connected")));
+      .where(and(
+        eq(socialAccounts.platform, "instagram"),
+        eq(socialAccounts.organization, MAIN_REPORT_ORGANIZATION),
+        eq(socialAccounts.connectionStatus, "connected"),
+      ));
     const connectedCount = rows.length;
     if (connectedCount === 0) {
       return { status: "awaiting_connection", byPage: [], connectedCount: 0 };
@@ -286,7 +296,7 @@ async function defaultFetchInstagramSummary(): Promise<InstagramSummary> {
     // Instagram analytics not yet available — placeholder with per-page 0 views
     return {
       status: "connected",
-      byPage: rows.map((r) => ({ pageId: r.id, label: r.displayName ?? r.id, views: 0 })),
+      byPage: [{ pageId: "emro", label: MAIN_REPORT_ALIAS, views: 0 }],
       connectedCount,
     };
   } catch {

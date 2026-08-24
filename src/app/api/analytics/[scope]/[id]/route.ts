@@ -2,6 +2,8 @@ import { AnalyticsAccessError, getAnalyticsExportRows, getContentAnalytics } fro
 import { buildAnalyticsPeriod, parseAnalyticsRange } from "@/lib/analytics/ranges";
 import { jsonError, jsonOk, requirePermission } from "@/lib/api-helpers";
 import { accountScopeForUser } from "@/lib/permissions";
+import { restrictAccountScopeToOrganization } from "@/lib/accounts/organization";
+import { listMainReportAccountIds } from "@/lib/accounts/organization-server";
 
 interface DetailDependencies {
   requirePermission(permission: "view_analytics"): Promise<{
@@ -10,6 +12,7 @@ interface DetailDependencies {
   }>;
   getContent: typeof getContentAnalytics;
   getExportRows: typeof getAnalyticsExportRows;
+  listReportingAccountIds(): Promise<string[]>;
   now(): Date;
 }
 
@@ -17,6 +20,7 @@ const defaultDependencies: DetailDependencies = {
   requirePermission,
   getContent: getContentAnalytics,
   getExportRows: getAnalyticsExportRows,
+  listReportingAccountIds: () => listMainReportAccountIds(),
   now: () => new Date(),
 };
 
@@ -32,7 +36,10 @@ export async function handleAnalyticsDetailRequest(
   }
   const range = parseAnalyticsRange(new URL(request.url).searchParams.get("range") ?? "90");
   if (!range) return jsonError("بازه آمار نامعتبر است.", 422, "INVALID_RANGE");
-  const allowedAccountIds = accountScopeForUser(user);
+  const allowedAccountIds = restrictAccountScopeToOrganization(
+    accountScopeForUser(user),
+    await dependencies.listReportingAccountIds(),
+  );
   try {
     if (params.scope === "content") {
       const result = await dependencies.getContent({
@@ -41,6 +48,9 @@ export async function handleAnalyticsDetailRequest(
         allowedAccountIds,
       });
       return result ? jsonOk(result) : jsonError("محتوا یافت نشد.", 404, "NOT_FOUND");
+    }
+    if (!allowedAccountIds.includes(params.id)) {
+      return jsonError("این حساب در گزارش اصلی Emro YT قرار ندارد.", 403, "FORBIDDEN");
     }
     const period = buildAnalyticsPeriod(range, dependencies.now(), "Asia/Tehran");
     const rows = await dependencies.getExportRows({

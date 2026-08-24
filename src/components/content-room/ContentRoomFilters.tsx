@@ -2,7 +2,7 @@
 
 import { Input, Select } from "@/components/ui";
 import type { ContentRoomFilters } from "./types";
-import { CHANNELS } from "@/lib/channels";
+import { ChannelOptions } from "@/components/ChannelOptions";
 
 interface Props {
   value: ContentRoomFilters;
@@ -65,11 +65,7 @@ export function ContentRoomFilters({ value, onChange }: Props) {
             aria-label="فیلتر کانال"
           >
             <option value="">همه کانال‌ها</option>
-            {CHANNELS.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.labelFa}
-              </option>
-            ))}
+            <ChannelOptions />
           </Select>
         </div>
 

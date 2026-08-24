@@ -16,7 +16,7 @@ import {
   JALALI_MONTH_LABELS,
   JALALI_WEEKDAY_LABELS,
 } from "@/lib/date/jalali";
-import { CHANNELS } from "@/lib/channels";
+import { ChannelOptions } from "@/components/ChannelOptions";
 import {
   detectChannelConflicts,
   formatConflictTooltip,
@@ -243,11 +243,7 @@ export default function CalendarPage() {
             aria-label="فیلتر کانال"
           >
             <option value="">همه کانال‌ها</option>
-            {CHANNELS.map((ch) => (
-              <option key={ch.id} value={ch.id}>
-                {ch.labelFa}
-              </option>
-            ))}
+            <ChannelOptions />
           </Select>
           <Select
             value={platform}

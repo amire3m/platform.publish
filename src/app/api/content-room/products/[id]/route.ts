@@ -3,6 +3,7 @@ import { contentRoomRepository, type ContentRoomRepository } from "@/lib/content
 import { requiresReasonForTransition, updateStatusSchema } from "@/lib/content-room/validation";
 import { getCurrentUser } from "@/lib/auth";
 import { hasPermission } from "@/lib/permissions";
+import { buildTelegramMediaUrl } from "@/lib/media/telegram-url";
 
 export interface ProductRouteDependencies {
   requirePermission: typeof requirePermission;
@@ -40,7 +41,14 @@ export async function handleProductRequest(
     try {
       const product = await deps.repository.getProduct(id);
       if (!product) return jsonError("محصول یافت نشد.", 404, "NOT_FOUND");
-      return jsonOk(product);
+      return jsonOk({
+        ...product,
+        parts: (product.parts ?? []).map((part) => ({
+          ...part,
+          playbackUrl: buildTelegramMediaUrl(part.fileRef),
+          coverUrl: buildTelegramMediaUrl(part.coverFileRef),
+        })),
+      });
     } catch (error) {
       const mapped = mapRepositoryError(error);
       if (mapped) return mapped;

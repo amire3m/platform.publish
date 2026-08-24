@@ -3,6 +3,7 @@ export interface PublicAccountDto {
   platform: string;
   username: string;
   displayName: string;
+  organization: "emro" | "sana" | null;
   profileImage: string | null;
   active: boolean;
   connectionStatus: string;
@@ -17,6 +18,7 @@ export interface PublicAccountSource extends Record<string, unknown> {
   platform: string;
   username: string;
   displayName: string;
+  organization?: "emro" | "sana" | null;
   profileImage: string | null;
   active: boolean;
   connectionStatus: string;
@@ -32,6 +34,7 @@ export function toPublicAccountDto(account: PublicAccountSource): PublicAccountD
     platform: account.platform,
     username: account.username,
     displayName: account.displayName,
+    organization: account.organization ?? null,
     profileImage: account.profileImage,
     active: account.active,
     connectionStatus: account.connectionStatus,

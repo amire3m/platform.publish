@@ -2,6 +2,8 @@ import { analyticsRepository } from "@/lib/analytics/repository";
 import { syncYouTubeAccounts, type AccountSyncResult } from "@/lib/analytics/sync";
 import { jsonError, jsonOk, requirePermission } from "@/lib/api-helpers";
 import { accountScopeForUser } from "@/lib/permissions";
+import { restrictAccountScopeToOrganization } from "@/lib/accounts/organization";
+import { listMainReportAccountIds } from "@/lib/accounts/organization-server";
 
 interface SyncDependencies {
   requirePermission(permission: "view_analytics" | "manage_accounts"): Promise<{
@@ -9,12 +11,14 @@ interface SyncDependencies {
     response: Response | null;
   }>;
   listSyncableAccounts(accountIds?: readonly string[]): Promise<readonly { id: string }[]>;
+  listReportingAccountIds(): Promise<string[]>;
   syncAccounts(accountIds: readonly string[]): Promise<AccountSyncResult[]>;
 }
 
 const defaultDependencies: SyncDependencies = {
   requirePermission,
   listSyncableAccounts: (accountIds) => analyticsRepository.listSyncableAccounts(accountIds),
+  listReportingAccountIds: () => listMainReportAccountIds("youtube"),
   syncAccounts: syncYouTubeAccounts,
 };
 
@@ -42,20 +46,23 @@ export async function handleAnalyticsSyncRequest(
   if (requestedAccountId === undefined) {
     return jsonError("درخواست همگام‌سازی نامعتبر است.", 422, "INVALID_REQUEST");
   }
-  const allowedAccountIds = accountScopeForUser(view.user);
+  const userAccountScope = accountScopeForUser(view.user);
+  const allowedAccountIds = restrictAccountScopeToOrganization(
+    userAccountScope,
+    await dependencies.listReportingAccountIds(),
+  );
   let accountIds: readonly string[];
   if (requestedAccountId) {
-    if (allowedAccountIds !== null && !allowedAccountIds.includes(requestedAccountId)) {
-      return jsonError("شما به این حساب دسترسی ندارید.", 403, "FORBIDDEN");
+    if (!allowedAccountIds.includes(requestedAccountId)) {
+      return jsonError("این حساب در گزارش اصلی Emro YT قرار ندارد.", 403, "FORBIDDEN");
     }
     accountIds = [requestedAccountId];
-  } else if (allowedAccountIds !== null) {
-    accountIds = (await dependencies.listSyncableAccounts(allowedAccountIds))
-      .map((account) => account.id);
   } else {
-    const management = await dependencies.requirePermission("manage_accounts");
-    if (!management.user) return management.response!;
-    accountIds = (await dependencies.listSyncableAccounts()).map((account) => account.id);
+    if (userAccountScope === null) {
+      const management = await dependencies.requirePermission("manage_accounts");
+      if (!management.user) return management.response!;
+    }
+    accountIds = (await dependencies.listSyncableAccounts(allowedAccountIds)).map((account) => account.id);
   }
   const results = await dependencies.syncAccounts(accountIds);
   return jsonOk({

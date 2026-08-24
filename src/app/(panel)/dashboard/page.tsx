@@ -9,6 +9,7 @@ import { CHANNELS, getChannelLabelFa } from "@/lib/channels";
 import { formatJalaliDateTime } from "@/lib/date/jalali";
 import { InstagramIcon, YoutubeIcon } from "@/components/brand-icons";
 import { platformLabelFa, statusLabelFa, UNKNOWN_LABEL_FA } from "@/lib/presentation-fa";
+import { MAIN_REPORT_ALIAS } from "@/lib/accounts/organization";
 
 type IconType = React.ComponentType<{ className?: string }>;
 
@@ -259,7 +260,7 @@ export default function DashboardPage() {
       <Card>
         <h2 className="mb-3 flex items-center gap-2 font-semibold text-tg-text">
           <YoutubeIcon className="h-4 w-4 text-rose-500" aria-hidden="true" />
-          بازدید یوتیوب ۳۰ روزه
+          گزارش YouTube {MAIN_REPORT_ALIAS} در ۳۰ روز گذشته
           <span className="ms-auto text-sm font-bold text-tg-text">{(data.youtube?.totalViews30d ?? 0).toLocaleString("fa-IR")} بازدید</span>
         </h2>
         {data.youtube?.byChannel?.length ? (
@@ -293,7 +294,7 @@ export default function DashboardPage() {
       <Card>
         <h2 className="mb-3 flex items-center gap-2 font-semibold text-tg-text">
           <Eye className="h-4 w-4 text-tg-secondary" aria-hidden="true" />
-          تاپ ویدیوها
+          ویدیوهای برتر {MAIN_REPORT_ALIAS}
         </h2>
         {data.youtube?.topVideos?.length ? (
           <div className="overflow-x-auto rounded-lg border border-tg-border">
@@ -328,12 +329,12 @@ export default function DashboardPage() {
       <Card>
         <h2 className="mb-3 flex items-center gap-2 font-semibold text-tg-text">
           <InstagramIcon className="h-4 w-4 text-pink-500" aria-hidden="true" />
-          اینستاگرام — منتظر اتصال
+          گزارش Instagram {MAIN_REPORT_ALIAS}
         </h2>
         {data.instagram?.status === "awaiting_connection" || (data.instagram?.connectedCount ?? 0) === 0 ? (
           <div className="rounded-lg border border-dashed border-tg-border p-6 text-center">
-            <p className="text-sm text-tg-secondary">هنوز حساب اینستاگرام متصل نشده است.</p>
-            <p className="mt-1 text-xs text-tg-secondary">برای مشاهده آمار اینستاگرام، ابتدا حساب خود را متصل کنید.</p>
+            <p className="text-sm text-tg-secondary">هنوز حساب Instagram موسسه امام روح‌الله متصل و تعیین نشده است.</p>
+            <p className="mt-1 text-xs text-tg-secondary">حساب را متصل کنید و وابستگی آن را در صفحه حساب‌ها روی «موسسه امام روح‌الله» قرار دهید.</p>
             <Link href="/settings/instagram" className="mt-3 inline-flex text-sm text-tg-accent underline">
               رفتن به تنظیمات اینستاگرام
             </Link>

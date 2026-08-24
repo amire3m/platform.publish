@@ -3,12 +3,13 @@
 import { use, useCallback, useMemo, useState } from "react";
 import useSWR from "swr";
 import Link from "next/link";
-import { ArrowRight, Link2, Link2Off, Calendar, AlertTriangle, User } from "lucide-react";
-import { Button, Card, EmptyState, ErrorState, Skeleton } from "@/components/ui";
+import { ArrowRight, Link2, Link2Off, Calendar, AlertTriangle, User, Play, ExternalLink } from "lucide-react";
+import { Button, Card, EmptyState, ErrorState, Modal, Skeleton } from "@/components/ui";
 import { fetchWorkflowApi, WorkflowApiError } from "@/lib/workflow/client";
 import { formatJalaliDateOnly, formatJalaliDateTime } from "@/lib/date/jalali";
 import { workflowStatusPresentation } from "@/lib/workflow/presentation";
 import { platformLabelFa, workflowActionLabelFa, UNKNOWN_LABEL_FA } from "@/lib/presentation-fa";
+import { getVideoEmbedUrl } from "@/lib/media/video-embed";
 import { WorkflowHistory, type WorkflowHistoryEntry } from "@/components/workflow/WorkflowHistory";
 import { WorkflowReasonDialog } from "@/components/workflow/WorkflowReasonDialog";
 import {
@@ -42,6 +43,8 @@ interface PublicationDetail {
   allowedActions?: string[];
   lastErrorCode?: string | null;
   lastErrorMessage?: string | null;
+  externalId?: string | null;
+  permalink?: string | null;
 }
 
 interface DeliverableDetail {
@@ -143,6 +146,11 @@ export default function WorkflowProgramDetailPage({ params }: { params: Promise<
   const canActDeliverable = permissions.has("manage_programs") || permissions.has("update_assigned_deliverables");
   const canActPublication = permissions.has("manage_publications") || permissions.has("manage_programs");
   const canAct = canActDeliverable || canActPublication;
+  const [publishedVideo, setPublishedVideo] = useState<{
+    platform: string;
+    permalink: string;
+    embedUrl: string;
+  } | null>(null);
 
   // ---- Program ----
   const {
@@ -609,6 +617,7 @@ export default function WorkflowProgramDetailPage({ params }: { params: Promise<
                           </div>
                         );
                       }
+                      const embedUrl = getVideoEmbedUrl(pub.platform, pub.permalink);
                       return (
                         <div key={pub.id} className="rounded-lg border border-tg-border p-3">
                           <div className="mb-2 flex items-center justify-between">
@@ -616,8 +625,27 @@ export default function WorkflowProgramDetailPage({ params }: { params: Promise<
                             <PublicationStatusBadge status={pub.status} />
                           </div>
                           {pub.scheduledAt && <p className="text-xs text-tg-secondary">زمان‌بندی: {formatJalaliDateTime(pub.scheduledAt)}</p>}
-                          {pub.publishedAt && <p className="text-xs text-tg-secondary">انتشار: {formatJalaliDateTime(pub.publishedAt)}</p>}
-                          {pub.lastErrorMessage && <p className="mt-1 text-xs text-rose-600 dark:text-rose-400">{pub.lastErrorMessage}</p>}
+                           {pub.publishedAt && <p className="text-xs text-tg-secondary">انتشار: {formatJalaliDateTime(pub.publishedAt)}</p>}
+                           {pub.lastErrorMessage && <p className="mt-1 text-xs text-rose-600 dark:text-rose-400">{pub.lastErrorMessage}</p>}
+                           {pub.permalink && (
+                             <div className="mt-2 flex flex-wrap gap-2">
+                               {embedUrl && (
+                                 <Button
+                                   size="sm"
+                                   variant="secondary"
+                                   className="min-h-[36px] text-xs"
+                                   onClick={() => setPublishedVideo({ platform: pub.platform, permalink: pub.permalink!, embedUrl })}
+                                 >
+                                   <Play className="h-3.5 w-3.5" />
+                                   پخش داخل سامانه
+                                 </Button>
+                               )}
+                               <a href={pub.permalink} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-[36px] items-center gap-1 text-xs font-medium text-tg-accent hover:underline">
+                                 <ExternalLink className="h-3.5 w-3.5" />
+                                 مشاهده در {platformLabel(pub.platform)}
+                               </a>
+                             </div>
+                           )}
                           <div className="mt-3">
                             {canActPublication ? (
                               <WorkflowStatusAction
@@ -649,6 +677,34 @@ export default function WorkflowProgramDetailPage({ params }: { params: Promise<
           </div>
         )}
       </Card>
+
+      <Modal
+        open={publishedVideo !== null}
+        onClose={() => setPublishedVideo(null)}
+        title={publishedVideo ? `پخش ویدئو از ${platformLabel(publishedVideo.platform)}` : "پخش ویدئو"}
+        footer={publishedVideo ? (
+          <>
+            <Button variant="secondary" onClick={() => setPublishedVideo(null)}>بستن</Button>
+            <a href={publishedVideo.permalink} target="_blank" rel="noopener noreferrer">
+              <Button>مشاهده در {platformLabel(publishedVideo.platform)}</Button>
+            </a>
+          </>
+        ) : undefined}
+      >
+        {publishedVideo && (
+          <div className="overflow-hidden rounded-lg bg-black">
+            <iframe
+              src={publishedVideo.embedUrl}
+              title={`ویدئوی منتشرشده در ${platformLabel(publishedVideo.platform)}`}
+              className={publishedVideo.platform === "instagram" ? "mx-auto aspect-[9/16] max-h-[70vh] w-full max-w-md" : "aspect-video w-full"}
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+              allowFullScreen
+              loading="lazy"
+              referrerPolicy="strict-origin-when-cross-origin"
+            />
+          </div>
+        )}
+      </Modal>
 
       {/* History */}
       <WorkflowHistory

@@ -399,4 +399,82 @@ describe("analytics query service", () => {
     expect(result.freshness.accounts[0].state).toBe(expected);
     expect(result.freshness.state).toBe(expected);
   });
+
+  it("computes monetization progress: 730 subs 3588 hours -> remaining 270/412 not eligible", async () => {
+    const oneYearAgo = new Date(NOW.getTime() - 365 * DAY);
+    // two rows within last year sum to 3588 hours
+    const repo = repository([
+      accountRow("a", 10, { watchTimeMinutes: 107640, subscribersTotal: 700 }), // 1794h
+      accountRow("a", 1, { watchTimeMinutes: 107640, subscribersTotal: 730 }), // 1794h -> total 3588h, latest subs 730
+      // row older than 365d should be excluded from watchHours but not affect latest if newer exists
+      { ...accountRow("a", 1, { watchTimeMinutes: 60000, subscribersTotal: 999 }), dateUtc: new Date(oneYearAgo.getTime() - DAY), id: "old" } as any,
+      // content row within window should not contribute to watchHours
+      contentRow("a", "vid1", 1, { watchTimeMinutes: 99999 }),
+    ]);
+
+    const result = await createAnalyticsQueryService(repo).getMonetizationProgress({
+      allowedAccountIds: ["a"],
+      now: NOW,
+    });
+
+    expect(repo.readSnapshots).toHaveBeenCalledWith({
+      accountIds: ["a"],
+      startDateInclusive: oneYearAgo,
+      endDateExclusive: NOW,
+    });
+    expect(result.subs).toBe(730);
+    expect(result.watchHours).toBe(3588);
+    expect(result.subsProgress).toBeCloseTo(0.73);
+    expect(result.hoursProgress).toBeCloseTo(0.897);
+    expect(result.remainingSubs).toBe(270);
+    expect(result.remainingHours).toBe(412);
+    expect(result.isEligible).toBe(false);
+  });
+
+  it("computes watchHours last 365d only via account scope and excludes older data", async () => {
+    const oneYearAgo = new Date(NOW.getTime() - 365 * DAY);
+    const inside = accountRow("a", 5, { watchTimeMinutes: 6000 }); // 100h
+    const outside: typeof inside = { ...accountRow("a", 5, { watchTimeMinutes: 6000 }), dateUtc: new Date(oneYearAgo.getTime() - 2 * DAY), id: "outside" };
+    const repo = repository([inside, outside]);
+
+    const result = await createAnalyticsQueryService(repo).getMonetizationProgress({
+      allowedAccountIds: ["a"],
+      now: NOW,
+    });
+
+    expect(result.watchHours).toBe(100);
+  });
+
+  it("returns eligible when thresholds met and clamps progress at 1", async () => {
+    const repo = repository([
+      accountRow("a", 1, { watchTimeMinutes: 300000, subscribersTotal: 1500 }), // 5000h
+    ]);
+    const result = await createAnalyticsQueryService(repo).getMonetizationProgress({
+      allowedAccountIds: ["a"],
+      now: NOW,
+    });
+    expect(result.isEligible).toBe(true);
+    expect(result.subsProgress).toBe(1);
+    expect(result.hoursProgress).toBe(1);
+    expect(result.remainingSubs).toBe(0);
+    expect(result.remainingHours).toBe(0);
+  });
+
+  it("respects allowedAccountIds and accountId filter for monetization and rejects denied account", async () => {
+    const repo = repository([accountRow("a", 1, { watchTimeMinutes: 6000, subscribersTotal: 500 })]);
+    const service = createAnalyticsQueryService(repo);
+    await expect(service.getMonetizationProgress({ accountId: "b", allowedAccountIds: ["a"], now: NOW })).rejects.toBeInstanceOf(AnalyticsAccessError);
+    expect(repo.readSnapshots).not.toHaveBeenCalled();
+    const filtered = await service.getMonetizationProgress({ accountId: "a", allowedAccountIds: ["a", "b"], now: NOW });
+    expect(repo.readSnapshots.mock.calls[0][0].accountIds).toEqual(["a"]);
+    expect(filtered.subs).toBe(500);
+  });
+
+  it("returns zero progress when no snapshots", async () => {
+    const result = await createAnalyticsQueryService(repository([])).getMonetizationProgress({
+      allowedAccountIds: ["a"],
+      now: NOW,
+    });
+    expect(result).toEqual({ subs: 0, watchHours: 0, subsProgress: 0, hoursProgress: 0, remainingSubs: 1000, remainingHours: 4000, isEligible: false });
+  });
 });

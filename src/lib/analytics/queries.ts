@@ -7,6 +7,7 @@ import {
   type AnalyticsSnapshotFilter,
   type AnalyticsSnapshotRecord,
 } from "@/lib/analytics/repository";
+import { calculateMonetizationProgress, type MonetizationProgress } from "@/lib/analytics/monetization";
 import { aggregateDailyMetrics, buildAnalyticsPeriod, calculateEngagementRate } from "@/lib/analytics/ranges";
 import { normalizeAllowedAccountIds } from "@/lib/permissions";
 import type {
@@ -181,10 +182,16 @@ function allowedFilter(
   return accountId ? [accountId] : allowed ?? undefined;
 }
 
+export interface MonetizationProgressResult extends MonetizationProgress {
+  subs: number;
+  watchHours: number;
+}
+
 export function createAnalyticsQueryService(repository: AnalyticsQueryRepository): {
   getOverview(input: { range: AnalyticsRange; accountId?: string; allowedAccountIds: readonly string[] | null; now?: Date }): Promise<AnalyticsOverview>;
   getContent(input: { externalVideoId: string; range: AnalyticsRange; allowedAccountIds: readonly string[] | null; now?: Date }): Promise<ContentAnalytics | null>;
   getExportRows(input: AnalyticsExportFilter & { allowedAccountIds: readonly string[] | null }): Promise<AnalyticsExportRow[]>;
+  getMonetizationProgress(input: { accountId?: string; allowedAccountIds: readonly string[] | null; now?: Date }): Promise<MonetizationProgressResult>;
 } {
   return {
     async getOverview(input) {
@@ -384,6 +391,36 @@ export function createAnalyticsQueryService(repository: AnalyticsQueryRepository
         fetchedAt: row.fetchedAt,
       }));
     },
+
+    async getMonetizationProgress(input) {
+      const now = input.now ?? new Date();
+      const accountIds = allowedFilter(input.accountId, input.allowedAccountIds);
+      if (accountIds?.length === 0) {
+        return { subs: 0, watchHours: 0, ...calculateMonetizationProgress(0, 0) };
+      }
+      const oneYearAgo = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
+      const rows = await repository.readSnapshots({
+        ...(accountIds ? { accountIds } : {}),
+        startDateInclusive: oneYearAgo,
+        endDateExclusive: now,
+      });
+      const allowed = accountIds ? new Set(accountIds) : null;
+      const visibleRows = allowed ? rows.filter((row) => allowed.has(row.accountId)) : rows;
+      const accountRows = visibleRows.filter((row) => row.scopeType === "account");
+      // watchHours = sum watchTimeMinutes where dateUtc >= now-365d /60 — filtered to account scope to avoid double counting
+      const watchHours = accountRows
+        .filter((row) => row.dateUtc >= oneYearAgo)
+        .reduce((sum, row) => sum + row.watchTimeMinutes, 0) / 60;
+      let latest: { date: Date; value: number } | null = null;
+      for (const row of accountRows) {
+        if (row.subscribersTotal === null) continue;
+        if (!latest || row.dateUtc > latest.date) {
+          latest = { date: row.dateUtc, value: row.subscribersTotal };
+        }
+      }
+      const subs = latest?.value ?? 0;
+      return { subs, watchHours, ...calculateMonetizationProgress(subs, watchHours) };
+    },
   };
 }
 
@@ -392,3 +429,4 @@ const analyticsQueryService = createAnalyticsQueryService(analyticsRepository);
 export const getAnalyticsOverview = analyticsQueryService.getOverview;
 export const getContentAnalytics = analyticsQueryService.getContent;
 export const getAnalyticsExportRows = analyticsQueryService.getExportRows;
+export const getMonetizationProgress = analyticsQueryService.getMonetizationProgress;

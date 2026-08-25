@@ -21,6 +21,15 @@ const CORE_METRICS = [
   "subscribersLost",
   "averageViewPercentage",
 ].join(",");
+const CONTENT_METRICS = [
+  "views",
+  "estimatedMinutesWatched",
+  "averageViewDuration",
+  "likes",
+  "comments",
+  "shares",
+  "averageViewPercentage",
+].join(",");
 const REVENUE_METRICS = ["estimatedRevenue", "cpm", "adImpressions"].join(",");
 const METRICS = CORE_METRICS;
 const CONTENT_PAGE_SIZE = 200;
@@ -542,7 +551,7 @@ export function createYouTubeAnalyticsAdapter(tokens: Credentials): YouTubeAnaly
         const response = await callGoogleApi(() => analytics.reports.query({
           ids: "channel==MINE",
           dimensions: "day,video",
-          metrics: METRICS,
+          metrics: CONTENT_METRICS,
           startIndex,
           maxResults: CONTENT_PAGE_SIZE,
           ...dateRange,
@@ -662,7 +671,7 @@ export function createYouTubeAnalyticsAdapter(tokens: Credentials): YouTubeAnaly
       const response = await callGoogleApi(() => analytics.reports.query({
         ids: "channel==MINE",
         dimensions: "day,video",
-        metrics: METRICS,
+        metrics: CONTENT_METRICS,
         ...dateRange,
       }));
       return mapAnalyticsRows(responseHeaders(response.data), responseRows(response.data), (row, rowIndex) => ({

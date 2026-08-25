@@ -350,9 +350,10 @@ describe("YouTubeAnalyticsAdapter", () => {
   });
 
   it("advances one-based pagination and stops after a short page", async () => {
-    const videoHeaders = [...headers, "video"];
+    const videoHeaders = ["day", "views", "estimatedMinutesWatched", "averageViewDuration", "likes", "comments", "shares", "averageViewPercentage", "video"];
+    const contentRow = (day: string, views: string): unknown[] => [day, views, "120", "30", "4", "3", "2", "45"];
     const page = Array.from({ length: 200 }, (_, index) => [
-      ...metricRow("2026-08-20", "1"),
+      ...contentRow("2026-08-20", "1"),
       `video-${index + 1}`,
     ]);
     mocks.analyticsQuery
@@ -365,7 +366,7 @@ describe("YouTubeAnalyticsAdapter", () => {
       .mockResolvedValueOnce({
         data: {
           columnHeaders: videoHeaders.map((name) => ({ name, columnType: "METRIC", dataType: "INTEGER" })),
-          rows: [[...metricRow("2026-08-20", "1"), "video-201"]],
+          rows: [[...contentRow("2026-08-20", "1"), "video-201"]],
         },
       });
 
@@ -376,7 +377,7 @@ describe("YouTubeAnalyticsAdapter", () => {
     expect(mocks.analyticsQuery.mock.calls[0]?.[0]).toEqual({
       ids: "channel==MINE",
       dimensions: "day,video",
-      metrics,
+      metrics: "views,estimatedMinutesWatched,averageViewDuration,likes,comments,shares,averageViewPercentage",
       startDate: "2026-08-19",
       endDate: "2026-08-21",
       startIndex: 1,

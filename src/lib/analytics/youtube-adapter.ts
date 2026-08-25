@@ -161,6 +161,7 @@ type GoogleAnalyticsErrorClassification =
   | "reconnect_required"
   | "api_not_enabled"
   | "quota_exhausted"
+  | "unsupported_query"
   | "permanent";
 
 export class YouTubeAnalyticsApiError extends Error {
@@ -422,6 +423,10 @@ export function classifyGoogleAnalyticsError(
   if (status === 429 || (status !== null && status >= 500 && status <= 599)) {
     return "retryable";
   }
+  try {
+    const raw = JSON.stringify(error).toLowerCase();
+    if (raw.includes("query is not supported")) return "unsupported_query";
+  } catch {}
   return "permanent";
 }
 

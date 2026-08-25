@@ -537,11 +537,18 @@ export function createAnalyticsSyncService(deps: AnalyticsSyncDependencies): {
             mapAccountSnapshot(row, accountId, now),
           ),
         ),
-        fetchWithRetry(() => adapter.fetchContentDaily(input), deps.sleep).then((rows) =>
-          (rows as Awaited<ReturnType<YouTubeAnalyticsAdapter["fetchContentDaily"]>>).map((row) =>
-            mapContentSnapshot(row, accountId, now),
-          ),
-        ),
+        fetchWithRetry(() => adapter.fetchContentDaily(input), deps.sleep)
+          .then((rows) =>
+            (rows as Awaited<ReturnType<YouTubeAnalyticsAdapter["fetchContentDaily"]>>).map((row) =>
+              mapContentSnapshot(row, accountId, now),
+            ),
+          )
+          .catch((error: unknown) => {
+            if (error instanceof YouTubeAnalyticsApiError && error.classification === "unsupported_query") {
+              return [] as AnalyticsSnapshotInput[];
+            }
+            throw error;
+          }),
       ];
 
       const allTasks = [...coreSnapshotTasks, ...dimensionSnapshotTasks];
@@ -557,9 +564,7 @@ export function createAnalyticsSyncService(deps: AnalyticsSyncDependencies): {
         throw nonRetryable ?? errors[0];
       }
 
-      const snapshots = (fetchResults as PromiseFulfilledResult<AnalyticsSnapshotInput[]>[]).flatMap(
-        (r) => r.value,
-      );
+      const snapshots = (fetchResults as PromiseFulfilledResult<AnalyticsSnapshotInput[]>[]).flatMap((r) => r.value);
 
       // Channel identity guard for all snapshots that carry channelId
       const mismatched = snapshots.some((s) => {

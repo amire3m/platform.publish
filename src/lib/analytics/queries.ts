@@ -363,7 +363,7 @@ export function createAnalyticsQueryService(repository: AnalyticsQueryRepository
         && row.dateUtc >= input.startDate
         && row.dateUtc < input.endDate
       ).map((row): AnalyticsExportRow => ({
-        scope: row.scopeType,
+        scope: row.scopeType as AnalyticsExportRow["scope"],
         date: row.dateUtc,
         accountId: row.accountId,
         channelId: row.channelId,

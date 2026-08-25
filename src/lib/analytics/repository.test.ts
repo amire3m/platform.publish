@@ -810,4 +810,196 @@ describe("analytics repository", () => {
     expect(serialized).not.toContain("metric-secret");
     expect(serialized).not.toContain("metadata-secret");
   });
+
+  it("maps geo snapshot to persistence row with country and ctr", async () => {
+    const port = new StatefulAnalyticsPort();
+    const repository = createAnalyticsRepository(port);
+    const geoSnapshot = {
+      platform: "youtube",
+      accountId: "account-1",
+      scopeType: "geo",
+      scopeId: "IR",
+      date: baseDate,
+      fetchedAt,
+      metrics: {
+        metricType: "geo",
+        views: 100,
+        likes: 5,
+        comments: 2,
+        shares: 1,
+        watchTimeMinutes: 50,
+        averageViewDurationSeconds: 30,
+        impressions: 1000,
+        ctr: 0.1,
+        estimatedRevenue: 12.5,
+        cpm: 2.3,
+      },
+      metadata: {
+        metadataType: "geo",
+        channelId: "channel-1",
+        channelTitle: "Channel One",
+        country: "IR",
+      },
+    } as unknown as AnalyticsSnapshotInput;
+
+    await repository.upsertSnapshots([geoSnapshot]);
+
+    const persisted = [...port.snapshots.values()][0];
+    expect(persisted).toMatchObject({
+      scopeType: "geo",
+      scopeId: "IR",
+      impressions: 1000,
+      ctr: 0.1,
+      estimatedRevenue: "12.5",
+      cpm: "2.3",
+    });
+    expect(persisted?.rawMetrics).toMatchObject({
+      metricType: "geo",
+      metadataType: "geo",
+      country: "IR",
+      views: 100,
+      impressions: 1000,
+      ctr: 0.1,
+    });
+
+    const rows = await repository.readSnapshots({ accountIds: ["account-1"], scopeType: "geo" as unknown as AnalyticsSnapshotFilter["scopeType"] });
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      scopeType: "geo",
+      scopeId: "IR",
+      country: "IR",
+      views: 100,
+      impressions: 1000,
+      ctr: 0.1,
+    });
+  });
+
+  it("maps retention snapshot with videoId and averageViewPercentage", async () => {
+    const port = new StatefulAnalyticsPort();
+    const repository = createAnalyticsRepository(port);
+    const retentionSnapshot = {
+      platform: "youtube",
+      accountId: "account-1",
+      scopeType: "retention",
+      scopeId: "video-youtube-9",
+      date: baseDate,
+      fetchedAt,
+      metrics: {
+        metricType: "retention",
+        views: 500,
+        likes: 20,
+        comments: 5,
+        shares: 3,
+        watchTimeMinutes: 300,
+        averageViewDurationSeconds: 60,
+        averageViewPercentage: 42.5,
+        impressions: 800,
+      },
+      metadata: {
+        metadataType: "retention",
+        channelId: "channel-1",
+        channelTitle: "Channel One",
+        videoId: "video-youtube-9",
+        title: "Retention Video",
+      },
+    } as unknown as AnalyticsSnapshotInput;
+
+    await repository.upsertSnapshots([retentionSnapshot]);
+
+    const persisted = [...port.snapshots.values()][0];
+    expect(persisted).toMatchObject({
+      scopeType: "retention",
+      scopeId: "video-youtube-9",
+      rawMetrics: expect.objectContaining({
+        metricType: "retention",
+        averageViewPercentage: 42.5,
+        videoId: "video-youtube-9",
+      }),
+    });
+
+    const rows = await repository.readSnapshots({ accountIds: ["account-1"], scopeType: "retention" as unknown as AnalyticsSnapshotFilter["scopeType"] });
+    expect(rows[0]).toMatchObject({
+      scopeType: "retention",
+      scopeId: "video-youtube-9",
+      videoId: "video-youtube-9",
+      averageViewPercentage: 42.5,
+    });
+  });
+
+  it("persists search snapshot with keyword containing colons safely", async () => {
+    const port = new StatefulAnalyticsPort();
+    const repository = createAnalyticsRepository(port);
+    const keyword = "how to: cook: rice";
+    const searchSnapshot = {
+      platform: "youtube",
+      accountId: "account-1",
+      scopeType: "search",
+      scopeId: keyword,
+      date: baseDate,
+      fetchedAt,
+      metrics: {
+        metricType: "search",
+        views: 250,
+        likes: 10,
+        comments: 1,
+        shares: 0,
+        watchTimeMinutes: 80,
+        averageViewDurationSeconds: 25,
+        impressions: 2000,
+      },
+      metadata: {
+        metadataType: "search",
+        channelId: "channel-1",
+        channelTitle: "Channel One",
+        keyword,
+      },
+    } as unknown as AnalyticsSnapshotInput;
+
+    await repository.upsertSnapshots([searchSnapshot]);
+
+    const persisted = [...port.snapshots.values()][0];
+    expect(persisted?.scopeId).toBe(keyword);
+    expect(persisted?.rawMetrics).toMatchObject({ keyword });
+
+    const rows = await repository.readSnapshots({ accountIds: ["account-1"], scopeType: "search" as unknown as AnalyticsSnapshotFilter["scopeType"] });
+    expect(rows[0]).toMatchObject({
+      scopeType: "search",
+      keyword,
+      scopeId: keyword,
+    });
+  });
+
+  it("derives ctr as views/impressions when ctr not provided", async () => {
+    const port = new StatefulAnalyticsPort();
+    const repository = createAnalyticsRepository(port);
+    const geoSnapshot = {
+      platform: "youtube",
+      accountId: "account-1",
+      scopeType: "geo",
+      scopeId: "US",
+      date: baseDate,
+      fetchedAt,
+      metrics: {
+        metricType: "geo",
+        views: 50,
+        likes: 0,
+        comments: 0,
+        shares: 0,
+        watchTimeMinutes: 10,
+        averageViewDurationSeconds: 20,
+        impressions: 200,
+      },
+      metadata: {
+        metadataType: "geo",
+        channelId: "channel-1",
+        channelTitle: "Channel One",
+        country: "US",
+      },
+    } as unknown as AnalyticsSnapshotInput;
+
+    await repository.upsertSnapshots([geoSnapshot]);
+    const persisted = [...port.snapshots.values()][0];
+    expect(persisted?.ctr).toBeCloseTo(0.25);
+    expect(persisted?.rawMetrics).toMatchObject({ ctr: 0.25 });
+  });
 });

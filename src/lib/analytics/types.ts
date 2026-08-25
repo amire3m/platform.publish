@@ -84,6 +84,16 @@ export interface ContentDailyMetric extends DailyMetric {
   publishedAt: Date | null;
 }
 
+export type AnalyticsScopeType =
+  | "account"
+  | "content"
+  | "geo"
+  | "age_gender"
+  | "device"
+  | "traffic"
+  | "search"
+  | "retention";
+
 interface AnalyticsSnapshotBase {
   platform: "youtube";
   accountId: string;
@@ -104,9 +114,185 @@ export interface ContentAnalyticsSnapshotInput extends AnalyticsSnapshotBase {
   metadata: ContentSnapshotMetadata;
 }
 
+export interface GeoSnapshotMetrics {
+  metricType: "geo";
+  views: number;
+  likes: number;
+  comments: number;
+  shares: number;
+  watchTimeMinutes: number;
+  averageViewDurationSeconds: number;
+  impressions?: number | null;
+  ctr?: number | null;
+  estimatedRevenue?: number | null;
+  cpm?: number | null;
+  averageViewPercentage?: number | null;
+}
+
+export interface GeoSnapshotMetadata {
+  metadataType: "geo";
+  channelId: string;
+  channelTitle: string;
+  country: string;
+}
+
+export interface GeoAnalyticsSnapshotInput extends AnalyticsSnapshotBase {
+  scopeType: "geo";
+  metrics: GeoSnapshotMetrics;
+  metadata: GeoSnapshotMetadata;
+}
+
+export interface AgeGenderSnapshotMetrics {
+  metricType: "age_gender";
+  views: number;
+  likes: number;
+  comments: number;
+  shares: number;
+  watchTimeMinutes: number;
+  averageViewDurationSeconds: number;
+  impressions?: number | null;
+  ctr?: number | null;
+  estimatedRevenue?: number | null;
+  cpm?: number | null;
+  averageViewPercentage?: number | null;
+}
+
+export interface AgeGenderSnapshotMetadata {
+  metadataType: "age_gender";
+  channelId: string;
+  channelTitle: string;
+  ageGroup: string;
+  gender: string;
+}
+
+export interface AgeGenderAnalyticsSnapshotInput extends AnalyticsSnapshotBase {
+  scopeType: "age_gender";
+  metrics: AgeGenderSnapshotMetrics;
+  metadata: AgeGenderSnapshotMetadata;
+}
+
+export interface DeviceSnapshotMetrics {
+  metricType: "device";
+  views: number;
+  likes: number;
+  comments: number;
+  shares: number;
+  watchTimeMinutes: number;
+  averageViewDurationSeconds: number;
+  impressions?: number | null;
+  ctr?: number | null;
+  estimatedRevenue?: number | null;
+  cpm?: number | null;
+  averageViewPercentage?: number | null;
+}
+
+export interface DeviceSnapshotMetadata {
+  metadataType: "device";
+  channelId: string;
+  channelTitle: string;
+  deviceType: string;
+}
+
+export interface DeviceAnalyticsSnapshotInput extends AnalyticsSnapshotBase {
+  scopeType: "device";
+  metrics: DeviceSnapshotMetrics;
+  metadata: DeviceSnapshotMetadata;
+}
+
+export interface TrafficSnapshotMetrics {
+  metricType: "traffic";
+  views: number;
+  likes: number;
+  comments: number;
+  shares: number;
+  watchTimeMinutes: number;
+  averageViewDurationSeconds: number;
+  impressions?: number | null;
+  ctr?: number | null;
+  estimatedRevenue?: number | null;
+  cpm?: number | null;
+  averageViewPercentage?: number | null;
+}
+
+export interface TrafficSnapshotMetadata {
+  metadataType: "traffic";
+  channelId: string;
+  channelTitle: string;
+  trafficSource: string;
+}
+
+export interface TrafficAnalyticsSnapshotInput extends AnalyticsSnapshotBase {
+  scopeType: "traffic";
+  metrics: TrafficSnapshotMetrics;
+  metadata: TrafficSnapshotMetadata;
+}
+
+export interface SearchSnapshotMetrics {
+  metricType: "search";
+  views: number;
+  likes: number;
+  comments: number;
+  shares: number;
+  watchTimeMinutes: number;
+  averageViewDurationSeconds: number;
+  impressions?: number | null;
+  ctr?: number | null;
+  estimatedRevenue?: number | null;
+  cpm?: number | null;
+  averageViewPercentage?: number | null;
+}
+
+export interface SearchSnapshotMetadata {
+  metadataType: "search";
+  channelId: string;
+  channelTitle: string;
+  keyword: string;
+}
+
+export interface SearchAnalyticsSnapshotInput extends AnalyticsSnapshotBase {
+  scopeType: "search";
+  metrics: SearchSnapshotMetrics;
+  metadata: SearchSnapshotMetadata;
+}
+
+export interface RetentionSnapshotMetrics {
+  metricType: "retention";
+  views: number;
+  likes: number;
+  comments: number;
+  shares: number;
+  watchTimeMinutes: number;
+  averageViewDurationSeconds: number;
+  impressions?: number | null;
+  ctr?: number | null;
+  estimatedRevenue?: number | null;
+  cpm?: number | null;
+  averageViewPercentage?: number | null;
+}
+
+export interface RetentionSnapshotMetadata {
+  metadataType: "retention";
+  channelId: string;
+  channelTitle: string;
+  videoId: string;
+  title?: string;
+}
+
+export interface RetentionAnalyticsSnapshotInput extends AnalyticsSnapshotBase {
+  scopeType: "retention";
+  metrics: RetentionSnapshotMetrics;
+  metadata: RetentionSnapshotMetadata;
+}
+
 export type AnalyticsSnapshotInput =
   | AccountAnalyticsSnapshotInput
-  | ContentAnalyticsSnapshotInput;
+  | ContentAnalyticsSnapshotInput
+  | GeoAnalyticsSnapshotInput
+  | AgeGenderAnalyticsSnapshotInput
+  | DeviceAnalyticsSnapshotInput
+  | TrafficAnalyticsSnapshotInput
+  | SearchAnalyticsSnapshotInput
+  | RetentionAnalyticsSnapshotInput;
 
 export interface AccountSnapshotMetrics {
   metricType: "account";

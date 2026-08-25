@@ -4,6 +4,29 @@ import { describe, expect, it } from "vitest";
 
 import { analyticsSnapshots, appSettings, socialAccounts } from "./schema";
 
+describe("analytics full schema", () => {
+  it("has impressions/ctr/revenue columns", () => {
+    const columns = getTableColumns(analyticsSnapshots);
+    expect(Object.keys(columns)).toEqual(
+      expect.arrayContaining(["impressions", "ctr", "estimatedRevenue", "cpm"]),
+    );
+    expect(columns.impressions.notNull).toBe(false);
+    expect(columns.ctr.notNull).toBe(false);
+    expect(columns.estimatedRevenue.notNull).toBe(false);
+    expect(columns.cpm.notNull).toBe(false);
+  });
+
+  it("defines dimension index on account_id, scope_type, date_utc", () => {
+    const indexes = getTableConfig(analyticsSnapshots).indexes;
+    const dimIdx = indexes.find((idx) => idx.config.name === "analytics_snapshots_dimension_idx");
+    expect(dimIdx).toBeDefined();
+    expect(
+      dimIdx?.config.columns.map((column) => ("name" in column ? column.name : undefined)),
+    ).toEqual(["account_id", "scope_type", "date_utc"]);
+    expect(dimIdx?.config.unique).toBe(false);
+  });
+});
+
 describe("analytics schema", () => {
   it("defines snapshot scope and content metadata with the required nullability", () => {
     const columns = getTableColumns(analyticsSnapshots);

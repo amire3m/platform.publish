@@ -23,6 +23,7 @@ import { sql } from "drizzle-orm";
 import {
   bigint,
   boolean,
+  doublePrecision,
   index,
   integer,
   jsonb,
@@ -199,6 +200,10 @@ export const analyticsSnapshots = pgTable(
     watchTime: bigint("watch_time", { mode: "number" }).default(0),
     averageViewDuration: numeric("average_view_duration").default("0"),
     engagementRate: numeric("engagement_rate").default("0"),
+    impressions: integer("impressions"),
+    ctr: doublePrecision("ctr"),
+    estimatedRevenue: numeric("estimated_revenue"),
+    cpm: numeric("cpm"),
     rawMetrics: jsonb("raw_metrics").$type<Record<string, unknown>>().notNull().default({}),
     telegramMessageId: integer("telegram_message_id"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -211,6 +216,7 @@ export const analyticsSnapshots = pgTable(
       table.scopeId,
       table.dateUtc,
     ),
+    dimensionIdx: index("analytics_snapshots_dimension_idx").on(table.accountId, table.scopeType, table.dateUtc),
   }),
 );
 

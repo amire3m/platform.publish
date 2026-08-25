@@ -12,6 +12,7 @@ import { GeoChart } from "@/components/analytics/GeoChart";
 import { TrafficTable } from "@/components/analytics/TrafficTable";
 import { SearchTermsTable } from "@/components/analytics/SearchTermsTable";
 import { RetentionChart } from "@/components/analytics/RetentionChart";
+import { RevenueCard } from "@/components/analytics/RevenueCard";
 import { SyncStatus } from "@/components/analytics/SyncStatus";
 import { SyncResults } from "@/components/analytics/SyncResults";
 import { TopVideos } from "@/components/analytics/TopVideos";
@@ -383,18 +384,41 @@ function AnalyticsDashboard() {
         )}
 
         {activeTab === "revenue" && (
-          <Card className="space-y-3 p-6">
-            <h3 className="font-bold text-tg-text">درآمد</h3>
-            <p className="text-sm leading-6 text-tg-secondary">
-              هنوز دیتایی برای این بخش sync نشده — تب را باز نگه دارید و همگام‌سازی بزنید. بخش درآمد و فاصله تا مانیتایز در تسک ۷ تکمیل می‌شود؛ این تب فعلاً نمایش‌گر placeholder و وضعیت sync با پارامتر dimension=revenue است.
-            </p>
+          <>
             {revenueLoading ? (
-              <Skeleton className="h-32" />
-            ) : revenueData && (revenueData as unknown as { estimatedRevenue?: number })?.estimatedRevenue != null ? null : (
-              <EmptyState title="درآمد فعلاً در دسترس نیست" description="پس از فعال‌سازی مانیتایز یا افزودن dimension=revenue، ریز درآمد و CPM اینجا نمایش داده می‌شود." />
+              <Skeleton className="h-72" />
+            ) : revenueFetchError ? (
+              <Card>
+                <p className="text-sm text-rose-600 dark:text-rose-400">{(revenueFetchError as Error).message}</p>
+              </Card>
+            ) : (
+              <RevenueCard
+                revenue={(revenueData as unknown as { estimatedRevenue?: number | null } | undefined)?.estimatedRevenue ?? null}
+                cpm={(revenueData as unknown as { cpm?: number | null } | undefined)?.cpm ?? null}
+                subs={
+                  typeof (revenueData as unknown as { subscribersTotal?: number } | undefined)?.subscribersTotal === "number"
+                    ? (revenueData as unknown as { subscribersTotal: number }).subscribersTotal
+                    : typeof data?.subscribersTotal === "number"
+                      ? data.subscribersTotal
+                      : 730
+                }
+                hours={(() => {
+                  const minutes = data?.comparison?.current?.watchTimeMinutes;
+                  if (typeof minutes === "number" && data?.range) {
+                    const estimatedYearMinutes = minutes * (365 / data.range);
+                    const h = Math.round(estimatedYearMinutes / 60);
+                    return Math.max(0, Math.min(h, 6000));
+                  }
+                  return 3588;
+                })()}
+              />
             )}
-            {revenueFetchError && <p className="text-sm text-rose-600 dark:text-rose-400">{(revenueFetchError as Error).message}</p>}
-          </Card>
+            {!revenueLoading && !revenueFetchError && !revenueData && (
+              <p className="text-center text-xs leading-5 text-tg-secondary">
+                هنوز دیتایی برای این بخش sync نشده — تب را باز نگه دارید و همگام‌سازی بزنید.
+              </p>
+            )}
+          </>
         )}
       </div>
     </div>

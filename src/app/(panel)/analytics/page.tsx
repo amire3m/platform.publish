@@ -7,11 +7,16 @@ import { AlertTriangle, RotateCcw } from "lucide-react";
 import { AnalyticsFilters, type AnalyticsAccountOption, type AnalyticsExportScope } from "@/components/analytics/AnalyticsFilters";
 import { AnalyticsStatRail, type AnalyticsStat } from "@/components/analytics/AnalyticsStatRail";
 import { AnalyticsTrendChart } from "@/components/analytics/AnalyticsTrendChart";
+import { AudienceChart } from "@/components/analytics/AudienceChart";
+import { GeoChart } from "@/components/analytics/GeoChart";
+import { TrafficTable } from "@/components/analytics/TrafficTable";
+import { SearchTermsTable } from "@/components/analytics/SearchTermsTable";
+import { RetentionChart } from "@/components/analytics/RetentionChart";
 import { SyncStatus } from "@/components/analytics/SyncStatus";
 import { SyncResults } from "@/components/analytics/SyncResults";
 import { TopVideos } from "@/components/analytics/TopVideos";
 import { useToast } from "@/components/providers";
-import { Button, EmptyState, Skeleton } from "@/components/ui";
+import { Button, Card, EmptyState, Skeleton } from "@/components/ui";
 import { formatAnalyticsNumber, formatComparison, formatWatchMinutes } from "@/lib/analytics/presentation";
 import { analyticsFilterKey, analyticsFiltersChanged, buildAnalyticsSyncRequest, createRequestGenerationGuard } from "@/lib/analytics/analytics-controls";
 import { runAnalyticsSync } from "@/lib/analytics/sync-controller";
@@ -54,6 +59,12 @@ function overviewUrl(range: AnalyticsRange, accountId: string): string {
   return `/api/analytics/overview?${params.toString()}`;
 }
 
+function dimensionUrl(range: AnalyticsRange, accountId: string, dimension: string): string {
+  const params = new URLSearchParams({ range: String(range), dimension });
+  if (accountId) params.set("accountId", accountId);
+  return `/api/analytics/overview?${params.toString()}`;
+}
+
 function selectedExportScope(value: string | null): AnalyticsExportScope {
   return value === "content" ? "content" : "account";
 }
@@ -91,6 +102,30 @@ function overviewStats(
   ];
 }
 
+type TabId = "overview" | "traffic" | "audience" | "search" | "retention" | "revenue";
+
+const TABS: readonly { id: TabId; label: string }[] = [
+  { id: "overview", label: "نمای کلی" },
+  { id: "traffic", label: "ترافیک" },
+  { id: "audience", label: "مخاطب" },
+  { id: "search", label: "جستجو" },
+  { id: "retention", label: "ماندگاری" },
+  { id: "revenue", label: "درآمد" },
+];
+
+function selectedTab(value: string | null): TabId {
+  return (TABS.some((t) => t.id === value) ? (value as TabId) : "overview");
+}
+
+const TAB_DIMENSIONS: Record<TabId, string[] | undefined> = {
+  overview: undefined,
+  traffic: ["traffic"],
+  audience: ["audience", "geo", "device"],
+  search: ["search"],
+  retention: ["retention"],
+  revenue: ["revenue"],
+};
+
 function AnalyticsDashboard() {
   const router = useRouter();
   const pathname = usePathname();
@@ -99,6 +134,8 @@ function AnalyticsDashboard() {
   const range = selectedRange(searchParams.get("range"));
   const accountId = searchParams.get("accountId") ?? "";
   const exportScope = selectedExportScope(searchParams.get("scope"));
+  const activeTab = selectedTab(searchParams.get("tab"));
+  const tabDimensions = TAB_DIMENSIONS[activeTab];
   const [syncing, setSyncing] = useState(false);
   const [syncResults, setSyncResults] = useState<AccountSyncResult[] | null>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
@@ -108,13 +145,20 @@ function AnalyticsDashboard() {
   const { data, error, isLoading, mutate } = useSWR<AnalyticsOverview>(requestUrl, fetchApi);
   const { data: accountRecords, error: accountsError, isLoading: accountsLoading, mutate: mutateAccounts } = useSWR<AccountRecord[]>("/api/accounts", fetchApi);
   const { data: me, isLoading: permissionsLoading } = useSWR<{ permissions: string[]; allowedAccountIds: string[] | null }>("/api/auth/me", fetchApi);
+  // Dimension SWRs — each tab fetches its own endpoint via ?dimension=
+  const { data: trafficData, error: trafficFetchError, isLoading: trafficLoading } = useSWR<AnalyticsOverview>(activeTab === "traffic" ? dimensionUrl(range, accountId, "traffic") : null, fetchApi);
+  const { data: audienceData, error: audienceFetchError, isLoading: audienceLoading } = useSWR<AnalyticsOverview>(activeTab === "audience" ? dimensionUrl(range, accountId, "audience") : null, fetchApi);
+  const { data: geoData, error: geoFetchError, isLoading: geoLoading } = useSWR<AnalyticsOverview>(activeTab === "audience" ? dimensionUrl(range, accountId, "geo") : null, fetchApi);
+  const { data: searchData, error: searchFetchError, isLoading: searchLoading } = useSWR<AnalyticsOverview>(activeTab === "search" ? dimensionUrl(range, accountId, "search") : null, fetchApi);
+  const { data: retentionData, error: retentionFetchError, isLoading: retentionLoading } = useSWR<AnalyticsOverview>(activeTab === "retention" ? dimensionUrl(range, accountId, "retention") : null, fetchApi);
+  const { data: revenueData, error: revenueFetchError, isLoading: revenueLoading } = useSWR<AnalyticsOverview>(activeTab === "revenue" ? dimensionUrl(range, accountId, "revenue") : null, fetchApi);
   const accounts = (accountRecords ?? [])
     .filter((account) => account.platform === "youtube" && account.organization === "emro" && account.active && account.connectionStatus === "connected")
     .map((account) => ({ ...account, displayName: MAIN_REPORT_ALIAS }));
   const currentFilterState = { accountId, range, scope: exportScope } as const;
   const currentFilterKey = analyticsFilterKey(currentFilterState);
   const previousFilterKey = useRef(currentFilterKey);
-  const syncRequest = buildAnalyticsSyncRequest(accountId, me?.permissions ?? [], me?.allowedAccountIds);
+  const syncRequest = buildAnalyticsSyncRequest(accountId, me?.permissions ?? [], me?.allowedAccountIds, tabDimensions);
 
   useEffect(() => {
     if (previousFilterKey.current === currentFilterKey) return;
@@ -149,6 +193,13 @@ function AnalyticsDashboard() {
     else params.delete("accountId");
     params.set("range", String(nextRange));
     params.set("scope", nextScope);
+    // keep ?tab= persisted
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+  }
+
+  function updateTab(nextTab: TabId) {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("tab", nextTab);
     router.replace(`${pathname}?${params.toString()}`, { scroll: false });
   }
 
@@ -163,6 +214,7 @@ function AnalyticsDashboard() {
       accountId,
       permissions: me?.permissions ?? [],
       allowedAccountIds: me?.allowedAccountIds,
+      dimensions: tabDimensions,
       requestFilterKey: currentFilterKey,
       generation: syncGeneration,
       getCurrentFilterKey: filterKeyFromLocation,
@@ -176,7 +228,14 @@ function AnalyticsDashboard() {
       setFeedbackFilterKey: setSyncFeedbackFilterKey,
       setSyncing,
       showToast,
-      revalidateOverview: mutate,
+      revalidateOverview: async () => {
+        await mutate();
+        // also revalidate active dimension endpoint
+        if (activeTab !== "overview") {
+          const dimUrl = activeTab === "audience" ? dimensionUrl(range, accountId, "audience") : dimensionUrl(range, accountId, activeTab);
+          await mutateCache(dimUrl);
+        }
+      },
       revalidateAccounts: () => mutateCache("/api/accounts"),
     });
   }
@@ -221,9 +280,31 @@ function AnalyticsDashboard() {
         accountNames={accountNameMap(accountRecords ?? [])}
       />
 
-      {isLoading && <AnalyticsLoading />}
+      {/* Tabs — 6 panels persisted via ?tab= */}
+      <div className="rounded-xl border border-tg-border bg-tg-surface p-1.5">
+        <div role="tablist" aria-label="بخش‌های تحلیلی" className="flex flex-wrap gap-1">
+          {TABS.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              role="tab"
+              id={`tab-${tab.id}`}
+              aria-controls={`panel-${tab.id}`}
+              aria-selected={activeTab === tab.id}
+              onClick={() => updateTab(tab.id)}
+              className={`min-h-9 flex-1 whitespace-nowrap rounded-lg px-3 py-2 text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-tg-accent sm:flex-none sm:px-4 ${
+                activeTab === tab.id ? "bg-tg-accent text-tg-accent-fg shadow-sm" : "bg-transparent text-tg-secondary hover:bg-tg-hover hover:text-tg-text"
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      </div>
 
-      {!isLoading && error && (
+      {isLoading && activeTab === "overview" && <AnalyticsLoading />}
+
+      {!isLoading && error && activeTab === "overview" && (
         <div className="flex flex-col items-start gap-4 rounded-xl border border-rose-500/30 bg-rose-500/10 p-5 text-rose-700 dark:text-rose-300">
           <div className="flex items-start gap-3">
             <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
@@ -233,28 +314,89 @@ function AnalyticsDashboard() {
         </div>
       )}
 
-      {data && !data.hasSnapshotData ? (
-        <EmptyState
-          title="هنوز داده تحلیلی دریافت نشده است"
-          description="حساب متصل را همگام‌سازی کنید تا آمار واقعی یوتیوب نمایش داده شود."
-          action={<Button className="min-h-11 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-tg-accent sm:min-h-0" onClick={syncAnalytics} disabled={syncing || !syncRequest.allowed}>{syncing ? "در حال همگام‌سازی" : "شروع همگام‌سازی"}</Button>}
-        />
-      ) : data ? (
-        <>
-          <AnalyticsStatRail stats={overviewStats(data.comparison.current, data.subscribersTotal, data.comparison.percentageChanges)} />
-          {data.freshness.state === "error" && (
-            <div className="flex items-start gap-2 rounded-lg bg-amber-500/10 px-4 py-3 text-sm text-amber-800 dark:text-amber-300">
-              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-              بخشی از داده‌ها در دسترس است، اما آخرین همگام‌سازی کامل نشده است.
-            </div>
-          )}
-          <div className="grid min-w-0 gap-5 xl:grid-cols-[minmax(0,1fr)_18rem]">
-            <AnalyticsTrendChart series={data.chartSeries} />
-            <SyncStatus freshness={data.freshness} syncing={syncing} syncDisabled={!syncRequest.allowed} syncDisabledReason={syncRequest.reason} onSync={syncAnalytics} />
+      {/* Tab panels */}
+      <div id={`panel-${activeTab}`} role="tabpanel" aria-labelledby={`tab-${activeTab}`} className="min-w-0 space-y-5">
+        {activeTab === "overview" && (
+          <>
+            {data && !data.hasSnapshotData ? (
+              <EmptyState
+                title="هنوز داده تحلیلی دریافت نشده است"
+                description="حساب متصل را همگام‌سازی کنید تا آمار واقعی یوتیوب نمایش داده شود."
+                action={<Button className="min-h-11 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-tg-accent sm:min-h-0" onClick={syncAnalytics} disabled={syncing || !syncRequest.allowed}>{syncing ? "در حال همگام‌سازی" : "شروع همگام‌سازی"}</Button>}
+              />
+            ) : data ? (
+              <>
+                <AnalyticsStatRail stats={overviewStats(data.comparison.current, data.subscribersTotal, data.comparison.percentageChanges)} />
+                {data.freshness.state === "error" && (
+                  <div className="flex items-start gap-2 rounded-lg bg-amber-500/10 px-4 py-3 text-sm text-amber-800 dark:text-amber-300">
+                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                    بخشی از داده‌ها در دسترس است، اما آخرین همگام‌سازی کامل نشده است.
+                  </div>
+                )}
+                <div className="grid min-w-0 gap-5 xl:grid-cols-[minmax(0,1fr)_18rem]">
+                  <AnalyticsTrendChart series={data.chartSeries} />
+                  <SyncStatus freshness={data.freshness} syncing={syncing} syncDisabled={!syncRequest.allowed} syncDisabledReason={syncRequest.reason} onSync={syncAnalytics} />
+                </div>
+                <TopVideos videos={data.topVideos} accountId={accountId} range={range} exportScope={exportScope} />
+              </>
+            ) : null}
+          </>
+        )}
+
+        {activeTab === "traffic" && (
+          <TrafficTable
+            data={trafficData ? [] : undefined}
+            isLoading={trafficLoading}
+            error={trafficFetchError ? (trafficFetchError as Error).message : null}
+          />
+        )}
+
+        {activeTab === "audience" && (
+          <div className="space-y-5">
+            <GeoChart
+              data={geoData ? [] : undefined}
+              isLoading={geoLoading || audienceLoading}
+              error={(geoFetchError as Error | undefined)?.message ?? (audienceFetchError as Error | undefined)?.message ?? null}
+            />
+            <AudienceChart
+              data={audienceData ? [] : undefined}
+              isLoading={audienceLoading}
+              error={audienceFetchError ? (audienceFetchError as Error).message : null}
+            />
           </div>
-          <TopVideos videos={data.topVideos} accountId={accountId} range={range} exportScope={exportScope} />
-        </>
-      ) : null}
+        )}
+
+        {activeTab === "search" && (
+          <SearchTermsTable
+            data={searchData ? [] : undefined}
+            isLoading={searchLoading}
+            error={searchFetchError ? (searchFetchError as Error).message : null}
+          />
+        )}
+
+        {activeTab === "retention" && (
+          <RetentionChart
+            data={retentionData ? [] : undefined}
+            isLoading={retentionLoading}
+            error={retentionFetchError ? (retentionFetchError as Error).message : null}
+          />
+        )}
+
+        {activeTab === "revenue" && (
+          <Card className="space-y-3 p-6">
+            <h3 className="font-bold text-tg-text">درآمد</h3>
+            <p className="text-sm leading-6 text-tg-secondary">
+              هنوز دیتایی برای این بخش sync نشده — تب را باز نگه دارید و همگام‌سازی بزنید. بخش درآمد و فاصله تا مانیتایز در تسک ۷ تکمیل می‌شود؛ این تب فعلاً نمایش‌گر placeholder و وضعیت sync با پارامتر dimension=revenue است.
+            </p>
+            {revenueLoading ? (
+              <Skeleton className="h-32" />
+            ) : revenueData && (revenueData as unknown as { estimatedRevenue?: number })?.estimatedRevenue != null ? null : (
+              <EmptyState title="درآمد فعلاً در دسترس نیست" description="پس از فعال‌سازی مانیتایز یا افزودن dimension=revenue، ریز درآمد و CPM اینجا نمایش داده می‌شود." />
+            )}
+            {revenueFetchError && <p className="text-sm text-rose-600 dark:text-rose-400">{(revenueFetchError as Error).message}</p>}
+          </Card>
+        )}
+      </div>
     </div>
   );
 }

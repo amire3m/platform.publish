@@ -28,6 +28,7 @@ interface AnalyticsSyncControllerOptions {
   accountId: string;
   permissions: readonly string[];
   allowedAccountIds: readonly string[] | null | undefined;
+  dimensions?: readonly string[] | null;
   requestFilterKey: string;
   generation: RequestGenerationGuard;
   getCurrentFilterKey(): string;
@@ -68,6 +69,7 @@ export async function runAnalyticsSync(options: AnalyticsSyncControllerOptions):
       options.permissions,
       options.allowedAccountIds,
       options.fetchSync,
+      options.dimensions,
     );
     if (!attempt.sent) {
       if (!completionIsCurrent()) return;

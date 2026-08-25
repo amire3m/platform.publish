@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import useSWR from "swr";
 import { Plus, Trash2 } from "lucide-react";
 import { InstagramIcon, YoutubeIcon } from "@/components/brand-icons";
-import { Button, Card, ConfirmModal, EmptyState, Input, Label, Modal, Select, Skeleton, StatusBadge } from "@/components/ui";
+import { Button, Card, ConfirmModal, EmptyState, Label, Modal, Select, Skeleton, StatusBadge } from "@/components/ui";
 import { useToast } from "@/components/providers";
 import { formatJalaliDateTime } from "@/lib/date/jalali";
 import type { PublicAccountDto } from "@/lib/accounts/public";
@@ -28,10 +28,6 @@ export default function AccountsPage() {
   const { showToast } = useToast();
   const [open, setOpen] = useState(false);
   const [platform, setPlatform] = useState<"youtube" | "instagram">("youtube");
-  const [username, setUsername] = useState("");
-  const [displayName, setDisplayName] = useState("");
-  const [topicId, setTopicId] = useState("");
-  const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Account | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [savingTopicId, setSavingTopicId] = useState<string | null>(null);
@@ -43,31 +39,11 @@ export default function AccountsPage() {
     if (params.get("error")) showToast(oauthErrorMessageFa(params.get("error")), "error");
   }, [showToast]);
 
-  async function connectMock() {
-    setSaving(true);
-    try {
-      const res = await fetch(`/api/accounts/connect/${platform}`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ mode: "mock", username, displayName, topicId: topicId || undefined }),
-      });
-      const json = await res.json();
-      if (!json.ok) return showToast(json.error, "error");
-      showToast("حساب آزمایشی ایجاد شد.", "success");
-      setOpen(false);
-      setUsername("");
-      setDisplayName("");
-      mutate();
-    } finally {
-      setSaving(false);
-    }
-  }
-
   async function connectOauth() {
     const res = await fetch(`/api/accounts/connect/${platform}`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ mode: "oauth", username: "-", displayName: "-" }),
+      body: JSON.stringify({ mode: "oauth" }),
     });
     const json = await res.json();
     if (!json.ok) return showToast(json.error, "error");
@@ -241,37 +217,11 @@ export default function AccountsPage() {
               <option value="instagram">اینستاگرام</option>
             </Select>
           </div>
-          <div>
-            <Label>نام کاربری / شناسه</Label>
-            <Input value={username} onChange={(e) => setUsername(e.target.value)} placeholder="مثلاً zaviye_no" />
-          </div>
-          <div>
-            <Label>نام نمایشی</Label>
-            <Input value={displayName} onChange={(e) => setDisplayName(e.target.value)} placeholder="مثلاً زاویه نو" />
-          </div>
-          <div>
-            <Label>تاپیک صف انتشار اختصاصی</Label>
-            <Select value={topicId} onChange={(e) => setTopicId(e.target.value)}>
-              <option value="">بدون تاپیک اختصاصی</option>
-              {topics
-                .filter((t) => t.messageThreadId && t.messageThreadId !== 1)
-                .map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.label}
-                  </option>
-                ))}
-            </Select>
-          </div>
-          <div className="flex gap-2 pt-2">
-            <Button className="flex-1" variant="secondary" onClick={connectOauth}>
-              اتصال رسمی OAuth
-            </Button>
-            <Button className="flex-1" onClick={connectMock} disabled={saving || !username || !displayName}>
-              {saving ? "در حال ایجاد..." : "ایجاد حساب آزمایشی"}
-            </Button>
-          </div>
+          <Button className="w-full" onClick={connectOauth}>
+            اتصال رسمی OAuth
+          </Button>
           <p className="text-[11px] text-tg-secondary/80">
-            اتصال OAuth نیازمند پیکربندی متغیرهای محیطی Google و Meta است؛ در غیر این صورت پیام «پیکربندی نشده» نمایش داده می‌شود.
+            برای ادامه، وارد حساب Google یا Instagram خود می‌شوید و دسترسی لازم را تأیید می‌کنید.
           </p>
         </div>
       </Modal>

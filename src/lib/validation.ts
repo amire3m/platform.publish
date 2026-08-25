@@ -41,11 +41,8 @@ export const updateUserSchema = createUserSchema.partial().extend({
 });
 
 export const socialAccountConnectSchema = z.object({
-  mode: z.enum(["mock", "oauth"]).default("mock"),
-  username: z.string().min(1),
-  displayName: z.string().min(1),
-  topicId: z.string().optional(),
-});
+  mode: z.literal("oauth"),
+}).strict();
 
 export const rescheduleSchema = z.object({
   scheduledAtJalali: z.string().min(1),

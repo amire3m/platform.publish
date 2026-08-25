@@ -238,6 +238,7 @@ export function ConfirmModal({
   description,
   danger,
   loading,
+  confirmLabel = "تأیید",
 }: {
   open: boolean;
   onClose: () => void;
@@ -246,6 +247,7 @@ export function ConfirmModal({
   description: string;
   danger?: boolean;
   loading?: boolean;
+  confirmLabel?: string;
 }) {
   return (
     <Modal
@@ -258,7 +260,7 @@ export function ConfirmModal({
             انصراف
           </Button>
           <Button variant={danger ? "danger" : "primary"} onClick={onConfirm} disabled={loading}>
-            {loading ? "در حال انجام..." : "تأیید"}
+            {loading ? "در حال انجام..." : confirmLabel}
           </Button>
         </>
       }

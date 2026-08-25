@@ -81,7 +81,7 @@ export default function AccountsPage() {
       const res = await fetch(`/api/accounts/${deleteTarget.id}`, { method: "DELETE" });
       const json = await res.json();
       if (!json.ok) return showToast(json.error, "error");
-      showToast("حساب قطع و غیرفعال شد.", "success");
+      showToast("کانال یا پیج برای همیشه حذف شد.", "success");
       mutate();
     } finally {
       setDeleting(false);
@@ -220,7 +220,7 @@ export default function AccountsPage() {
               </p>
             )}
             <div className="mt-4 flex justify-end">
-              <Button variant="ghost" size="sm" onClick={() => setDeleteTarget(a)} disabled={!a.active}>
+              <Button variant="ghost" size="sm" onClick={() => setDeleteTarget(a)}>
                 <Trash2 className="h-3.5 w-3.5" />
                 حذف
               </Button>
@@ -280,14 +280,15 @@ export default function AccountsPage() {
         open={Boolean(deleteTarget)}
         onClose={() => setDeleteTarget(null)}
         onConfirm={deleteAccount}
-        title="حذف حساب"
+        title="حذف دائمی کانال یا پیج"
         description={
           deleteTarget
-            ? `حساب «${deleteTarget.displayName}» قطع و غیرفعال می‌شود. محتوای قبلی حفظ می‌شود ولی این حساب دیگر برای انتشار در دسترس نیست.`
+            ? `«${deleteTarget.displayName}» و اطلاعات اتصال آن برای همیشه حذف می‌شود. سابقه محتوای منتشرشده حفظ خواهد شد، اما این عملیات قابل بازگشت نیست.`
             : ""
         }
         danger
         loading={deleting}
+        confirmLabel="حذف برای همیشه"
       />
     </div>
   );

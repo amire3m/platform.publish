@@ -152,6 +152,22 @@ const defaultDependencies: OverviewDependencies = {
   getLegacyDashboardFields,
 };
 
+const ALLOWED_OVERVIEW_DIMENSIONS = new Set([
+  "geo",
+  "audience",
+  "age_gender",
+  "age-gender",
+  "device",
+  "traffic",
+  "search",
+  "retention",
+  "revenue",
+]);
+
+function normalizeOverviewDimension(dim: string): string {
+  return dim.toLowerCase().trim().replace(/-/g, "_");
+}
+
 export async function handleAnalyticsOverviewRequest(
   request: Request,
   dependencies: OverviewDependencies,
@@ -161,6 +177,14 @@ export async function handleAnalyticsOverviewRequest(
   const url = new URL(request.url);
   const range = parseAnalyticsRange(url.searchParams.get("range") ?? "90");
   if (!range) return jsonError("بازه آمار نامعتبر است.", 422, "INVALID_RANGE");
+  const dimensionRaw = url.searchParams.get("dimension");
+  if (dimensionRaw !== null) {
+    const normalized = normalizeOverviewDimension(dimensionRaw);
+    if (!ALLOWED_OVERVIEW_DIMENSIONS.has(dimensionRaw.toLowerCase().trim()) && !ALLOWED_OVERVIEW_DIMENSIONS.has(normalized)) {
+      return jsonError("بعد آماری نامعتبر است.", 422, "INVALID_DIMENSION");
+    }
+    // Dimension routing will be handled by tab-specific queries in future; currently validated for lazy sync parity.
+  }
   const accountId = url.searchParams.get("accountId") || undefined;
   const reportingAccountIds = await dependencies.listReportingAccountIds();
   const allowedAccountIds = restrictAccountScopeToOrganization(accountScopeForUser(user), reportingAccountIds);

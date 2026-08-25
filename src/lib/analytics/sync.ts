@@ -148,13 +148,269 @@ function mapContentSnapshot(
   };
 }
 
+function mapGeoSnapshot(
+  row: Awaited<ReturnType<NonNullable<YouTubeAnalyticsAdapter["fetchGeoDaily"]>>>[number],
+  accountId: string,
+  fetchedAt: Date,
+): AnalyticsSnapshotInput {
+  return {
+    platform: "youtube",
+    accountId,
+    scopeType: "geo",
+    scopeId: row.country,
+    date: row.date,
+    fetchedAt,
+    metrics: {
+      metricType: "geo",
+      views: row.views,
+      likes: row.likes,
+      comments: row.comments,
+      shares: row.shares,
+      watchTimeMinutes: row.watchTimeMinutes,
+      averageViewDurationSeconds: row.averageViewDurationSeconds,
+      impressions: row.impressions,
+      estimatedRevenue: row.estimatedRevenue,
+      cpm: row.cpm,
+      averageViewPercentage: row.averageViewPercentage,
+    },
+    metadata: {
+      metadataType: "geo",
+      channelId: row.channelId,
+      channelTitle: row.channelTitle,
+      country: row.country,
+    },
+  };
+}
+
+function mapAgeGenderSnapshot(
+  row: Awaited<ReturnType<NonNullable<YouTubeAnalyticsAdapter["fetchAgeGenderDaily"]>>>[number],
+  accountId: string,
+  fetchedAt: Date,
+): AnalyticsSnapshotInput {
+  return {
+    platform: "youtube",
+    accountId,
+    scopeType: "age_gender",
+    scopeId: `${row.ageGroup}:${row.gender}`,
+    date: row.date,
+    fetchedAt,
+    metrics: {
+      metricType: "age_gender",
+      views: row.views,
+      likes: row.likes,
+      comments: row.comments,
+      shares: row.shares,
+      watchTimeMinutes: row.watchTimeMinutes,
+      averageViewDurationSeconds: row.averageViewDurationSeconds,
+      impressions: row.impressions,
+      estimatedRevenue: row.estimatedRevenue,
+      cpm: row.cpm,
+      averageViewPercentage: row.averageViewPercentage,
+    },
+    metadata: {
+      metadataType: "age_gender",
+      channelId: row.channelId,
+      channelTitle: row.channelTitle,
+      ageGroup: row.ageGroup,
+      gender: row.gender,
+    },
+  };
+}
+
+function mapDeviceSnapshot(
+  row: Awaited<ReturnType<NonNullable<YouTubeAnalyticsAdapter["fetchDeviceDaily"]>>>[number],
+  accountId: string,
+  fetchedAt: Date,
+): AnalyticsSnapshotInput {
+  return {
+    platform: "youtube",
+    accountId,
+    scopeType: "device",
+    scopeId: row.deviceType,
+    date: row.date,
+    fetchedAt,
+    metrics: {
+      metricType: "device",
+      views: row.views,
+      likes: row.likes,
+      comments: row.comments,
+      shares: row.shares,
+      watchTimeMinutes: row.watchTimeMinutes,
+      averageViewDurationSeconds: row.averageViewDurationSeconds,
+      impressions: row.impressions,
+      estimatedRevenue: row.estimatedRevenue,
+      cpm: row.cpm,
+      averageViewPercentage: row.averageViewPercentage,
+    },
+    metadata: {
+      metadataType: "device",
+      channelId: row.channelId,
+      channelTitle: row.channelTitle,
+      deviceType: row.deviceType,
+    },
+  };
+}
+
+function mapTrafficSnapshot(
+  row: Awaited<ReturnType<NonNullable<YouTubeAnalyticsAdapter["fetchTrafficDaily"]>>>[number],
+  accountId: string,
+  fetchedAt: Date,
+): AnalyticsSnapshotInput {
+  return {
+    platform: "youtube",
+    accountId,
+    scopeType: "traffic",
+    scopeId: row.trafficSource,
+    date: row.date,
+    fetchedAt,
+    metrics: {
+      metricType: "traffic",
+      views: row.views,
+      likes: row.likes,
+      comments: row.comments,
+      shares: row.shares,
+      watchTimeMinutes: row.watchTimeMinutes,
+      averageViewDurationSeconds: row.averageViewDurationSeconds,
+      impressions: row.impressions,
+      estimatedRevenue: row.estimatedRevenue,
+      cpm: row.cpm,
+      averageViewPercentage: row.averageViewPercentage,
+    },
+    metadata: {
+      metadataType: "traffic",
+      channelId: row.channelId,
+      channelTitle: row.channelTitle,
+      trafficSource: row.trafficSource,
+    },
+  };
+}
+
+function mapSearchSnapshot(
+  row: Awaited<ReturnType<NonNullable<YouTubeAnalyticsAdapter["fetchSearchDaily"]>>>[number],
+  accountId: string,
+  fetchedAt: Date,
+): AnalyticsSnapshotInput {
+  return {
+    platform: "youtube",
+    accountId,
+    scopeType: "search",
+    scopeId: row.keyword,
+    date: row.date,
+    fetchedAt,
+    metrics: {
+      metricType: "search",
+      views: row.views,
+      likes: row.likes,
+      comments: row.comments,
+      shares: row.shares,
+      watchTimeMinutes: row.watchTimeMinutes,
+      averageViewDurationSeconds: row.averageViewDurationSeconds,
+      impressions: row.impressions,
+      estimatedRevenue: row.estimatedRevenue,
+      cpm: row.cpm,
+      averageViewPercentage: row.averageViewPercentage,
+    },
+    metadata: {
+      metadataType: "search",
+      channelId: row.channelId,
+      channelTitle: row.channelTitle,
+      keyword: row.keyword,
+    },
+  };
+}
+
+function mapRetentionSnapshot(
+  row: Awaited<ReturnType<NonNullable<YouTubeAnalyticsAdapter["fetchRetentionDaily"]>>>[number],
+  accountId: string,
+  fetchedAt: Date,
+): AnalyticsSnapshotInput {
+  return {
+    platform: "youtube",
+    accountId,
+    scopeType: "retention",
+    scopeId: row.videoId,
+    date: row.date,
+    fetchedAt,
+    metrics: {
+      metricType: "retention",
+      views: row.views,
+      likes: row.likes,
+      comments: row.comments,
+      shares: row.shares,
+      watchTimeMinutes: row.watchTimeMinutes,
+      averageViewDurationSeconds: row.averageViewDurationSeconds,
+      impressions: row.impressions,
+      estimatedRevenue: row.estimatedRevenue,
+      cpm: row.cpm,
+      averageViewPercentage: row.averageViewPercentage,
+    },
+    metadata: {
+      metadataType: "retention",
+      channelId: row.channelId,
+      channelTitle: row.channelTitle,
+      videoId: row.videoId,
+    },
+  };
+}
+
+function mapRevenueSnapshot(
+  row: Awaited<ReturnType<NonNullable<YouTubeAnalyticsAdapter["fetchRevenueDaily"]>>>[number],
+  accountId: string,
+  fetchedAt: Date,
+): AnalyticsSnapshotInput {
+  // Revenue is daily aggregate; store as retention with synthetic videoId to avoid clobbering account snapshot key.
+  return {
+    platform: "youtube",
+    accountId,
+    scopeType: "retention",
+    scopeId: "revenue",
+    date: row.date,
+    fetchedAt,
+    metrics: {
+      metricType: "retention",
+      views: row.views,
+      likes: row.likes,
+      comments: row.comments,
+      shares: row.shares,
+      watchTimeMinutes: row.watchTimeMinutes,
+      averageViewDurationSeconds: row.averageViewDurationSeconds,
+      impressions: row.impressions,
+      estimatedRevenue: row.estimatedRevenue,
+      cpm: row.cpm,
+      averageViewPercentage: row.averageViewPercentage,
+    },
+    metadata: {
+      metadataType: "retention",
+      channelId: row.channelId,
+      channelTitle: row.channelTitle,
+      videoId: "revenue",
+    },
+  };
+}
+
+const DIMENSION_FETCHER_MAP: Record<string, keyof YouTubeAnalyticsAdapter> = {
+  geo: "fetchGeoDaily",
+  audience: "fetchAgeGenderDaily",
+  age_gender: "fetchAgeGenderDaily",
+  "age-gender": "fetchAgeGenderDaily",
+  device: "fetchDeviceDaily",
+  traffic: "fetchTrafficDaily",
+  search: "fetchSearchDaily",
+  retention: "fetchRetentionDaily",
+  revenue: "fetchRevenueDaily",
+};
+
+function normalizeDimension(dim: string): string {
+  return dim.toLowerCase().trim().replace(/-/g, "_");
+}
+
 export function createAnalyticsSyncService(deps: AnalyticsSyncDependencies): {
-  syncAccount(accountId: string, options?: { now?: Date }): Promise<AccountSyncResult>;
-  syncAccounts(accountIds: readonly string[], options?: { now?: Date }): Promise<AccountSyncResult[]>;
+  syncAccount(accountId: string, options?: { now?: Date; dimensions?: string[] }): Promise<AccountSyncResult>;
+  syncAccounts(accountIds: readonly string[], options?: { now?: Date; dimensions?: string[] }): Promise<AccountSyncResult[]>;
 } {
   async function syncAccount(
     accountId: string,
-    options?: { now?: Date },
+    options?: { now?: Date; dimensions?: string[] },
   ): Promise<AccountSyncResult> {
     const now = options?.now ?? deps.now();
     const lockId = deps.createLockId();
@@ -219,10 +475,77 @@ export function createAnalyticsSyncService(deps: AnalyticsSyncDependencies): {
         timezone: TIMEZONE,
       };
 
-      const fetchResults = await Promise.allSettled([
-        fetchWithRetry(() => adapter.fetchAccountDaily(input), deps.sleep),
-        fetchWithRetry(() => adapter.fetchContentDaily(input), deps.sleep),
-      ]);
+      // Core fetches always, dimension fetches lazily per requested tabs
+      const requestedDimensions = options?.dimensions ?? [];
+      const seenFetchers = new Set<string>();
+      const dimensionSnapshotTasks: Array<Promise<AnalyticsSnapshotInput[]>> = [];
+      for (const raw of requestedDimensions) {
+        if (typeof raw !== "string") continue;
+        const normalized = normalizeDimension(raw);
+        const fetcherKey = DIMENSION_FETCHER_MAP[normalized];
+        if (!fetcherKey) continue;
+        if (seenFetchers.has(fetcherKey)) continue;
+        const fetcher = (adapter as unknown as Record<string, unknown>)[fetcherKey] as
+          | ((inp: typeof input) => Promise<unknown[]>)
+          | undefined;
+        if (typeof fetcher !== "function") continue;
+        seenFetchers.add(fetcherKey);
+        const task: Promise<AnalyticsSnapshotInput[]> = fetchWithRetry(
+          () => (fetcher as (inp: typeof input) => Promise<unknown[]>).call(adapter, input),
+          deps.sleep,
+        ).then((rows) => {
+          const typedRows = rows as unknown[];
+          switch (fetcherKey) {
+            case "fetchGeoDaily":
+              return (typedRows as Awaited<ReturnType<NonNullable<YouTubeAnalyticsAdapter["fetchGeoDaily"]>>>).map((row) =>
+                mapGeoSnapshot(row, accountId, now),
+              );
+            case "fetchAgeGenderDaily":
+              return (typedRows as Awaited<ReturnType<NonNullable<YouTubeAnalyticsAdapter["fetchAgeGenderDaily"]>>>).map((row) =>
+                mapAgeGenderSnapshot(row, accountId, now),
+              );
+            case "fetchDeviceDaily":
+              return (typedRows as Awaited<ReturnType<NonNullable<YouTubeAnalyticsAdapter["fetchDeviceDaily"]>>>).map((row) =>
+                mapDeviceSnapshot(row, accountId, now),
+              );
+            case "fetchTrafficDaily":
+              return (typedRows as Awaited<ReturnType<NonNullable<YouTubeAnalyticsAdapter["fetchTrafficDaily"]>>>).map((row) =>
+                mapTrafficSnapshot(row, accountId, now),
+              );
+            case "fetchSearchDaily":
+              return (typedRows as Awaited<ReturnType<NonNullable<YouTubeAnalyticsAdapter["fetchSearchDaily"]>>>).map((row) =>
+                mapSearchSnapshot(row, accountId, now),
+              );
+            case "fetchRetentionDaily":
+              return (typedRows as Awaited<ReturnType<NonNullable<YouTubeAnalyticsAdapter["fetchRetentionDaily"]>>>).map((row) =>
+                mapRetentionSnapshot(row, accountId, now),
+              );
+            case "fetchRevenueDaily":
+              return (typedRows as Awaited<ReturnType<NonNullable<YouTubeAnalyticsAdapter["fetchRevenueDaily"]>>>).map((row) =>
+                mapRevenueSnapshot(row, accountId, now),
+              );
+            default:
+              return [];
+          }
+        });
+        dimensionSnapshotTasks.push(task);
+      }
+
+      const coreSnapshotTasks: Array<Promise<AnalyticsSnapshotInput[]>> = [
+        fetchWithRetry(() => adapter.fetchAccountDaily(input), deps.sleep).then((rows) =>
+          (rows as Awaited<ReturnType<YouTubeAnalyticsAdapter["fetchAccountDaily"]>>).map((row) =>
+            mapAccountSnapshot(row, accountId, now),
+          ),
+        ),
+        fetchWithRetry(() => adapter.fetchContentDaily(input), deps.sleep).then((rows) =>
+          (rows as Awaited<ReturnType<YouTubeAnalyticsAdapter["fetchContentDaily"]>>).map((row) =>
+            mapContentSnapshot(row, accountId, now),
+          ),
+        ),
+      ];
+
+      const allTasks = [...coreSnapshotTasks, ...dimensionSnapshotTasks];
+      const fetchResults = await Promise.allSettled(allTasks);
       const errors = fetchResults
         .filter((result): result is PromiseRejectedResult => result.status === "rejected")
         .map((result) => result.reason as unknown);
@@ -234,18 +557,19 @@ export function createAnalyticsSyncService(deps: AnalyticsSyncDependencies): {
         throw nonRetryable ?? errors[0];
       }
 
-      const accountRows = (fetchResults[0] as PromiseFulfilledResult<Awaited<ReturnType<YouTubeAnalyticsAdapter["fetchAccountDaily"]>>>).value;
-      const contentRows = (fetchResults[1] as PromiseFulfilledResult<Awaited<ReturnType<YouTubeAnalyticsAdapter["fetchContentDaily"]>>>).value;
-      if (
-        accountRows.some((row) => row.channelId !== account.externalAccountId)
-        || contentRows.some((row) => row.channelId !== account.externalAccountId)
-      ) {
+      const snapshots = (fetchResults as PromiseFulfilledResult<AnalyticsSnapshotInput[]>[]).flatMap(
+        (r) => r.value,
+      );
+
+      // Channel identity guard for all snapshots that carry channelId
+      const mismatched = snapshots.some((s) => {
+        const md = (s.metadata as unknown as { channelId?: string });
+        return md.channelId && md.channelId !== account.externalAccountId;
+      });
+      if (mismatched) {
         throw new Error("Analytics channel identity mismatch");
       }
-      const snapshots = [
-        ...accountRows.map((row) => mapAccountSnapshot(row, accountId, now)),
-        ...contentRows.map((row) => mapContentSnapshot(row, accountId, now)),
-      ];
+
       const snapshotCount = await deps.repository.commitSync(
         accountId,
         lockId,
@@ -363,14 +687,14 @@ const defaultSyncService = createAnalyticsSyncService({
 
 export async function syncYouTubeAccount(
   accountId: string,
-  options?: { now?: Date },
+  options?: { now?: Date; dimensions?: string[] },
 ): Promise<AccountSyncResult> {
   return defaultSyncService.syncAccount(accountId, options);
 }
 
 export async function syncYouTubeAccounts(
   accountIds: readonly string[],
-  options?: { now?: Date },
+  options?: { now?: Date; dimensions?: string[] },
 ): Promise<AccountSyncResult[]> {
   return defaultSyncService.syncAccounts(accountIds, options);
 }

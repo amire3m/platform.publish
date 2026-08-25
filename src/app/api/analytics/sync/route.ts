@@ -12,7 +12,7 @@ interface SyncDependencies {
   }>;
   listSyncableAccounts(accountIds?: readonly string[]): Promise<readonly { id: string }[]>;
   listReportingAccountIds(): Promise<string[]>;
-  syncAccounts(accountIds: readonly string[]): Promise<AccountSyncResult[]>;
+  syncAccounts(accountIds: readonly string[], options?: { dimensions?: string[] }): Promise<AccountSyncResult[]>;
 }
 
 const defaultDependencies: SyncDependencies = {
@@ -22,18 +22,72 @@ const defaultDependencies: SyncDependencies = {
   syncAccounts: syncYouTubeAccounts,
 };
 
-async function readRequestedAccount(request: Request): Promise<string | null | undefined> {
+const ALLOWED_SYNC_DIMENSIONS = new Set([
+  "geo",
+  "audience",
+  "age_gender",
+  "age-gender",
+  "device",
+  "traffic",
+  "search",
+  "retention",
+  "revenue",
+]);
+
+function normalizeSyncDimension(dim: string): string {
+  return dim.toLowerCase().trim().replace(/-/g, "_");
+}
+
+function parseSyncDimensions(raw: unknown): string[] | undefined {
+  if (raw === undefined) return undefined;
+  if (!Array.isArray(raw)) return undefined;
+  const parsed: string[] = [];
+  for (const item of raw) {
+    if (typeof item !== "string") return undefined;
+    const normalized = normalizeSyncDimension(item);
+    if (!ALLOWED_SYNC_DIMENSIONS.has(item.toLowerCase().trim()) && !ALLOWED_SYNC_DIMENSIONS.has(normalized)) {
+      return undefined;
+    }
+    parsed.push(normalized);
+  }
+  return parsed;
+}
+
+interface SyncPayload {
+  accountId: string | null | undefined;
+  dimensions?: string[];
+}
+
+async function readSyncPayload(request: Request): Promise<SyncPayload | undefined> {
   const text = await request.text();
-  if (!text) return null;
+  if (!text) return { accountId: null };
   try {
     const body: unknown = JSON.parse(text);
     if (typeof body !== "object" || body === null || Array.isArray(body)) return undefined;
-    const accountId = (body as { accountId?: unknown }).accountId;
-    if (accountId === undefined) return null;
-    return typeof accountId === "string" && accountId.length > 0 ? accountId : undefined;
+    const accountIdRaw = (body as { accountId?: unknown }).accountId;
+    let accountId: string | null | undefined;
+    if (accountIdRaw === undefined) accountId = null;
+    else if (typeof accountIdRaw === "string" && accountIdRaw.length > 0) accountId = accountIdRaw;
+    else return undefined;
+
+    const dimensionsRaw = (body as { dimensions?: unknown }).dimensions;
+    let dimensions: string[] | undefined;
+    if (dimensionsRaw !== undefined) {
+      const parsed = parseSyncDimensions(dimensionsRaw);
+      if (parsed === undefined) return undefined;
+      dimensions = parsed;
+    }
+
+    return { accountId, dimensions };
   } catch {
     return undefined;
   }
+}
+
+async function readRequestedAccount(request: Request): Promise<string | null | undefined> {
+  const payload = await readSyncPayload(request);
+  if (payload === undefined) return undefined;
+  return payload.accountId;
 }
 
 export async function handleAnalyticsSyncRequest(
@@ -42,7 +96,12 @@ export async function handleAnalyticsSyncRequest(
 ): Promise<Response> {
   const view = await dependencies.requirePermission("view_analytics");
   if (!view.user) return view.response!;
-  const requestedAccountId = await readRequestedAccount(request);
+  const payload = await readSyncPayload(request);
+  if (payload === undefined) {
+    return jsonError("درخواست همگام‌سازی نامعتبر است.", 422, "INVALID_REQUEST");
+  }
+  const requestedAccountId = payload.accountId;
+  const requestedDimensions = payload.dimensions;
   if (requestedAccountId === undefined) {
     return jsonError("درخواست همگام‌سازی نامعتبر است.", 422, "INVALID_REQUEST");
   }
@@ -64,7 +123,9 @@ export async function handleAnalyticsSyncRequest(
     }
     accountIds = (await dependencies.listSyncableAccounts(allowedAccountIds)).map((account) => account.id);
   }
-  const results = await dependencies.syncAccounts(accountIds);
+  const results = requestedDimensions
+    ? await dependencies.syncAccounts(accountIds, { dimensions: requestedDimensions })
+    : await dependencies.syncAccounts(accountIds);
   return jsonOk({
     results,
     succeeded: results.filter((result) => result.status === "synced").length,

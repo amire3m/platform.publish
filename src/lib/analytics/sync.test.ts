@@ -616,6 +616,176 @@ describe("analytics account synchronization", () => {
   });
 });
 
+describe("lazy dimension sync", () => {
+  function createDimensionAdapter(): YouTubeAnalyticsAdapter {
+    const base = createAdapter();
+    return {
+      ...base,
+      fetchGeoDaily: vi.fn(async (input) => [{
+        accountId: input.accountId,
+        channelId: "youtube-channel-1",
+        channelTitle: "A channel",
+        date: new Date("2026-08-20T00:00:00.000Z"),
+        views: 10,
+        likes: 1,
+        comments: 0,
+        shares: 0,
+        watchTimeMinutes: 5,
+        averageViewDurationSeconds: 30,
+        country: "IR",
+        impressions: 100,
+        averageViewPercentage: 45,
+        estimatedRevenue: 1.5,
+        cpm: 2,
+        adImpressions: 50,
+        subscribersGained: 0,
+        subscribersLost: 0,
+      }]),
+      fetchAgeGenderDaily: vi.fn(async (input) => [{
+        accountId: input.accountId,
+        channelId: "youtube-channel-1",
+        channelTitle: "A channel",
+        date: new Date("2026-08-20T00:00:00.000Z"),
+        views: 20,
+        likes: 2,
+        comments: 1,
+        shares: 0,
+        watchTimeMinutes: 10,
+        averageViewDurationSeconds: 35,
+        ageGroup: "25-34",
+        gender: "male",
+        impressions: 200,
+        averageViewPercentage: 50,
+        estimatedRevenue: 2,
+        cpm: 3,
+        adImpressions: 60,
+        subscribersGained: 0,
+        subscribersLost: 0,
+      }]),
+      fetchDeviceDaily: vi.fn(async () => []),
+      fetchTrafficDaily: vi.fn(async () => []),
+      fetchSearchDaily: vi.fn(async () => []),
+      fetchRetentionDaily: vi.fn(async () => []),
+      fetchRevenueDaily: vi.fn(async (input) => [{
+        accountId: input.accountId,
+        channelId: "youtube-channel-1",
+        channelTitle: "A channel",
+        date: new Date("2026-08-20T00:00:00.000Z"),
+        views: 5,
+        likes: 0,
+        comments: 0,
+        shares: 0,
+        watchTimeMinutes: 2,
+        averageViewDurationSeconds: 20,
+        impressions: 50,
+        averageViewPercentage: 40,
+        estimatedRevenue: 0.5,
+        cpm: 1,
+        adImpressions: 10,
+        subscribersGained: 0,
+        subscribersLost: 0,
+      }]),
+    };
+  }
+
+  it("fetches only requested dimensions alongside core", async () => {
+    const adapter = createDimensionAdapter();
+    const harness = createHarness({ createAdapter: () => adapter });
+
+    const result = await harness.service.syncAccount("account-1", { dimensions: ["geo"] } as any);
+
+    expect(result.status).toBe("synced");
+    expect(adapter.fetchAccountDaily).toHaveBeenCalled();
+    expect(adapter.fetchContentDaily).toHaveBeenCalled();
+    expect(adapter.fetchGeoDaily).toHaveBeenCalled();
+    expect(adapter.fetchTrafficDaily).not.toHaveBeenCalled();
+    expect(adapter.fetchAgeGenderDaily).not.toHaveBeenCalled();
+  });
+
+  it("fetches no dimensions when dimensions is empty or undefined", async () => {
+    const adapter = createDimensionAdapter();
+    const h1 = createHarness({ createAdapter: () => adapter });
+    await h1.service.syncAccount("account-1", {} as any);
+    expect(adapter.fetchGeoDaily).not.toHaveBeenCalled();
+    const adapter2 = createDimensionAdapter();
+    const h2 = createHarness({ createAdapter: () => adapter2 });
+    await h2.service.syncAccount("account-1", { dimensions: [] } as any);
+    expect(adapter2.fetchGeoDaily).not.toHaveBeenCalled();
+  });
+
+  it("merges dimension snapshots into single commitSync call", async () => {
+    const adapter = createDimensionAdapter();
+    const harness = createHarness({ createAdapter: () => adapter });
+
+    await harness.service.syncAccount("account-1", { dimensions: ["geo", "audience"] } as any);
+
+    expect(harness.repository.commitSync).toHaveBeenCalledTimes(1);
+    const committed = vi.mocked(harness.repository.commitSync).mock.calls[0][4] as AnalyticsSnapshotInput[];
+    // core 2 + geo 1 + age_gender 1 = 4
+    expect(committed.length).toBe(4);
+    expect(committed.some((r) => r.scopeType === "geo" && r.scopeId === "IR")).toBe(true);
+    expect(committed.some((r) => r.scopeType === "age_gender" && r.scopeId === "25-34:male")).toBe(true);
+  });
+
+  it("supports audience alias for age_gender", async () => {
+    const adapter = createDimensionAdapter();
+    const harness = createHarness({ createAdapter: () => adapter });
+    await harness.service.syncAccount("account-1", { dimensions: ["audience"] } as any);
+    expect(adapter.fetchAgeGenderDaily).toHaveBeenCalled();
+  });
+
+  it("supports age_gender alias directly", async () => {
+    const adapter = createDimensionAdapter();
+    const harness = createHarness({ createAdapter: () => adapter });
+    await harness.service.syncAccount("account-1", { dimensions: ["age_gender"] } as any);
+    expect(adapter.fetchAgeGenderDaily).toHaveBeenCalled();
+  });
+
+  it("ignores unknown dimensions", async () => {
+    const adapter = createDimensionAdapter();
+    const harness = createHarness({ createAdapter: () => adapter });
+    const result = await harness.service.syncAccount("account-1", { dimensions: ["unknown"] } as any);
+    expect(result.status).toBe("synced");
+    expect(adapter.fetchGeoDaily).not.toHaveBeenCalled();
+  });
+
+  it("guards optional fetchers when not implemented", async () => {
+    const base = createAdapter(); // no dimension fetchers
+    const harness = createHarness({ createAdapter: () => base as any });
+    const result = await harness.service.syncAccount("account-1", { dimensions: ["geo", "device"] } as any);
+    expect(result.status).toBe("synced");
+    expect(harness.repository.commitSync).toHaveBeenCalledTimes(1);
+    const committed = vi.mocked(harness.repository.commitSync).mock.calls[0][4] as AnalyticsSnapshotInput[];
+    expect(committed.length).toBe(2); // only core
+  });
+
+  it("propagates dimension fetch failure as sync failure", async () => {
+    const adapter = createDimensionAdapter();
+    vi.mocked(adapter.fetchGeoDaily!).mockRejectedValue(new YouTubeAnalyticsApiError("quota_exhausted"));
+    const harness = createHarness({ createAdapter: () => adapter });
+    const result = await harness.service.syncAccount("account-1", { dimensions: ["geo"] } as any);
+    expect(result).toMatchObject({ status: "failed", code: "QUOTA_EXHAUSTED" });
+  });
+
+  it("syncAccounts propagates dimensions to each account", async () => {
+    const { repository } = createRepository();
+    vi.mocked(repository.listSyncableAccounts).mockImplementation(async (ids) => [syncableAccount(ids?.[0])]);
+    const adapter = createDimensionAdapter();
+    const service = createAnalyticsSyncService({
+      repository,
+      createAdapter: () => adapter,
+      decrypt: () => JSON.stringify({ access_token: SECRET }),
+      sleep: async () => undefined,
+      now: () => NOW,
+      createLockId: () => "lock-1",
+    });
+    const results = await (service as any).syncAccounts(["a", "b"], { dimensions: ["geo"] });
+    expect(adapter.fetchGeoDaily).toHaveBeenCalledTimes(2);
+    expect(results[0].status).toBe("synced");
+    expect(results[1].status).toBe("synced");
+  });
+});
+
 describe("account sync HTTP mapping", () => {
   it.each([
     ["SYNC_IN_PROGRESS", 409],

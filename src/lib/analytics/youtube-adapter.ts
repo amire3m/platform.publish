@@ -6,6 +6,7 @@ import type {
   AccountDailyMetric,
   AnalyticsFetchInput,
   ContentDailyMetric,
+  DailyMetric,
 } from "@/lib/analytics/types";
 import { getGoogleOAuthClient } from "@/lib/providers/youtube";
 
@@ -18,6 +19,11 @@ const METRICS = [
   "shares",
   "subscribersGained",
   "subscribersLost",
+  "impressions",
+  "averageViewPercentage",
+  "estimatedRevenue",
+  "cpm",
+  "adImpressions",
 ].join(",");
 const CONTENT_PAGE_SIZE = 200;
 
@@ -26,9 +32,114 @@ export type RowMapper<T> = (
   rowIndex: number,
 ) => T;
 
+export interface GeoDailyMetric extends DailyMetric {
+  accountId: string;
+  channelId: string;
+  channelTitle: string;
+  country: string;
+  impressions: number | null;
+  averageViewPercentage: number | null;
+  estimatedRevenue: number | null;
+  cpm: number | null;
+  adImpressions: number | null;
+  subscribersGained: number;
+  subscribersLost: number;
+}
+
+export interface AgeGenderDailyMetric extends DailyMetric {
+  accountId: string;
+  channelId: string;
+  channelTitle: string;
+  ageGroup: string;
+  gender: string;
+  impressions: number | null;
+  averageViewPercentage: number | null;
+  estimatedRevenue: number | null;
+  cpm: number | null;
+  adImpressions: number | null;
+  subscribersGained: number;
+  subscribersLost: number;
+}
+
+export interface DeviceDailyMetric extends DailyMetric {
+  accountId: string;
+  channelId: string;
+  channelTitle: string;
+  deviceType: string;
+  impressions: number | null;
+  averageViewPercentage: number | null;
+  estimatedRevenue: number | null;
+  cpm: number | null;
+  adImpressions: number | null;
+  subscribersGained: number;
+  subscribersLost: number;
+}
+
+export interface TrafficDailyMetric extends DailyMetric {
+  accountId: string;
+  channelId: string;
+  channelTitle: string;
+  trafficSource: string;
+  impressions: number | null;
+  averageViewPercentage: number | null;
+  estimatedRevenue: number | null;
+  cpm: number | null;
+  adImpressions: number | null;
+  subscribersGained: number;
+  subscribersLost: number;
+}
+
+export interface SearchDailyMetric extends DailyMetric {
+  accountId: string;
+  channelId: string;
+  channelTitle: string;
+  keyword: string;
+  impressions: number | null;
+  averageViewPercentage: number | null;
+  estimatedRevenue: number | null;
+  cpm: number | null;
+  adImpressions: number | null;
+  subscribersGained: number;
+  subscribersLost: number;
+}
+
+export interface RetentionDailyMetric extends DailyMetric {
+  accountId: string;
+  channelId: string;
+  channelTitle: string;
+  videoId: string;
+  averageViewPercentage: number | null;
+  impressions: number | null;
+  estimatedRevenue: number | null;
+  cpm: number | null;
+  adImpressions: number | null;
+  subscribersGained: number;
+  subscribersLost: number;
+}
+
+export interface RevenueDailyMetric extends DailyMetric {
+  accountId: string;
+  channelId: string;
+  channelTitle: string;
+  impressions: number | null;
+  averageViewPercentage: number | null;
+  estimatedRevenue: number | null;
+  cpm: number | null;
+  adImpressions: number | null;
+  subscribersGained: number;
+  subscribersLost: number;
+}
+
 export interface YouTubeAnalyticsAdapter {
   fetchAccountDaily(input: AnalyticsFetchInput): Promise<AccountDailyMetric[]>;
   fetchContentDaily(input: AnalyticsFetchInput): Promise<ContentDailyMetric[]>;
+  fetchGeoDaily?(input: AnalyticsFetchInput): Promise<GeoDailyMetric[]>;
+  fetchAgeGenderDaily?(input: AnalyticsFetchInput): Promise<AgeGenderDailyMetric[]>;
+  fetchDeviceDaily?(input: AnalyticsFetchInput): Promise<DeviceDailyMetric[]>;
+  fetchTrafficDaily?(input: AnalyticsFetchInput): Promise<TrafficDailyMetric[]>;
+  fetchSearchDaily?(input: AnalyticsFetchInput): Promise<SearchDailyMetric[]>;
+  fetchRetentionDaily?(input: AnalyticsFetchInput): Promise<RetentionDailyMetric[]>;
+  fetchRevenueDaily?(input: AnalyticsFetchInput): Promise<RevenueDailyMetric[]>;
 }
 
 export class AnalyticsResponseError extends Error {
@@ -101,6 +212,51 @@ function requiredNumber(
     throw new AnalyticsResponseError(`Invalid required numeric field '${field}' at row ${rowIndex}`);
   }
   return number;
+}
+
+function optionalNumber(
+  row: Readonly<Record<string, unknown>>,
+  field: string,
+): number | null {
+  const value = row[field];
+  if (value === null || value === undefined) return null;
+  if (typeof value === "string" && value.trim() === "") return null;
+  const number = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(number)) return null;
+  return number;
+}
+
+function mapDimensionBase(
+  row: Readonly<Record<string, unknown>>,
+  rowIndex: number,
+  timezone: string,
+  channel: { channelId: string; channelTitle: string },
+  accountId: string,
+): DailyMetric & {
+  accountId: string;
+  channelId: string;
+  channelTitle: string;
+  impressions: number | null;
+  averageViewPercentage: number | null;
+  estimatedRevenue: number | null;
+  cpm: number | null;
+  adImpressions: number | null;
+  subscribersGained: number;
+  subscribersLost: number;
+} {
+  return {
+    ...mapDailyMetric(row, rowIndex, timezone),
+    accountId,
+    channelId: channel.channelId,
+    channelTitle: channel.channelTitle,
+    impressions: optionalNumber(row, "impressions"),
+    averageViewPercentage: optionalNumber(row, "averageViewPercentage"),
+    estimatedRevenue: optionalNumber(row, "estimatedRevenue"),
+    cpm: optionalNumber(row, "cpm"),
+    adImpressions: optionalNumber(row, "adImpressions"),
+    subscribersGained: optionalNumber(row, "subscribersGained") ?? 0,
+    subscribersLost: optionalNumber(row, "subscribersLost") ?? 0,
+  };
 }
 
 function parseAnalyticsDay(day: string, timezone: string, rowIndex: number): Date {
@@ -421,6 +577,114 @@ export function createYouTubeAnalyticsAdapter(tokens: Credentials): YouTubeAnaly
           publishedAt: video?.publishedAt ?? null,
         };
       });
+    },
+
+    async fetchGeoDaily(input) {
+      const channel = await fetchChannel();
+      const dateRange = toGoogleDateRange(input);
+      const response = await callGoogleApi(() => analytics.reports.query({
+        ids: "channel==MINE",
+        dimensions: "day,country",
+        metrics: METRICS,
+        ...dateRange,
+      }));
+      return mapAnalyticsRows(responseHeaders(response.data), responseRows(response.data), (row, rowIndex) => ({
+        ...mapDimensionBase(row, rowIndex, input.timezone, channel, input.accountId),
+        country: requiredString(row, "country", rowIndex),
+      }));
+    },
+
+    async fetchAgeGenderDaily(input) {
+      const channel = await fetchChannel();
+      const dateRange = toGoogleDateRange(input);
+      const response = await callGoogleApi(() => analytics.reports.query({
+        ids: "channel==MINE",
+        dimensions: "day,ageGroup,gender",
+        metrics: METRICS,
+        ...dateRange,
+      }));
+      return mapAnalyticsRows(responseHeaders(response.data), responseRows(response.data), (row, rowIndex) => ({
+        ...mapDimensionBase(row, rowIndex, input.timezone, channel, input.accountId),
+        ageGroup: requiredString(row, "ageGroup", rowIndex),
+        gender: requiredString(row, "gender", rowIndex),
+      }));
+    },
+
+    async fetchDeviceDaily(input) {
+      const channel = await fetchChannel();
+      const dateRange = toGoogleDateRange(input);
+      const response = await callGoogleApi(() => analytics.reports.query({
+        ids: "channel==MINE",
+        dimensions: "day,deviceType",
+        metrics: METRICS,
+        ...dateRange,
+      }));
+      return mapAnalyticsRows(responseHeaders(response.data), responseRows(response.data), (row, rowIndex) => ({
+        ...mapDimensionBase(row, rowIndex, input.timezone, channel, input.accountId),
+        deviceType: requiredString(row, "deviceType", rowIndex),
+      }));
+    },
+
+    async fetchTrafficDaily(input) {
+      const channel = await fetchChannel();
+      const dateRange = toGoogleDateRange(input);
+      const response = await callGoogleApi(() => analytics.reports.query({
+        ids: "channel==MINE",
+        dimensions: "day,insightTrafficSourceType",
+        metrics: METRICS,
+        ...dateRange,
+      }));
+      return mapAnalyticsRows(responseHeaders(response.data), responseRows(response.data), (row, rowIndex) => ({
+        ...mapDimensionBase(row, rowIndex, input.timezone, channel, input.accountId),
+        trafficSource: requiredString(row, "insightTrafficSourceType", rowIndex),
+      }));
+    },
+
+    async fetchSearchDaily(input) {
+      const channel = await fetchChannel();
+      const dateRange = toGoogleDateRange(input);
+      const response = await callGoogleApi(() => analytics.reports.query({
+        ids: "channel==MINE",
+        dimensions: "day,insightTrafficSourceDetail",
+        metrics: METRICS,
+        filters: "insightTrafficSourceType==YT_SEARCH",
+        ...dateRange,
+      }));
+      const rows = mapAnalyticsRows(responseHeaders(response.data), responseRows(response.data), (row, rowIndex) => ({
+        ...mapDimensionBase(row, rowIndex, input.timezone, channel, input.accountId),
+        keyword: requiredString(row, "insightTrafficSourceDetail", rowIndex),
+      }));
+      // Client-side filter fallback: if API ignores filters, keep only YT_SEARCH detail values (non-empty)
+      return rows.filter((r) => r.keyword && r.keyword.length > 0);
+    },
+
+    async fetchRetentionDaily(input) {
+      const channel = await fetchChannel();
+      const dateRange = toGoogleDateRange(input);
+      const response = await callGoogleApi(() => analytics.reports.query({
+        ids: "channel==MINE",
+        dimensions: "day,video",
+        metrics: METRICS,
+        ...dateRange,
+      }));
+      return mapAnalyticsRows(responseHeaders(response.data), responseRows(response.data), (row, rowIndex) => ({
+        ...mapDimensionBase(row, rowIndex, input.timezone, channel, input.accountId),
+        videoId: requiredString(row, "video", rowIndex),
+      }));
+    },
+
+    async fetchRevenueDaily(input) {
+      const channel = await fetchChannel();
+      const dateRange = toGoogleDateRange(input);
+      const response = await callGoogleApi(() => analytics.reports.query({
+        ids: "channel==MINE",
+        dimensions: "day",
+        metrics: METRICS,
+        ...dateRange,
+      }));
+      return mapAnalyticsRows(responseHeaders(response.data), responseRows(response.data), (row, rowIndex) => ({
+        ...mapDimensionBase(row, rowIndex, input.timezone, channel, input.accountId),
+      }));
     },
   };
 }

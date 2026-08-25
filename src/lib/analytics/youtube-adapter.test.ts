@@ -43,7 +43,7 @@ const headers = [
   "subscribersGained",
   "subscribersLost",
 ];
-const metrics = "views,estimatedMinutesWatched,averageViewDuration,likes,comments,shares,subscribersGained,subscribersLost";
+const metrics = "views,estimatedMinutesWatched,averageViewDuration,likes,comments,shares,subscribersGained,subscribersLost,impressions,averageViewPercentage,estimatedRevenue,cpm,adImpressions";
 
 function metricRow(day: string, views: string): unknown[] {
   return [day, views, "120", "30", "4", "3", "2", "5", "1"];
@@ -381,5 +381,84 @@ describe("YouTubeAnalyticsAdapter", () => {
       startIndex: 1,
       maxResults: 200,
     });
+  });
+});
+
+describe("Dimension fetchers", () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    mocks.getGoogleOAuthClient.mockImplementation(() => ({
+      setCredentials: mocks.setCredentials,
+    }));
+    mocks.youtubeAnalytics.mockReturnValue({ reports: { query: mocks.analyticsQuery } });
+    mocks.youtube.mockReturnValue({
+      channels: { list: mocks.channelsList },
+      videos: { list: mocks.videosList },
+    });
+    mocks.channelsList.mockResolvedValue({
+      data: {
+        items: [{
+          id: "channel-1",
+          snippet: { title: "Channel" },
+          statistics: { subscriberCount: "1234" },
+        }],
+      },
+    });
+    mocks.videosList.mockResolvedValue({ data: { items: [] } });
+  });
+
+  it("maps geo rows with country dimension", async () => {
+    const geoHeaders = [...headers, "impressions", "averageViewPercentage", "estimatedRevenue", "cpm", "adImpressions", "country"];
+    mocks.analyticsQuery.mockResolvedValue({
+      data: {
+        columnHeaders: geoHeaders.map((name) => ({ name })),
+        rows: [["2026-08-20", "10", "120", "30", "4", "3", "2", "5", "1", "100", "45.5", "12.34", "2.5", "15", "IR"]],
+      },
+    });
+    const adapter = createYouTubeAnalyticsAdapter({});
+    const result = await (adapter as any).fetchGeoDaily(input());
+    expect(result[0].country).toBe("IR");
+    expect(result[0].views).toBe(10);
+    expect(result[0].impressions).toBe(100);
+  });
+
+  it("handles empty rows for geo fetcher", async () => {
+    const geoHeaders = [...headers, "impressions", "averageViewPercentage", "estimatedRevenue", "cpm", "adImpressions", "country"];
+    mocks.analyticsQuery.mockResolvedValue({
+      data: {
+        columnHeaders: geoHeaders.map((name) => ({ name })),
+        rows: null,
+      },
+    });
+    const adapter = createYouTubeAnalyticsAdapter({});
+    const result = await (adapter as any).fetchGeoDaily(input());
+    expect(result).toEqual([]);
+  });
+
+  it("maps age/gender rows with dimensions", async () => {
+    const agHeaders = [...headers, "impressions", "averageViewPercentage", "estimatedRevenue", "cpm", "adImpressions", "ageGroup", "gender"];
+    mocks.analyticsQuery.mockResolvedValue({
+      data: {
+        columnHeaders: agHeaders.map((name) => ({ name })),
+        rows: [["2026-08-20", "10", "120", "30", "4", "3", "2", "5", "1", "100", "45.5", "0", "0", "0", "age25_34", "male"]],
+      },
+    });
+    const adapter = createYouTubeAnalyticsAdapter({});
+    const result = await (adapter as any).fetchAgeGenderDaily(input());
+    expect(result[0].ageGroup).toBe("age25_34");
+    expect(result[0].gender).toBe("male");
+  });
+
+  it("handles empty rows for retention fetcher", async () => {
+    const retHeaders = [...headers, "impressions", "averageViewPercentage", "estimatedRevenue", "cpm", "adImpressions", "video"];
+    mocks.analyticsQuery.mockResolvedValue({
+      data: {
+        columnHeaders: retHeaders.map((name) => ({ name })),
+        rows: null,
+      },
+    });
+    const adapter = createYouTubeAnalyticsAdapter({});
+    const result = await (adapter as any).fetchRetentionDaily(input());
+    expect(result).toEqual([]);
   });
 });

@@ -10,7 +10,7 @@ import type {
 } from "@/lib/analytics/types";
 import { getGoogleOAuthClient } from "@/lib/providers/youtube";
 
-const METRICS = [
+const CORE_METRICS = [
   "views",
   "estimatedMinutesWatched",
   "averageViewDuration",
@@ -19,12 +19,10 @@ const METRICS = [
   "shares",
   "subscribersGained",
   "subscribersLost",
-  "impressions",
   "averageViewPercentage",
-  "estimatedRevenue",
-  "cpm",
-  "adImpressions",
 ].join(",");
+const REVENUE_METRICS = ["estimatedRevenue", "cpm", "adImpressions"].join(",");
+const METRICS = CORE_METRICS;
 const CONTENT_PAGE_SIZE = 200;
 
 export type RowMapper<T> = (
@@ -676,15 +674,23 @@ export function createYouTubeAnalyticsAdapter(tokens: Credentials): YouTubeAnaly
     async fetchRevenueDaily(input) {
       const channel = await fetchChannel();
       const dateRange = toGoogleDateRange(input);
-      const response = await callGoogleApi(() => analytics.reports.query({
-        ids: "channel==MINE",
-        dimensions: "day",
-        metrics: METRICS,
-        ...dateRange,
-      }));
-      return mapAnalyticsRows(responseHeaders(response.data), responseRows(response.data), (row, rowIndex) => ({
-        ...mapDimensionBase(row, rowIndex, input.timezone, channel, input.accountId),
-      }));
+      try {
+        const response = await callGoogleApi(() => analytics.reports.query({
+          ids: "channel==MINE",
+          dimensions: "day",
+          metrics: `${CORE_METRICS},${REVENUE_METRICS}`,
+          ...dateRange,
+        }));
+        return mapAnalyticsRows(responseHeaders(response.data), responseRows(response.data), (row, rowIndex) => ({
+          ...mapDimensionBase(row, rowIndex, input.timezone, channel, input.accountId),
+        }));
+      } catch (error) {
+        if (error instanceof YouTubeAnalyticsApiError && error.classification === "permanent") {
+          // Non-monetized channels return permanent error for revenue metrics — treat as empty, not failure
+          return [];
+        }
+        throw error;
+      }
     },
   };
 }

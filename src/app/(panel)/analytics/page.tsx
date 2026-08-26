@@ -25,6 +25,7 @@ import type { PublicAccountDto } from "@/lib/accounts/public";
 import type { AnalyticsOverview, AnalyticsRange, MetricTotals } from "@/lib/analytics/types";
 import type { AccountSyncResult } from "@/lib/analytics/sync";
 import { MAIN_REPORT_ALIAS } from "@/lib/accounts/organization";
+import { ChannelHeader } from "@/components/analytics/ChannelHeader";
 
 type AccountRecord = PublicAccountDto & AnalyticsAccountOption;
 
@@ -153,9 +154,11 @@ function AnalyticsDashboard() {
   const { data: searchData, error: searchFetchError, isLoading: searchLoading } = useSWR<AnalyticsOverview>(activeTab === "search" ? dimensionUrl(range, accountId, "search") : null, fetchApi);
   const { data: retentionData, error: retentionFetchError, isLoading: retentionLoading } = useSWR<AnalyticsOverview>(activeTab === "retention" ? dimensionUrl(range, accountId, "retention") : null, fetchApi);
   const { data: revenueData, error: revenueFetchError, isLoading: revenueLoading } = useSWR<AnalyticsOverview>(activeTab === "revenue" ? dimensionUrl(range, accountId, "revenue") : null, fetchApi);
+  const shouldFetchFallback = Boolean(accountId && data && data.topVideos.length === 0 && activeTab === "overview");
+  const { data: fallbackData, isLoading: fallbackLoading } = useSWR<{ top: Array<{ videoId: string; title: string; thumbnailUrl: string | null; viewCount: number; publishedAt: string | null }>; latest: Array<{ videoId: string; title: string; thumbnailUrl: string | null; viewCount: number; publishedAt: string | null }> }>(shouldFetchFallback ? `/api/analytics/videos?accountId=${accountId}` : null, fetchApi);
   const accounts = (accountRecords ?? [])
-    .filter((account) => account.platform === "youtube" && account.organization === "emro" && account.active && account.connectionStatus === "connected")
-    .map((account) => ({ ...account, displayName: MAIN_REPORT_ALIAS }));
+    .filter((account) => account.platform === "youtube" && account.organization === "emro" && account.active && account.connectionStatus === "connected");
+  const selectedAccount = accountId ? accounts.find((a) => a.id === accountId) ?? null : null;
   const currentFilterState = { accountId, range, scope: exportScope } as const;
   const currentFilterKey = analyticsFilterKey(currentFilterState);
   const previousFilterKey = useRef(currentFilterKey);
@@ -268,6 +271,11 @@ function AnalyticsDashboard() {
         onSync={syncAnalytics}
       />
 
+      <ChannelHeader
+        account={selectedAccount ? { id: selectedAccount.id, displayName: selectedAccount.displayName, username: selectedAccount.username, profileImage: selectedAccount.profileImage, externalAccountId: (selectedAccount as unknown as { externalAccountId?: string }).externalAccountId ?? null } : null}
+        isAggregated={!accountId}
+      />
+
       {accountsError && (
         <div className="flex flex-col items-start gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-800 dark:text-amber-300">
           <p>فهرست حساب‌های قابل انتخاب دریافت نشد. آمار کلی همچنان می‌تواند نمایش داده شود.</p>
@@ -339,6 +347,29 @@ function AnalyticsDashboard() {
                   <SyncStatus freshness={data.freshness} syncing={syncing} syncDisabled={!syncRequest.allowed} syncDisabledReason={syncRequest.reason} onSync={syncAnalytics} />
                 </div>
                 <TopVideos videos={data.topVideos} accountId={accountId} range={range} exportScope={exportScope} />
+                {data.topVideos.length === 0 && (
+                  <section className="rounded-xl border border-tg-border bg-tg-surface p-4" aria-labelledby="fallback-videos-title">
+                    <h3 id="fallback-videos-title" className="font-bold text-tg-text">آخرین ویدیوها</h3>
+                    <p className="mt-1 text-xs text-tg-secondary">چون داده آنالیتیکس ویدیویی هنوز در دسترس نیست، آخرین ویدیوها مستقیماً از YouTube Data API نمایش داده می‌شود.</p>
+                    {fallbackLoading ? (
+                      <Skeleton className="mt-4 h-32" />
+                    ) : fallbackData?.latest && fallbackData.latest.length > 0 ? (
+                      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                        {fallbackData.latest.slice(0, 6).map((v) => (
+                          <a key={v.videoId} href={`https://www.youtube.com/watch?v=${v.videoId}`} target="_blank" rel="noopener noreferrer" className="flex gap-3 rounded-lg border border-tg-border p-3 hover:bg-tg-hover">
+                            {v.thumbnailUrl ? <img src={v.thumbnailUrl} alt={v.title} className="h-16 w-28 rounded object-cover" /> : <div className="h-16 w-28 rounded bg-tg-hover" />}
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-medium text-tg-text">{v.title || v.videoId}</p>
+                              <p className="text-xs text-tg-secondary">{v.viewCount?.toLocaleString("fa-IR")} بازدید</p>
+                            </div>
+                          </a>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="mt-4 text-sm text-tg-secondary">ویدیویی یافت نشد.</p>
+                    )}
+                  </section>
+                )}
               </>
             ) : null}
           </>

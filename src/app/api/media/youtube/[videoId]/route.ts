@@ -20,7 +20,7 @@ export async function GET(
     url = await get360pUrl(videoId);
   } catch (e) {
     const msg = (e as Error)?.message ?? "";
-    if (msg.includes("360") || msg.includes("۳۶۰")) {
+    if (msg.includes("360")) {
       return jsonError("کیفیت ۳۶۰ موجود نیست.", 502);
     }
     return jsonError("ویدیو در دسترس نیست.", 404);
@@ -30,12 +30,11 @@ export async function GET(
     const range = req.headers.get("range");
     const upstream = await fetch(url, range ? { headers: { Range: range } } : undefined);
     if (!upstream.ok || !upstream.body) {
-      return jsonError("ویدیو در دسترس نیست.", 404);
+      return jsonError("ویدیو در دسترس نیست.", upstream.status === 403 ? 502 : 404);
     }
     const headers = new Headers(upstream.headers);
     headers.set("Cache-Control", "private, max-age=3600");
     headers.set("Accept-Ranges", "bytes");
-    // Ensure content-type is preserved; ytdl mp4 should be video/mp4
     if (!headers.has("content-type")) {
       headers.set("content-type", "video/mp4");
     }

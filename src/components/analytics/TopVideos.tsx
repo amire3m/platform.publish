@@ -66,40 +66,40 @@ export function TopVideos({ videos, accountId, range, exportScope }: {
       {videos.length === 0 ? (
         <div className="px-5 py-10 text-center text-sm text-tg-secondary">هنوز داده‌ای برای رتبه‌بندی ویدیوها وجود ندارد.</div>
       ) : (
-        <div className="divide-y divide-tg-border">
-          <div className="hidden grid-cols-[2rem_minmax(16rem,1fr)_6rem_7rem_6rem_7rem] items-center gap-3 px-5 text-[11px] font-semibold text-tg-secondary lg:grid">
-            <span>رتبه</span><span>ویدیو</span>
+        <>
+          <div className="hidden border-b border-tg-border px-5 py-2 lg:flex items-center gap-3 text-[11px] font-semibold text-tg-secondary">
             <SortHeader label="بازدید" sortKey="views" activeKey={sortKey} direction={direction} onSort={changeSort} />
             <SortHeader label="زمان تماشا" sortKey="watchTimeMinutes" activeKey={sortKey} direction={direction} onSort={changeSort} />
             <SortHeader label="تعامل" sortKey="engagementRate" activeKey={sortKey} direction={direction} onSort={changeSort} />
             <SortHeader label="تغییر دوره" sortKey="change" activeKey={sortKey} direction={direction} onSort={changeSort} />
           </div>
-          {sortedVideos.map((video, index) => {
-            const delta = formatComparison(video.percentageChanges.views);
-            return (
-              <Link
-                key={`${video.accountId}:${video.videoId}`}
-                href={detailHref(video.videoId, accountId, range, exportScope)}
-                className="grid gap-3 px-4 py-4 transition hover:bg-tg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-tg-accent lg:grid-cols-[2rem_minmax(16rem,1fr)_6rem_7rem_6rem_7rem] lg:items-center lg:px-5"
-              >
-                <span className="text-sm font-bold text-tg-secondary">{formatAnalyticsNumber(index + 1)}</span>
-                <span className="flex min-w-0 items-center gap-3">
-                  <AnalyticsThumbnail key={video.thumbnailUrl} src={video.thumbnailUrl} title={video.title} width={96} height={56} className="h-14 w-24 shrink-0 rounded-lg" />
-                  <span className="min-w-0">
-                    <span className="block truncate text-sm font-semibold text-tg-text">{video.title}</span>
-                    <span className="mt-1 block truncate text-xs text-tg-secondary">{video.channelTitle} · {video.publishedAt ? formatAnalyticsDate(video.publishedAt) : "تاریخ انتشار نامشخص"}</span>
-                  </span>
-                </span>
-                <span className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:contents">
-                  <span><span className="block text-[10px] text-tg-secondary lg:hidden">بازدید</span><span className="text-sm font-medium text-tg-text">{formatAnalyticsNumber(video.totals.views, "compact")}</span></span>
-                  <span><span className="block text-[10px] text-tg-secondary lg:hidden">زمان تماشا</span><span className="text-sm font-medium text-tg-text">{formatWatchMinutes(video.totals.watchTimeMinutes)}</span></span>
-                  <span><span className="block text-[10px] text-tg-secondary lg:hidden">تعامل</span><span className="text-sm font-medium text-tg-text">{formatAnalyticsNumber(video.totals.engagementRate)}٪</span></span>
-                  <span><span className="block text-[10px] text-tg-secondary lg:hidden">تغییر دوره</span><span className={`text-xs font-medium ${delta.tone === "positive" ? "text-emerald-700 dark:text-emerald-400" : delta.tone === "negative" ? "text-rose-700 dark:text-rose-400" : "text-tg-secondary"}`}>{delta.label}</span></span>
-                </span>
-              </Link>
-            );
-          })}
-        </div>
+          <div className="flex gap-4 overflow-x-auto p-4 snap-x snap-mandatory scrollbar-thin scrollbar-thumb-tg-border">
+            {sortedVideos.map((video, index) => {
+              const delta = formatComparison(video.percentageChanges.views);
+              return (
+                <Link
+                  key={`${video.accountId}:${video.videoId}`}
+                  href={detailHref(video.videoId, accountId, range, exportScope)}
+                  className="group flex w-72 shrink-0 snap-start flex-col overflow-hidden rounded-xl border border-tg-border bg-white transition hover:-translate-y-1 hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-tg-accent"
+                >
+                  <div className="relative">
+                    <AnalyticsThumbnail key={video.thumbnailUrl} src={video.thumbnailUrl} title={video.title} width={288} height={162} className="h-40 w-full object-cover" />
+                    <span className="absolute right-2 top-2 rounded-full bg-black/70 px-2 py-0.5 text-xs font-bold text-white">#{formatAnalyticsNumber(index + 1)}</span>
+                  </div>
+                  <div className="flex flex-1 flex-col p-3">
+                    <p className="line-clamp-2 text-sm font-semibold text-tg-text">{video.title}</p>
+                    <p className="mt-1 truncate text-xs text-tg-secondary">{video.channelTitle}</p>
+                    <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                      <span className="rounded bg-tg-hover px-2 py-1 text-center font-medium text-tg-text">{formatAnalyticsNumber(video.totals.views, "compact")} بازدید</span>
+                      <span className="rounded bg-tg-hover px-2 py-1 text-center font-medium text-tg-text">{formatAnalyticsNumber(video.totals.engagementRate)}٪ تعامل</span>
+                    </div>
+                    <p className={`mt-2 text-center text-xs font-medium ${delta.tone === "positive" ? "text-emerald-600" : delta.tone === "negative" ? "text-rose-600" : "text-tg-secondary"}`}>{delta.label}</p>
+                  </div>
+                </Link>
+              );
+            })}
+          </div>
+        </>
       )}
     </section>
   );

@@ -123,6 +123,47 @@ export default async function ShowcasePage() {
     }];
   });
 
+  // Top videos for homepage — Data API fallback (like dashboard)
+  let homepageTopVideos: Array<{ videoId: string; title: string; thumbnailUrl: string | null; viewCount: number; channelTitle: string; publishedAt: string | null }> = [];
+  try {
+    const { credentials } = await import("@/db/schema");
+    const { decryptSecret } = await import("@/lib/crypto");
+    const { google } = await import("googleapis");
+    const { getGoogleOAuthClient } = await import("@/lib/providers/youtube");
+    for (const acc of accounts.slice(0, 4)) {
+      const [fullAcc] = await db.select().from(socialAccounts).where(eq(socialAccounts.id, acc.id)).limit(1);
+      if (!fullAcc?.credentialRef) continue;
+      const [credRow] = await db.select().from(credentials).where(eq(credentials.id, fullAcc.credentialRef)).limit(1);
+      if (!credRow) continue;
+      try {
+        const tokens = JSON.parse(decryptSecret(credRow.encryptedPayload));
+        const auth = getGoogleOAuthClient();
+        auth.setCredentials(tokens);
+        const youtube = google.youtube({ version: "v3", auth });
+        const chRes = await youtube.channels.list({ part: ["contentDetails"], mine: true });
+        const uploadsId = (chRes.data.items?.[0] as unknown as { contentDetails?: { relatedPlaylists?: { uploads?: string } } })?.contentDetails?.relatedPlaylists?.uploads;
+        if (!uploadsId) continue;
+        const plRes = await youtube.playlistItems.list({ part: ["snippet", "contentDetails"], playlistId: uploadsId, maxResults: 10 });
+        const vIds = (plRes.data.items ?? []).map((it) => (it as unknown as { contentDetails?: { videoId?: string } }).contentDetails?.videoId).filter(Boolean) as string[];
+        if (vIds.length === 0) continue;
+        const vRes = await youtube.videos.list({ part: ["snippet", "statistics"], id: vIds });
+        for (const v of vRes.data.items ?? []) {
+          const s = v as unknown as { id?: string; snippet?: { title?: string; thumbnails?: { high?: { url?: string } }; publishedAt?: string }; statistics?: { viewCount?: string } };
+          if (!s.id) continue;
+          homepageTopVideos.push({
+            videoId: s.id,
+            title: s.snippet?.title ?? "",
+            thumbnailUrl: s.snippet?.thumbnails?.high?.url ?? null,
+            viewCount: Number(s.statistics?.viewCount ?? 0),
+            channelTitle: acc.displayName,
+            publishedAt: s.snippet?.publishedAt ?? null,
+          });
+        }
+      } catch {}
+    }
+    homepageTopVideos = homepageTopVideos.sort((a, b) => b.viewCount - a.viewCount).slice(0, 12);
+  } catch {}
+
   return (
     <main className="min-h-screen bg-[#FFF1F2] font-sans text-[#881337]">
       {/* ---------- Nav ---------- */}
@@ -204,40 +245,40 @@ export default async function ShowcasePage() {
           </span>
         </div>
 
-        {publicProfiles.length === 0 ? (
+        {accounts.length === 0 ? (
           <div className="mt-6 rounded-2xl border-2 border-dashed border-[#FECDD3] bg-white/60 p-10 text-center text-sm text-[#881337]/60">
             هنوز حسابی متصل نشده است.
           </div>
         ) : (
           <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {publicProfiles.map((profile) => {
-              const isYt = profile.platform === "youtube";
+            {accounts.map((account) => {
+              const snap = latestSnapshotByAccount.get(account.id);
+              const isYt = account.platform === "youtube";
               return (
                 <div
-                  key={profile.id}
+                  key={account.id}
                   className="group rounded-2xl border border-[#FECDD3] bg-white p-5 transition hover:-translate-y-1 hover:shadow-lg hover:shadow-[#E11D48]/10"
                 >
                   <div className="flex items-center gap-3">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#FFF1F2]">
-                      {isYt ? (
-                        <YoutubeIcon className="h-6 w-6 text-[#E11D48]" />
-                      ) : (
-                        <InstagramIcon className="h-6 w-6 text-[#E11D48]" />
-                      )}
-                    </div>
+                    {account.profileImage ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={account.profileImage} alt={account.displayName} className="h-12 w-12 rounded-xl object-cover" />
+                    ) : (
+                      <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#FFF1F2]">
+                        {isYt ? <YoutubeIcon className="h-6 w-6 text-[#E11D48]" /> : <InstagramIcon className="h-6 w-6 text-[#E11D48]" />}
+                      </div>
+                    )}
                     <div className="min-w-0">
-                      <p className="truncate font-bold text-[#881337]">{MAIN_REPORT_ALIAS}</p>
-                      <p className="truncate text-xs text-[#881337]/50">{isYt ? "YouTube" : "Instagram"}</p>
+                      <p className="truncate font-bold text-[#881337]">{account.displayName}</p>
+                      <p className="truncate text-xs text-[#881337]/50">@{account.username} · {isYt ? "YouTube" : "Instagram"}</p>
                     </div>
                   </div>
                   <div className="mt-4 flex items-center justify-between border-t border-[#FECDD3] pt-3 text-sm">
                     <span className="inline-flex items-center gap-1.5 font-semibold text-[#881337]">
-                      {isYt ? <Users className="h-4 w-4 text-[#2563EB]" /> : <Users className="h-4 w-4 text-[#2563EB]" />}
+                      <Users className="h-4 w-4 text-[#2563EB]" />
                       {isYt ? "مشترک" : "دنبالکننده"}:
                     </span>
-                    <span className="font-black tabular-nums text-[#E11D48]">
-                       {persianNumber(profile.followers)}
-                    </span>
+                    <span className="font-black tabular-nums text-[#E11D48]">{persianNumber(snap?.followersOrSubscribers ?? 0)}</span>
                   </div>
                 </div>
               );
@@ -365,6 +406,44 @@ export default async function ShowcasePage() {
             <p className="mt-3 text-3xl font-black tabular-nums text-[#881337]">{persianNumber(totalLikes)}</p>
           </div>
         </div>
+      </section>
+
+      {/* ---------- Top Videos ---------- */}
+      <section className="mx-auto max-w-6xl px-4 py-12 sm:px-6">
+        <div className="flex items-end justify-between">
+          <div>
+            <h2 className="text-2xl font-black text-[#881337]">ویدیوهای برتر</h2>
+            <p className="mt-1 text-sm text-[#881337]/60">محبوب‌ترین ویدیوها بر اساس بازدید</p>
+          </div>
+          <span className="rounded-full bg-white px-3 py-1 text-xs font-bold text-[#E11D48] ring-1 ring-[#FECDD3]">{toPersianDigits(homepageTopVideos.length)} ویدیو</span>
+        </div>
+        {homepageTopVideos.length === 0 ? (
+          <div className="mt-6 rounded-2xl border-2 border-dashed border-[#FECDD3] bg-white/60 p-10 text-center text-sm text-[#881337]/60">هنوز ویدیویی برای نمایش وجود ندارد.</div>
+        ) : (
+          <div className="mt-6 flex gap-4 overflow-x-auto pb-4 snap-x snap-mandatory">
+            {homepageTopVideos.map((v) => (
+              <a
+                key={v.videoId}
+                href={`/api/media/youtube/${v.videoId}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="group flex w-72 shrink-0 snap-start flex-col overflow-hidden rounded-2xl border border-[#FECDD3] bg-white transition hover:-translate-y-1 hover:shadow-lg"
+              >
+                {v.thumbnailUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={v.thumbnailUrl} alt={v.title} className="h-40 w-full object-cover" />
+                ) : (
+                  <div className="flex h-40 w-full items-center justify-center bg-[#FFF1F2] text-[#E11D48]">بدون تصویر</div>
+                )}
+                <div className="flex flex-1 flex-col p-4">
+                  <p className="line-clamp-2 text-sm font-bold text-[#881337]">{v.title || v.videoId}</p>
+                  <p className="mt-1 truncate text-xs text-[#881337]/60">{v.channelTitle}</p>
+                  <p className="mt-2 text-xs font-bold text-[#E11D48]">{persianNumber(v.viewCount)} بازدید</p>
+                </div>
+              </a>
+            ))}
+          </div>
+        )}
       </section>
 
       {/* ---------- CTA ---------- */}

@@ -1,15 +1,19 @@
 "use client";
 
+import { Suspense } from "react";
+import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import useSWR from "swr";
 import Link from "next/link";
 import { AlertTriangle, BarChart3, Clock3, Eye, Mail, Package, TrendingUp, XCircle } from "lucide-react";
-import { Card, EmptyState, ErrorState, Skeleton } from "@/components/ui";
+import { Card, EmptyState, ErrorState, Select, Skeleton } from "@/components/ui";
 import { fetchWorkflowApi } from "@/lib/workflow/client";
 import { CHANNELS, getChannelLabelFa } from "@/lib/channels";
 import { formatJalaliDateTime } from "@/lib/date/jalali";
 import { InstagramIcon, YoutubeIcon } from "@/components/brand-icons";
 import { platformLabelFa, statusLabelFa, UNKNOWN_LABEL_FA } from "@/lib/presentation-fa";
 import { MAIN_REPORT_ALIAS } from "@/lib/accounts/organization";
+import { ChannelHeader } from "@/components/analytics/ChannelHeader";
+import type { PublicAccountDto } from "@/lib/accounts/public";
 
 type IconType = React.ComponentType<{ className?: string }>;
 
@@ -98,8 +102,26 @@ function BarChart({ title, data, labels, ariaLabel }: { title: string; data: Rec
   );
 }
 
-export default function DashboardPage() {
-  const { data, error, isLoading } = useSWR<DashboardSummary>("/api/dashboard/summary", fetchWorkflowApi<DashboardSummary>);
+function DashboardContent() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
+  const accountId = searchParams.get("accountId") ?? "";
+
+  const { data: accountRecords } = useSWR<PublicAccountDto[]>("/api/accounts", fetchWorkflowApi<PublicAccountDto[]>);
+  const accounts = (accountRecords ?? []).filter((a) => a.platform === "youtube" && a.organization === "emro" && a.active && a.connectionStatus === "connected");
+  const selected = accountId ? accounts.find((a) => a.id === accountId) ?? null : null;
+
+  const summaryUrl = accountId ? `/api/dashboard/summary?accountId=${accountId}` : "/api/dashboard/summary";
+  const { data, error, isLoading } = useSWR<DashboardSummary>(summaryUrl, fetchWorkflowApi<DashboardSummary>);
+
+  function handleAccountChange(value: string) {
+    const params = new URLSearchParams(searchParams.toString());
+    if (value) params.set("accountId", value);
+    else params.delete("accountId");
+    const qs = params.toString();
+    router.replace(qs ? `${pathname}?${qs}` : pathname);
+  }
 
   if (isLoading) {
     return (
@@ -108,6 +130,16 @@ export default function DashboardPage() {
           <h1 className="text-xl font-bold text-tg-text">داشبورد</h1>
           <p className="text-sm text-tg-secondary">نمای کلی وضعیت محتوا، انتشار و تیم</p>
         </div>
+        <Select aria-label="حساب یوتیوب" value={accountId} onChange={(e) => handleAccountChange(e.target.value)} className="sm:w-64">
+          <option value="">همه حساب‌های Emro YT</option>
+          {accounts.map((a) => (
+            <option key={a.id} value={a.id}>{a.displayName}</option>
+          ))}
+        </Select>
+        <ChannelHeader
+          account={selected ? { id: selected.id, displayName: selected.displayName, username: selected.username, profileImage: selected.profileImage, externalAccountId: (selected as unknown as { externalAccountId?: string | null }).externalAccountId ?? null } : null}
+          isAggregated={!accountId}
+        />
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5" aria-busy="true" aria-label="در حال بارگذاری">
           {[1, 2, 3, 4, 5].map((i) => (
             <Skeleton key={i} className="h-24" />
@@ -129,6 +161,16 @@ export default function DashboardPage() {
           <h1 className="text-xl font-bold text-tg-text">داشبورد</h1>
           <p className="text-sm text-tg-secondary">نمای کلی وضعیت محتوا، انتشار و تیم</p>
         </div>
+        <Select aria-label="حساب یوتیوب" value={accountId} onChange={(e) => handleAccountChange(e.target.value)} className="sm:w-64">
+          <option value="">همه حساب‌های Emro YT</option>
+          {accounts.map((a) => (
+            <option key={a.id} value={a.id}>{a.displayName}</option>
+          ))}
+        </Select>
+        <ChannelHeader
+          account={selected ? { id: selected.id, displayName: selected.displayName, username: selected.username, profileImage: selected.profileImage, externalAccountId: (selected as unknown as { externalAccountId?: string | null }).externalAccountId ?? null } : null}
+          isAggregated={!accountId}
+        />
         <ErrorState message={msg} />
         <p className="text-sm text-tg-secondary">
           لطفاً صفحه را تازه‌سازی کنید یا به{" "}
@@ -145,6 +187,16 @@ export default function DashboardPage() {
           <h1 className="text-xl font-bold text-tg-text">داشبورد</h1>
           <p className="text-sm text-tg-secondary">نمای کلی وضعیت محتوا، انتشار و تیم</p>
         </div>
+        <Select aria-label="حساب یوتیوب" value={accountId} onChange={(e) => handleAccountChange(e.target.value)} className="sm:w-64">
+          <option value="">همه حساب‌های Emro YT</option>
+          {accounts.map((a) => (
+            <option key={a.id} value={a.id}>{a.displayName}</option>
+          ))}
+        </Select>
+        <ChannelHeader
+          account={selected ? { id: selected.id, displayName: selected.displayName, username: selected.username, profileImage: selected.profileImage, externalAccountId: (selected as unknown as { externalAccountId?: string | null }).externalAccountId ?? null } : null}
+          isAggregated={!accountId}
+        />
         <EmptyState title="داده‌ای برای نمایش وجود ندارد" description="هنوز محتوایی ثبت نشده است." />
       </div>
     );
@@ -153,10 +205,8 @@ export default function DashboardPage() {
   const isEmpty = data.kpis.contentProductsTotal === 0 && data.kpis.programsTotal === 0 && data.kpis.deliverablesTotal === 0;
   const avgProgress = data.kpis.progress?.percent ?? 0;
 
-  // Prepare byStatus ordered (ensure 7 keys)
   const orderedByStatus: Record<string, number> = {};
   for (const s of STATUS_ORDER) orderedByStatus[s] = data.byStatus[s] ?? 0;
-  // include any extra statuses not in order
   for (const [k, v] of Object.entries(data.byStatus)) if (!(k in orderedByStatus)) orderedByStatus[k] = v;
 
   const channelLabels: Record<string, string> = {};
@@ -170,6 +220,23 @@ export default function DashboardPage() {
         <h1 className="text-xl font-bold text-tg-text">داشبورد</h1>
         <p className="text-sm text-tg-secondary">نمای کلی وضعیت محتوا، انتشار و تیم — بروزرسانی لحظه‌ای</p>
       </div>
+
+      <Select
+        aria-label="حساب یوتیوب"
+        value={accountId}
+        onChange={(e) => handleAccountChange(e.target.value)}
+        className="sm:w-64"
+      >
+        <option value="">همه حساب‌های Emro YT</option>
+        {accounts.map((a) => (
+          <option key={a.id} value={a.id}>{a.displayName}</option>
+        ))}
+      </Select>
+
+      <ChannelHeader
+        account={selected ? { id: selected.id, displayName: selected.displayName, username: selected.username, profileImage: selected.profileImage, externalAccountId: (selected as unknown as { externalAccountId?: string | null }).externalAccountId ?? null } : null}
+        isAggregated={!accountId}
+      />
 
       {isEmpty ? <EmptyState title="داده‌ای برای نمایش وجود ندارد" description="هنوز محتوایی ثبت نشده است. از اتاق محتوا شروع کنید." action={<Link href="/content-room" className="text-tg-accent text-sm underline">رفتن به اتاق محتوا</Link>} /> : null}
 
@@ -397,5 +464,13 @@ export default function DashboardPage() {
         )}
       </Card>
     </div>
+  );
+}
+
+export default function DashboardPage() {
+  return (
+    <Suspense fallback={<div className="space-y-6" dir="rtl"><Skeleton className="h-24" /></div>}>
+      <DashboardContent />
+    </Suspense>
   );
 }

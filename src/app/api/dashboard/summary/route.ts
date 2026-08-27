@@ -84,6 +84,7 @@ export interface DashboardSummaryDependencies {
   fetchMailUnread: (account: "info" | "support") => Promise<number>;
   fetchYoutubeSummary?: (now: Date) => Promise<YoutubeSummary>;
   fetchInstagramSummary?: () => Promise<InstagramSummary>;
+  fetchYoutubeFallback?: () => Promise<YoutubeTopVideo[]>;
   now: () => Date;
 }
 
@@ -304,6 +305,28 @@ async function defaultFetchInstagramSummary(): Promise<InstagramSummary> {
   }
 }
 
+async function defaultFetchYoutubeFallback(): Promise<YoutubeTopVideo[]> {
+  try {
+    const { fetchLastVideos } = await import("@/lib/youtube/data-fallback");
+    const { listMainReportAccountIds } = await import("@/lib/accounts/organization-server");
+    const { MAIN_REPORT_ALIAS } = await import("@/lib/accounts/organization");
+    const accountIds = await listMainReportAccountIds("youtube");
+    if (accountIds.length === 0) return [];
+    const videos = await fetchLastVideos(accountIds);
+    return videos
+      .slice(0, 10)
+      .map((v) => ({
+        videoId: v.videoId,
+        title: v.title,
+        views: v.viewCount,
+        channel: v.channelTitle || MAIN_REPORT_ALIAS,
+        channelId: v.channelId,
+      }));
+  } catch {
+    return [];
+  }
+}
+
 const defaultDependencies: DashboardSummaryDependencies = {
   requireDashboardAccess: defaultRequireDashboardAccess,
   fetchContentProducts: defaultFetchContentProducts,
@@ -314,6 +337,7 @@ const defaultDependencies: DashboardSummaryDependencies = {
   fetchMailUnread: defaultFetchMailUnread,
   fetchYoutubeSummary: defaultFetchYoutubeSummary,
   fetchInstagramSummary: defaultFetchInstagramSummary,
+  fetchYoutubeFallback: defaultFetchYoutubeFallback,
   now: () => new Date(),
 };
 
@@ -337,7 +361,7 @@ export async function handleDashboardSummaryRequest(
     ? deps.fetchInstagramSummary().catch(() => ({ status: "awaiting_connection", byPage: [], connectedCount: 0 }) as InstagramSummary)
     : Promise.resolve({ status: "awaiting_connection", byPage: [], connectedCount: 0 } as InstagramSummary);
 
-  const [products, programs, deliverables, publications, users, mailInfo, mailSupport, youtube, instagram] = await Promise.all([
+  let [products, programs, deliverables, publications, users, mailInfo, mailSupport, youtube, instagram] = await Promise.all([
     deps.fetchContentProducts(),
     deps.fetchPrograms(),
     deps.fetchDeliverables(),
@@ -348,6 +372,18 @@ export async function handleDashboardSummaryRequest(
     youtubePromise,
     instagramPromise,
   ]);
+
+  // --- Data API fallback for topVideos when analytics empty ---
+  if (youtube.topVideos.length === 0 && deps.fetchYoutubeFallback) {
+    try {
+      const fallbackTop = await deps.fetchYoutubeFallback();
+      if (fallbackTop.length > 0) {
+        youtube = { ...youtube, topVideos: fallbackTop.slice(0, 10) };
+      }
+    } catch {
+      // keep empty topVideos; do not throw
+    }
+  }
 
   // --- content_products aggregates ---
   const totalProducts = products.length;

@@ -229,4 +229,50 @@ describe("GET /api/dashboard/summary", () => {
     expect(body.data.youtube).toEqual({ totalViews30d: 0, byChannel: [], topVideos: [] });
     expect(body.data.instagram).toEqual({ status: "awaiting_connection", byPage: [], connectedCount: 0 });
   });
+
+  it("falls back to Data API when analytics top empty", async () => {
+    const fallbackTop = [
+      { videoId: "v1", title: "Fallback Video 1", views: 999, channel: "Emro YT", channelId: "emro" },
+      { videoId: "v2", title: "Fallback Video 2", views: 500, channel: "Emro YT", channelId: "emro" },
+    ];
+    const fetchYoutubeFallback = vi.fn().mockResolvedValue(fallbackTop);
+    const deps = makeDeps({
+      fetchYoutubeSummary: vi.fn().mockResolvedValue({ totalViews30d: 0, byChannel: [], topVideos: [] } as never),
+      fetchYoutubeFallback,
+    } as unknown as Partial<DashboardSummaryDependencies>);
+    const res = await handleDashboardSummaryRequest(new Request("http://test/api/dashboard/summary"), deps);
+    expect(fetchYoutubeFallback).toHaveBeenCalledTimes(1);
+    const body = await res.json();
+    expect(body.data.youtube.topVideos).toEqual(fallbackTop);
+  });
+
+  it("does not call fallback when topVideos already present", async () => {
+    const fetchYoutubeFallback = vi.fn().mockResolvedValue([]);
+    const youtube = {
+      totalViews30d: 15000,
+      byChannel: [{ channelId: "emro", label: "Emro YT", views: 15000 }],
+      topVideos: [{ videoId: "vid1", title: "Existing Top", views: 7000, channel: "Emro YT" }],
+    };
+    const deps = makeDeps({
+      fetchYoutubeSummary: vi.fn().mockResolvedValue(youtube as never),
+      fetchYoutubeFallback,
+    } as unknown as Partial<DashboardSummaryDependencies>);
+    const res = await handleDashboardSummaryRequest(new Request("http://test/api/dashboard/summary"), deps);
+    expect(fetchYoutubeFallback).not.toHaveBeenCalled();
+    const body = await res.json();
+    expect(body.data.youtube.topVideos).toEqual(youtube.topVideos);
+  });
+
+  it("handles fallback failure gracefully (keeps empty topVideos)", async () => {
+    const fetchYoutubeFallback = vi.fn().mockRejectedValue(new Error("quotaExceeded"));
+    const deps = makeDeps({
+      fetchYoutubeSummary: vi.fn().mockResolvedValue({ totalViews30d: 0, byChannel: [], topVideos: [] } as never),
+      fetchYoutubeFallback,
+    } as unknown as Partial<DashboardSummaryDependencies>);
+    const res = await handleDashboardSummaryRequest(new Request("http://test/api/dashboard/summary"), deps);
+    expect(fetchYoutubeFallback).toHaveBeenCalledTimes(1);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.data.youtube.topVideos).toEqual([]);
+  });
 });

@@ -420,7 +420,7 @@ function PartUploadCard({
 
       <div className="space-y-2 border-t border-tg-border pt-2">
         <div className="flex flex-col gap-2">
-          <label className="text-xs font-medium text-tg-secondary">ویدئوی خام (حداکثر ۱۰۰ مگابایت، با فرمت mp4، mov، avi، webm یا mkv)</label>
+          <label className="text-xs font-medium text-tg-secondary">ویدئوی خام (حداکثر ۲ گیگابایت، با فرمت mp4، mov، avi، webm یا mkv)</label>
           <input
             ref={videoInputRef}
             type="file"

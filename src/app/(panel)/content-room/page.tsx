@@ -76,7 +76,7 @@ export default function ContentRoomPage() {
   const isNotFound = (error instanceof ContentRoomApiError && error.status === 404) || (error instanceof WorkflowApiError && error.status === 404);
 
   async function handleArchive(product: ContentRoomProductSummary) {
-    if (!confirm(`آیا از آرشیو کردن "${product.title}" اطمینان دارید؟`)) return;
+    if (!confirm(`آیا از بایگانی کردن "${product.title}" اطمینان دارید؟`)) return;
     setArchiveBusy(product.id);
     try {
       await fetchContentRoomApi(`/api/content-room/products/${product.id}/archive`, {
@@ -86,7 +86,7 @@ export default function ContentRoomPage() {
       });
       await mutate();
     } catch (e) {
-      alert((e as Error).message ?? "خطا در آرشیو");
+      alert((e as Error).message ?? "خطا در بایگانی");
     } finally {
       setArchiveBusy(null);
     }
@@ -102,7 +102,7 @@ export default function ContentRoomPage() {
       });
       await mutate();
     } catch (e) {
-      alert((e as Error).message ?? "خطا در بازگردانی");
+      alert((e as Error).message ?? "خطا در بازیابی");
     } finally {
       setArchiveBusy(null);
     }
@@ -177,6 +177,8 @@ export default function ContentRoomPage() {
                   <option value="film">فیلم سینمایی</option>
                   <option value="short_film">فیلم کوتاه</option>
                   <option value="educational">آموزشی</option>
+                  <option value="teaser">تیزر</option>
+                  <option value="music_video">نماهنگ</option>
                 </Select>
               </div>
               <div className="flex flex-col gap-1">

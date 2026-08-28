@@ -72,14 +72,14 @@ export function ContentRoomCards({ products, onArchive, onUnarchive }: Props) {
                   onClick={() => onUnarchive?.(p)}
                   className="flex-1 rounded-lg bg-amber-500/15 py-2 text-xs font-medium text-amber-700 hover:bg-amber-500/25 dark:text-amber-300"
                 >
-                  بازگردانی{p.isCold ? " · آرشیو سرد" : ""}
+                  بازیابی{p.isCold ? " · بایگانی سرد" : ""}
                 </button>
               ) : (
                 <button
                   onClick={() => onArchive?.(p)}
                   className="flex-1 rounded-lg bg-slate-500/10 py-2 text-xs font-medium text-slate-600 hover:bg-slate-500/15 dark:text-slate-300"
                 >
-                  آرشیو
+                  بایگانی
                 </button>
               )}
             </div>

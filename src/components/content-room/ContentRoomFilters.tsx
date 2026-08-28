@@ -50,6 +50,8 @@ export function ContentRoomFilters({ value, onChange }: Props) {
             <option value="film">فیلم سینمایی</option>
             <option value="short_film">فیلم کوتاه</option>
             <option value="educational">آموزشی</option>
+            <option value="teaser">تیزر</option>
+            <option value="music_video">نماهنگ</option>
           </Select>
         </div>
 

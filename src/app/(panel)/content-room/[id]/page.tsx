@@ -3,7 +3,7 @@
 import { use } from "react";
 import useSWR from "swr";
 import Link from "next/link";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, Plus } from "lucide-react";
 import { Button, Card, EmptyState, ErrorState, Skeleton } from "@/components/ui";
 import { fetchContentRoomApi, ContentRoomApiError } from "@/lib/content-room/client";
 import { ContentRoomDetail } from "@/components/content-room/ContentRoomDetail";
@@ -103,10 +103,18 @@ export default function ContentRoomDetailPage({ params }: { params: Promise<{ id
 
   return (
     <div className="space-y-6" dir="rtl">
-      <Link href="/content-room" className="inline-flex items-center gap-2 text-sm text-tg-accent hover:underline">
-        <ArrowRight className="h-4 w-4" />
-        بازگشت به اتاق محتوا
-      </Link>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <Link href="/content-room" className="inline-flex items-center gap-2 text-sm text-tg-accent hover:underline">
+          <ArrowRight className="h-4 w-4" />
+          بازگشت به اتاق محتوا
+        </Link>
+        <Link href="/content-room/new">
+          <Button className="min-h-[44px]">
+            <Plus className="h-4 w-4" />
+            ایجاد محصول جدید
+          </Button>
+        </Link>
+      </div>
 
       <ContentRoomDetail product={product} onRefresh={async () => { await mutate(); }} />
     </div>

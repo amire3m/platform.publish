@@ -83,17 +83,17 @@ export function ContentRoomTable({ products, onArchive, onUnarchive }: Props) {
                         <button
                           onClick={() => onUnarchive?.(p)}
                           className="rounded-full bg-amber-500/15 px-3 py-1 text-xs font-medium text-amber-700 hover:bg-amber-500/25 dark:text-amber-300"
-                          aria-label={`بازگردانی ${p.title}`}
+                          aria-label={`بازیابی ${p.title}`}
                         >
-                          بازگردانی{p.isCold ? " · سرد" : ""}
+                          بازیابی{p.isCold ? " · سرد" : ""}
                         </button>
                       ) : (
                         <button
                           onClick={() => onArchive?.(p)}
                           className="rounded-full bg-slate-500/10 px-3 py-1 text-xs font-medium text-slate-600 hover:bg-slate-500/20 dark:text-slate-300"
-                          aria-label={`آرشیو ${p.title}`}
+                          aria-label={`بایگانی ${p.title}`}
                         >
-                          آرشیو
+                          بایگانی
                         </button>
                       )}
                     </td>

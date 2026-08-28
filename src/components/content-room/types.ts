@@ -1,7 +1,26 @@
 import type { ContentStatus } from "@/lib/content-room/presentation";
 
-export type ProductType = "serial" | "documentary" | "tv_program" | "film" | "short_film" | "educational";
+export type ProductType = "serial" | "documentary" | "tv_program" | "film" | "short_film" | "educational" | "teaser" | "music_video";
 export type Channel = "zed_revayat" | "zaviye_no" | "tamashin" | "iranian_frame" | "shock" | "tinazh";
+
+export const PART_ACTIVITIES = [
+  "editing_youtube",
+  "copyright_fix",
+  "highlight_done",
+  "reel_done",
+  "cover_ready",
+  "previously_published",
+] as const;
+export type PartActivity = (typeof PART_ACTIVITIES)[number];
+export const REQUIRED_FOR_SEND: PartActivity[] = [
+  "editing_youtube",
+  "copyright_fix",
+  "highlight_done",
+  "reel_done",
+  "cover_ready",
+];
+
+export type ContentPartActivityState = Record<PartActivity, boolean>;
 
 export interface ContentRoomProductSummary {
   id: string;
@@ -29,6 +48,8 @@ export interface ContentPart {
   coverUrl?: string | null;
   version?: number | null;
   status?: string | null;
+  isActive?: boolean;
+  activities?: Partial<Record<PartActivity, boolean>> & Record<string, boolean>;
   createdAt?: string | Date | null;
   updatedAt?: string | Date | null;
 }

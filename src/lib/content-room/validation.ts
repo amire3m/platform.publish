@@ -1,5 +1,14 @@
 import { z } from "zod";
 
+export const PART_ACTIVITIES = [
+  "editing_youtube",
+  "copyright_fix",
+  "highlight_done",
+  "reel_done",
+  "cover_ready",
+  "previously_published",
+] as const;
+
 export const PRODUCT_TYPES = [
   "serial",
   "documentary",
@@ -7,6 +16,8 @@ export const PRODUCT_TYPES = [
   "film",
   "short_film",
   "educational",
+  "teaser",
+  "music_video",
 ] as const;
 
 export const CHANNELS = [
@@ -77,3 +88,27 @@ export const updateStatusSchema = z
 
 export type CreateProductInput = z.infer<typeof createProductSchema>;
 export type UpdateStatusInput = z.infer<typeof updateStatusSchema>;
+
+export const batchCreateSchema = z.object({
+  products: z.array(createProductSchema).min(1, "حداقل یک محصول لازم است.").max(10, "حداکثر ۱۰ محصول مجاز است."),
+});
+
+export const updateMetadataSchema = z.object({
+  title: z.string().trim().min(1, "عنوان الزامی است.").max(200, "عنوان باید حداکثر ۲۰۰ کاراکتر باشد.").optional(),
+  productType: z.enum(PRODUCT_TYPES).optional(),
+  channel: z.enum(CHANNELS).optional(),
+  partsCount: z.number().int().min(1).max(50).optional(),
+  notes: z.string().max(4000).nullable().optional(),
+  expectedVersion: z.number().int().positive(),
+});
+
+export const toggleActivitySchema = z.object({
+  partId: z.string().min(1),
+  activity: z.enum(PART_ACTIVITIES),
+  isDone: z.boolean(),
+  expectedProductVersion: z.number().int().positive(),
+});
+
+export type BatchCreateInput = z.infer<typeof batchCreateSchema>;
+export type UpdateMetadataInput = z.infer<typeof updateMetadataSchema>;
+export type ToggleActivityInput = z.infer<typeof toggleActivitySchema>;

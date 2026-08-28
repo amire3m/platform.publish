@@ -58,11 +58,24 @@ export async function POST(req: Request) {
       };
       const { TelegramClient } = await import("@/lib/telegram/client");
       const client = TelegramClient.fromEnv();
-      await client.sendMessage(beautiful.text, msg.message_thread_id, {
-        parseMode: "HTML",
-        replyMarkup: kb,
-        replyToMessageId: msg.message_id,
-      } as never);
+      try {
+        await client.sendMessage(beautiful.text, msg.message_thread_id, {
+          parseMode: "HTML",
+          replyMarkup: kb,
+          replyToMessageId: msg.message_id,
+        } as never);
+      } catch (err) {
+        const msgErr = (err as Error).message || "";
+        if (msgErr.includes("message thread not found") || msgErr.includes("thread not found")) {
+          await client.sendMessage(beautiful.text, undefined, {
+            parseMode: "HTML",
+            replyMarkup: kb,
+            replyToMessageId: msg.message_id,
+          } as never);
+        } else {
+          throw err;
+        }
+      }
       // record idempotency
       try {
         const { db } = await import("@/db");

@@ -27,10 +27,10 @@ function mapRepositoryError(error: unknown): Response | null {
 
 export async function handleActivitiesRequest(
   request: Request,
-  ctx: { params: Promise<{ partId: string }> },
+  ctx: { params: Promise<{ id: string }> },
   deps: ActivitiesRouteDependencies = defaultDependencies,
 ): Promise<Response> {
-  const { partId } = await ctx.params;
+  const { id: partId } = await ctx.params;
 
   const user = await deps.getCurrentUser();
   if (!user) return jsonError("ابتدا وارد حساب کاربری خود شوید.", 401, "UNAUTHENTICATED");
@@ -78,10 +78,10 @@ export async function handleActivitiesRequest(
   } catch (error) {
     const mapped = mapRepositoryError(error);
     if (mapped) return mapped;
-    return jsonInternalError(error, "api/content-room/parts/[partId]/activities PATCH");
+    return jsonInternalError(error, "api/content-room/parts/[id]/activities PATCH");
   }
 }
 
-export async function PATCH(request: Request, ctx: { params: Promise<{ partId: string }> }): Promise<Response> {
+export async function PATCH(request: Request, ctx: { params: Promise<{ id: string }> }): Promise<Response> {
   return handleActivitiesRequest(request, ctx, defaultDependencies);
 }

@@ -107,7 +107,7 @@ export async function POST(req: Request) {
   let result: { ok: boolean; message: string };
   try {
     const { routeCallback } = await import("@/lib/telegram/callback-router");
-    result = await routeCallback(action, contentId, fromTelegramId);
+    result = await routeCallback(action, contentId, fromTelegramId, cq.message?.message_id);
   } catch (err) {
     console.error("[webhook] routeCallback failed:", (err as Error).message);
     result = { ok: false, message: "\u062E\u0637\u0627\u06CC \u062F\u0627\u062E\u0644\u06CC \u0631\u062E \u062F\u0627\u062F." };
@@ -117,7 +117,7 @@ export async function POST(req: Request) {
     const { TelegramClient } = await import("@/lib/telegram/client");
     const client = TelegramClient.fromEnv();
     await client.answerCallbackQuery(cq.id, result.message);
-    if (result.ok && cq.message?.message_id) {
+    if (result.ok && cq.message?.message_id && !action.startsWith("link_")) {
       await client.editMessageReplyMarkup(cq.message.message_id, { inline_keyboard: [] });
     }
   } catch (err) {

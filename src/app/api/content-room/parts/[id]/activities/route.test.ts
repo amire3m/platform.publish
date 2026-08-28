@@ -96,7 +96,7 @@ describe("PATCH /api/content-room/parts/:partId/activities", () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.data.id).toBe("CPP-1");
-    expect(repository.togglePartActivity).toHaveBeenCalledWith(expect.objectContaining({ id: "CPP-1", activity: "previously_published", isDone: true }));
+    expect(repository.togglePartActivity).toHaveBeenCalledWith(expect.objectContaining({ partId: "CPP-1", activity: "previously_published", isDone: true }));
   });
 
   it("toggles activity successfully", async () => {

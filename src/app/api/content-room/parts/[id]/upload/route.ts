@@ -8,8 +8,9 @@ import { TelegramClient, TelegramNotConfiguredError } from "@/lib/telegram/clien
 import { generateEntityId } from "@/lib/ids";
 
 export const runtime = "nodejs";
+export const maxDuration = 300;
 
-const MAX_VIDEO_BYTES = 100 * 1024 * 1024; // 100MB
+const MAX_VIDEO_BYTES = 2 * 1024 * 1024 * 1024; // 2GB — سقف Bot API با Local Server (یوتیوب تا 256GB است اما تلگرام 2GB)
 const MAX_COVER_BYTES = 10 * 1024 * 1024; // 10MB
 
 const ALLOWED_VIDEO_MIMES = new Set([
@@ -83,7 +84,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
 
   if (type === "video") {
     if (size > MAX_VIDEO_BYTES) {
-      return jsonError("حجم ویدئو نباید بیش از ۱۰۰ مگابایت باشد.", 422, "FILE_TOO_LARGE");
+      return jsonError("حجم ویدئو نباید بیش از ۲ گیگابایت باشد. فایل‌های بزرگ‌تر را فشرده یا کوتاه کنید.", 422, "FILE_TOO_LARGE");
     }
     if (!isVideoMime(mime)) {
       return jsonError(`فرمت ویدئو پشتیبانی نمی‌شود: ${mime || "نامشخص"}. فرمت‌های مجاز: mp4، mov، avi، webm و mkv.`, 422, "INVALID_MIME");
@@ -126,7 +127,8 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     throw err;
   }
 
-  const buffer = Buffer.from(await file.arrayBuffer());
+  // برای فایل 2GB کل محتوا را در RAM کپی نکن — File خود Blob است
+  const uploadBlob: Blob = file;
 
   // Use existing telegram storage pattern: sendDocument to preserve raw bytes
   let fileId: string | null = null;
@@ -135,11 +137,11 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     if (type === "video") {
       // Try sendVideo first, fall back to sendDocument
       try {
-        const sent = await client.sendVideo(buffer, file.name);
+        const sent = await client.sendVideo(uploadBlob, file.name);
         fileId = sent.video?.file_id ?? null;
         messageId = sent.message_id;
       } catch {
-        const sent = await client.sendDocument(buffer, file.name);
+        const sent = await client.sendDocument(uploadBlob, file.name);
         fileId =
           sent.document?.file_id ??
           sent.video?.file_id ??
@@ -150,7 +152,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
       }
       if (!fileId) {
         // fallback to document
-        const sent = await client.sendDocument(buffer, file.name);
+        const sent = await client.sendDocument(uploadBlob, file.name);
         fileId =
           sent.document?.file_id ??
           sent.video?.file_id ??
@@ -162,11 +164,11 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     } else {
       // cover: sendPhoto or sendDocument
       try {
-        const sent = await client.sendPhoto(buffer, file.name);
+        const sent = await client.sendPhoto(uploadBlob, file.name);
         fileId = sent.photo?.[0]?.file_id ?? String(sent.message_id);
         messageId = sent.message_id;
       } catch {
-        const sent = await client.sendDocument(buffer, file.name);
+        const sent = await client.sendDocument(uploadBlob, file.name);
         fileId =
           sent.document?.file_id ??
           sent.photo?.[0]?.file_id ??

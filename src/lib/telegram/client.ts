@@ -215,7 +215,7 @@ export class TelegramClient {
   }
 
   async sendDocument(
-    fileBuffer: Buffer,
+    fileBuffer: Buffer | Blob,
     fileName: string,
     messageThreadId?: number,
     caption?: string,
@@ -231,12 +231,13 @@ export class TelegramClient {
     form.set("chat_id", this.cfg.groupId);
     if (messageThreadId) form.set("message_thread_id", String(messageThreadId));
     if (caption) form.set("caption", caption.slice(0, 1024));
-    form.set("document", new Blob([new Uint8Array(fileBuffer)]), fileName);
+    const blob = fileBuffer instanceof Blob ? fileBuffer : new Blob([new Uint8Array(fileBuffer)]);
+    form.set("document", blob, fileName);
     return callApi(this.cfg.botToken, "sendDocument", form);
   }
 
   async sendVideo(
-    fileBuffer: Buffer,
+    fileBuffer: Buffer | Blob,
     fileName: string,
     messageThreadId?: number,
     caption?: string,
@@ -245,12 +246,13 @@ export class TelegramClient {
     form.set("chat_id", this.cfg.groupId);
     if (messageThreadId) form.set("message_thread_id", String(messageThreadId));
     if (caption) form.set("caption", caption.slice(0, 1024));
-    form.set("video", new Blob([new Uint8Array(fileBuffer)]), fileName);
+    const blob = fileBuffer instanceof Blob ? fileBuffer : new Blob([new Uint8Array(fileBuffer)]);
+    form.set("video", blob, fileName);
     return callApi(this.cfg.botToken, "sendVideo", form);
   }
 
   async sendPhoto(
-    fileBuffer: Buffer,
+    fileBuffer: Buffer | Blob,
     fileName: string,
     messageThreadId?: number,
     caption?: string,
@@ -259,7 +261,8 @@ export class TelegramClient {
     form.set("chat_id", this.cfg.groupId);
     if (messageThreadId) form.set("message_thread_id", String(messageThreadId));
     if (caption) form.set("caption", caption.slice(0, 1024));
-    form.set("photo", new Blob([new Uint8Array(fileBuffer)]), fileName);
+    const blob = fileBuffer instanceof Blob ? fileBuffer : new Blob([new Uint8Array(fileBuffer)]);
+    form.set("photo", blob, fileName);
     return callApi(this.cfg.botToken, "sendPhoto", form);
   }
 

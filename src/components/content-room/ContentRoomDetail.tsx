@@ -274,6 +274,7 @@ function PartUploadCard({
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [coverFile, setCoverFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState<"video" | "cover" | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<number>(0);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [coverPreviewUrl, setCoverPreviewUrl] = useState<string | null>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
@@ -311,18 +312,33 @@ function PartUploadCard({
       return;
     }
     setUploading(type);
+    setUploadProgress(0);
     onError(null);
     try {
       const form = new FormData();
       form.set("file", file);
       form.set("type", type);
       if (part.version) form.set("expectedVersion", String(part.version));
-      const res = await fetch(`/api/content-room/parts/${part.id}/upload`, {
-        method: "POST",
-        body: form,
+      const body = await new Promise<{ ok: boolean; error?: string }>((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open("POST", `/api/content-room/parts/${part.id}/upload`);
+        xhr.upload.onprogress = (e) => {
+          if (e.lengthComputable) setUploadProgress(Math.round((e.loaded / e.total) * 100));
+        };
+        xhr.onload = () => {
+          try {
+            const json = JSON.parse(xhr.responseText || "{}");
+            if (xhr.status >= 200 && xhr.status < 300 && json.ok) resolve(json);
+            else reject(new Error(json.error ?? `خطا در آپلود (${xhr.status})`));
+          } catch {
+            reject(new Error(`خطا در آپلود (${xhr.status})`));
+          }
+        };
+        xhr.onerror = () => reject(new Error("خطا در ارتباط با سرور"));
+        xhr.ontimeout = () => reject(new Error("اتمام زمان آپلود"));
+        xhr.send(form);
       });
-      const body = await res.json();
-      if (!res.ok || !body.ok) {
+      if (!body.ok) {
         throw new Error(body.error ?? "خطا در آپلود");
       }
       onToast(type === "video" ? `ویدئو قسمت ${part.partNumber} با موفقیت آپلود شد.` : `کاور قسمت ${part.partNumber} با موفقیت آپلود شد.`);
@@ -345,6 +361,7 @@ function PartUploadCard({
       }
     } finally {
       setUploading(null);
+      setUploadProgress(0);
     }
   }
 
@@ -434,8 +451,13 @@ function PartUploadCard({
             disabled={!videoFile || uploading !== null}
             className="w-full min-h-[36px] text-xs"
           >
-            {uploading === "video" ? "در حال آپلود ویدئو..." : hasVideo ? "جایگزینی ویدئو" : "آپلود ویدئو"}
+            {uploading === "video" ? `در حال آپلود ویدئو... ${uploadProgress}%` : hasVideo ? "جایگزینی ویدئو" : "آپلود ویدئو"}
           </Button>
+          {uploading === "video" && (
+            <div className="h-1.5 w-full overflow-hidden rounded-full bg-tg-hover">
+              <div className="h-full bg-tg-accent transition-all duration-150" style={{ width: `${uploadProgress}%` }} />
+            </div>
+          )}
         </div>
 
         <div className="flex flex-col gap-2">
@@ -454,8 +476,13 @@ function PartUploadCard({
             disabled={!coverFile || uploading !== null}
             className="w-full min-h-[36px] text-xs"
           >
-            {uploading === "cover" ? "در حال آپلود کاور..." : hasCover ? "جایگزینی کاور" : "آپلود کاور"}
+            {uploading === "cover" ? `در حال آپلود کاور... ${uploadProgress}%` : hasCover ? "جایگزینی کاور" : "آپلود کاور"}
           </Button>
+          {uploading === "cover" && (
+            <div className="h-1.5 w-full overflow-hidden rounded-full bg-tg-hover">
+              <div className="h-full bg-sky-500 transition-all duration-150" style={{ width: `${uploadProgress}%` }} />
+            </div>
+          )}
         </div>
       </div>
     </div>

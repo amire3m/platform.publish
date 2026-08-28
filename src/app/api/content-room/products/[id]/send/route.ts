@@ -55,7 +55,13 @@ function mapServiceError(error: unknown): Response | null {
   if (code === "VERSION_CONFLICT") return jsonError(message, 409, "VERSION_CONFLICT");
   if (code === "NOT_FOUND") return jsonError(message, 404, "NOT_FOUND");
   if (code === "REASON_REQUIRED") return jsonError(message, 422, "REASON_REQUIRED");
-  if (code === "INVALID_TRANSITION") return jsonError(message, 409, "INVALID_TRANSITION");
+  if (code === "INVALID_TRANSITION") {
+    // No sendable parts case should be 400 per spec
+    if (message.includes("قابل ارسال") || message.includes("قبلاً منتشر")) {
+      return jsonError(message, 400, "INVALID_TRANSITION");
+    }
+    return jsonError(message, 409, "INVALID_TRANSITION");
+  }
   return null;
 }
 
@@ -90,12 +96,17 @@ export async function handleSendRequest(
       expectedVersion: parsed.data.expectedVersion,
       actorUserId: (user as unknown as { id?: string }).id ?? "unknown",
     });
-    return jsonOk({ programId: result.program.id, product: result.product, program: result.program });
+    return jsonOk({
+      programId: result.program.id,
+      product: result.product,
+      program: result.program,
+      skippedPreviouslyPublished: (result as unknown as { skippedPreviouslyPublished?: number }).skippedPreviouslyPublished ?? 0,
+      deliverables: result.deliverables,
+      publications: result.publications,
+    });
   } catch (error) {
     const mapped = mapServiceError(error);
     if (mapped) return mapped;
-    // Fallback: check if error is INVALID_TRANSITION but should be 422 for certain cases?
-    // We map both to 409 as per spec, but allow 422 for validation-like invalid transition.
     return jsonInternalError(error, "api/content-room/products/[id]/send");
   }
 }

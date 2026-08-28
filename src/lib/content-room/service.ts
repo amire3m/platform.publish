@@ -37,6 +37,7 @@ export interface SendToPublicationResult {
   program: WorkflowProgramRecord;
   deliverables: WorkflowDeliverableRecord[];
   publications: WorkflowPublicationRecord[];
+  skippedPreviouslyPublished: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -78,8 +79,30 @@ export function createContentRoomService(options: {
       }
 
       const parts = await contentPort.listPartsForProduct(command.productId);
-      // Ensure partsCount matches actual parts
-      const effectiveParts = parts.length > 0 ? parts : [];
+      // Filter to sendable parts: isActive && !previously_published
+      let skippedPreviouslyPublished = 0;
+      const sendable = parts.filter((p) => {
+        const isActive = (p as unknown as { isActive?: boolean }).isActive ?? true;
+        const activities = (p as unknown as { activities?: Record<string, boolean> }).activities;
+        const previouslyPublished =
+          activities?.previously_published ??
+          (p as unknown as { previously_published?: boolean }).previously_published ??
+          (p as unknown as { previouslyPublished?: boolean }).previouslyPublished ??
+          false;
+        if (!isActive) return false;
+        if (previouslyPublished) {
+          skippedPreviouslyPublished++;
+          return false;
+        }
+        return true;
+      });
+      if (sendable.length === 0) {
+        throw new ContentRoomServiceError(
+          "INVALID_TRANSITION",
+          "هیچ قسمت قابل ارسالی وجود ندارد. همه قسمت‌های فعال قبلاً منتشر شده‌اند.",
+        );
+      }
+      const effectiveParts = sendable;
 
       const now = new Date();
       // Create workflow program
@@ -280,6 +303,7 @@ export function createContentRoomService(options: {
         program: createdProgram,
         deliverables,
         publications,
+        skippedPreviouslyPublished,
       };
     },
   };

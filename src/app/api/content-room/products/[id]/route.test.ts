@@ -242,3 +242,126 @@ describe("GET/PATCH /api/content-room/products/:id", () => {
     expect(repository.updateProductStatus).toHaveBeenCalledWith(expect.objectContaining({ status: "editing_youtube", expectedVersion: 1 }));
   });
 });
+
+describe("PATCH /api/content-room/products/:id metadata edit", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("edits metadata successfully without title change", async () => {
+    const repository = {
+      getProduct: vi.fn().mockResolvedValue({ id: "CPR-1", title: "old", status: "imported", version: 1 }),
+      updateProductStatus: vi.fn(),
+      updateProductMetadata: vi.fn().mockResolvedValue({ id: "CPR-1", title: "old", status: "imported", version: 2 }),
+    };
+    const response = await handleProductRequest(
+      request("PATCH", { notes: "یادداشت جدید", expectedVersion: 1 }),
+      { params: Promise.resolve({ id: "CPR-1" }) },
+      makeDeps({ repository: repository as never }),
+    );
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.data.version).toBe(2);
+    expect(repository.updateProductMetadata).toHaveBeenCalledWith(expect.objectContaining({ id: "CPR-1", notes: "یادداشت جدید", expectedVersion: 1 }));
+  });
+
+  it("edits title and syncs workflow when manage_programs allowed", async () => {
+    const repository = {
+      getProduct: vi.fn().mockResolvedValue({ id: "CPR-1", title: "old", status: "imported", version: 1 }),
+      updateProductStatus: vi.fn(),
+      updateProductMetadata: vi.fn().mockResolvedValue({ id: "CPR-1", title: "new title", status: "imported", version: 2 }),
+    };
+    const syncWorkflowTitle = vi.fn().mockResolvedValue(undefined);
+    const response = await handleProductRequest(
+      request("PATCH", { title: "new title", expectedVersion: 1 }),
+      { params: Promise.resolve({ id: "CPR-1" }) },
+      {
+        ...makeDeps({ repository: repository as never }),
+        syncWorkflowTitle: syncWorkflowTitle as never,
+      } as never,
+    );
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.data.title).toBe("new title");
+    expect(body.data.workflowTitleSync).toBe("synced");
+    expect(syncWorkflowTitle).toHaveBeenCalledWith("CPR-1", "new title", expect.any(String));
+  });
+
+  it("edits title without manage_programs returns skipped_no_permission", async () => {
+    const repository = {
+      getProduct: vi.fn().mockResolvedValue({ id: "CPR-1", title: "old", status: "imported", version: 1 }),
+      updateProductStatus: vi.fn(),
+      updateProductMetadata: vi.fn().mockResolvedValue({ id: "CPR-1", title: "new title", status: "imported", version: 2 }),
+    };
+    const syncWorkflowTitle = vi.fn();
+    const response = await handleProductRequest(
+      request("PATCH", { title: "new title", expectedVersion: 1 }),
+      { params: Promise.resolve({ id: "CPR-1" }) },
+      makeDeps({
+        user: { id: "u2", role: "editor", allowedActions: ["update_assigned_content"], allowedAccountIds: [] },
+        repository: repository as never,
+      }) as never,
+    );
+    // editor lacks manage_programs, so sync should be skipped
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.data.workflowTitleSync).toBe("skipped_no_permission");
+    expect(syncWorkflowTitle).not.toHaveBeenCalled();
+  });
+
+  it("returns 422 for invalid metadata (empty title)", async () => {
+    const repository = {
+      getProduct: vi.fn().mockResolvedValue({ id: "CPR-1", title: "old", status: "imported", version: 1 }),
+      updateProductStatus: vi.fn(),
+      updateProductMetadata: vi.fn(),
+    };
+    const response = await handleProductRequest(
+      request("PATCH", { title: "", expectedVersion: 1 }),
+      { params: Promise.resolve({ id: "CPR-1" }) },
+      makeDeps({ repository: repository as never }),
+    );
+    expect(response.status).toBe(422);
+    expect(repository.updateProductMetadata).not.toHaveBeenCalled();
+  });
+
+  it("returns 409 for VERSION_CONFLICT on metadata edit", async () => {
+    const repository = {
+      getProduct: vi.fn().mockResolvedValue({ id: "CPR-1", title: "old", status: "imported", version: 2 }),
+      updateProductStatus: vi.fn(),
+      updateProductMetadata: vi.fn().mockRejectedValue({ code: "VERSION_CONFLICT", message: "نسخه قدیمی است." }),
+    };
+    const response = await handleProductRequest(
+      request("PATCH", { title: "new", expectedVersion: 1 }),
+      { params: Promise.resolve({ id: "CPR-1" }) },
+      makeDeps({ repository: repository as never }),
+    );
+    expect(response.status).toBe(409);
+  });
+
+  it("returns 404 when product not found on metadata edit", async () => {
+    const repository = {
+      getProduct: vi.fn().mockResolvedValue(null),
+      updateProductStatus: vi.fn(),
+      updateProductMetadata: vi.fn(),
+    };
+    const response = await handleProductRequest(
+      request("PATCH", { title: "new", expectedVersion: 1 }),
+      { params: Promise.resolve({ id: "missing" }) },
+      makeDeps({ repository: repository as never }),
+    );
+    expect(response.status).toBe(404);
+  });
+
+  it("handles partsCount update", async () => {
+    const repository = {
+      getProduct: vi.fn().mockResolvedValue({ id: "CPR-1", title: "a", status: "imported", version: 1, partsCount: 2 }),
+      updateProductStatus: vi.fn(),
+      updateProductMetadata: vi.fn().mockResolvedValue({ id: "CPR-1", title: "a", partsCount: 3, version: 2 }),
+    };
+    const response = await handleProductRequest(
+      request("PATCH", { partsCount: 3, expectedVersion: 1 }),
+      { params: Promise.resolve({ id: "CPR-1" }) },
+      makeDeps({ repository: repository as never }),
+    );
+    expect(response.status).toBe(200);
+    expect(repository.updateProductMetadata).toHaveBeenCalledWith(expect.objectContaining({ partsCount: 3 }));
+  });
+});

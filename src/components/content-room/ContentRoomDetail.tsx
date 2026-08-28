@@ -281,6 +281,10 @@ function PartUploadCard({
   const [reelFile, setReelFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState<"video" | "cover" | "highlight" | "reel" | null>(null);
   const [uploadProgress, setUploadProgress] = useState<number>(0);
+  const [uploadLoaded, setUploadLoaded] = useState<number>(0);
+  const [uploadTotal, setUploadTotal] = useState<number>(0);
+  const [uploadSpeed, setUploadSpeed] = useState<number>(0);
+  const xhrRef = useRef<XMLHttpRequest | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [coverPreviewUrl, setCoverPreviewUrl] = useState<string | null>(null);
   const [highlightPreviewUrl, setHighlightPreviewUrl] = useState<string | null>(null);
@@ -358,6 +362,9 @@ function PartUploadCard({
     }
     setUploading(type);
     setUploadProgress(0);
+    setUploadLoaded(0);
+    setUploadTotal(file.size);
+    setUploadSpeed(0);
     onError(null);
     try {
       const form = new FormData();
@@ -366,11 +373,27 @@ function PartUploadCard({
       if (part.version) form.set("expectedVersion", String(part.version));
       const body = await new Promise<{ ok: boolean; error?: string }>((resolve, reject) => {
         const xhr = new XMLHttpRequest();
+        xhrRef.current = xhr;
         xhr.open("POST", `/api/content-room/parts/${part.id}/upload`);
+        let lastLoaded = 0;
+        let lastTime = Date.now();
         xhr.upload.onprogress = (e) => {
-          if (e.lengthComputable) setUploadProgress(Math.round((e.loaded / e.total) * 100));
+          if (e.lengthComputable) {
+            setUploadProgress(Math.round((e.loaded / e.total) * 100));
+            setUploadLoaded(e.loaded);
+            setUploadTotal(e.total);
+            const now = Date.now();
+            const dt = (now - lastTime) / 1000;
+            if (dt > 0.3) {
+              const speed = (e.loaded - lastLoaded) / dt;
+              setUploadSpeed(speed);
+              lastLoaded = e.loaded;
+              lastTime = now;
+            }
+          }
         };
         xhr.onload = () => {
+          xhrRef.current = null;
           try {
             const json = JSON.parse(xhr.responseText || "{}");
             if (xhr.status >= 200 && xhr.status < 300 && json.ok) resolve(json);
@@ -379,8 +402,18 @@ function PartUploadCard({
             reject(new Error(`خطا در آپلود (${xhr.status})`));
           }
         };
-        xhr.onerror = () => reject(new Error("خطا در ارتباط با سرور"));
-        xhr.ontimeout = () => reject(new Error("اتمام زمان آپلود"));
+        xhr.onerror = () => {
+          xhrRef.current = null;
+          reject(new Error("خطا در ارتباط با سرور"));
+        };
+        xhr.onabort = () => {
+          xhrRef.current = null;
+          reject(new Error("آپلود لغو شد"));
+        };
+        xhr.ontimeout = () => {
+          xhrRef.current = null;
+          reject(new Error("اتمام زمان آپلود"));
+        };
         xhr.send(form);
       });
       if (!body.ok) {
@@ -411,14 +444,29 @@ function PartUploadCard({
       if (type === "highlight" || type === "reel") await mutateAssets();
     } catch (err) {
       const message = err instanceof Error ? err.message : "خطا در آپلود فایل";
-      onError(message);
-      if (message.includes("نسخه قدیمی") || message.includes("409")) {
-        await onRefresh();
-        if (type === "highlight" || type === "reel") await mutateAssets();
+      // لغو را به‌عنوان خطا نمایش نده اگر کاربر خودش لغو کرده
+      if (message === "آپلود لغو شد") {
+        onToast("آپلود لغو شد");
+        setTimeout(() => onToast(null), 2000);
+      } else {
+        onError(message);
+        if (message.includes("نسخه قدیمی") || message.includes("409")) {
+          await onRefresh();
+          if (type === "highlight" || type === "reel") await mutateAssets();
+        }
       }
     } finally {
+      xhrRef.current = null;
       setUploading(null);
       setUploadProgress(0);
+      setUploadLoaded(0);
+      setUploadSpeed(0);
+    }
+  }
+
+  function handleCancel() {
+    if (xhrRef.current) {
+      xhrRef.current.abort();
     }
   }
 
@@ -531,9 +579,16 @@ function PartUploadCard({
             {uploading === "video" ? `در حال آپلود ویدئو... ${uploadProgress}%` : hasVideo ? "جایگزینی ویدئو" : "آپلود ویدئو"}
           </Button>
           {uploading === "video" && (
-            <div className="h-1.5 w-full overflow-hidden rounded-full bg-tg-hover">
-              <div className="h-full bg-tg-accent transition-all duration-150" style={{ width: `${uploadProgress}%` }} />
-            </div>
+            <>
+              <div className="flex items-center justify-between text-[11px] text-tg-secondary">
+                <span>{(uploadLoaded / (1024 * 1024)).toFixed(1)} / {(uploadTotal / (1024 * 1024)).toFixed(1)} مگابایت</span>
+                <span>{uploadSpeed > 0 ? `${(uploadSpeed / (1024 * 1024)).toFixed(2)} MB/s` : ""}</span>
+                <button onClick={handleCancel} className="text-rose-600 hover:underline">لغو</button>
+              </div>
+              <div className="h-1.5 w-full overflow-hidden rounded-full bg-tg-hover">
+                <div className="h-full bg-tg-accent transition-all duration-150" style={{ width: `${uploadProgress}%` }} />
+              </div>
+            </>
           )}
         </div>
 
@@ -556,9 +611,16 @@ function PartUploadCard({
             {uploading === "cover" ? `در حال آپلود کاور... ${uploadProgress}%` : hasCover ? "جایگزینی کاور" : "آپلود کاور"}
           </Button>
           {uploading === "cover" && (
-            <div className="h-1.5 w-full overflow-hidden rounded-full bg-tg-hover">
-              <div className="h-full bg-sky-500 transition-all duration-150" style={{ width: `${uploadProgress}%` }} />
-            </div>
+            <>
+              <div className="flex items-center justify-between text-[11px] text-tg-secondary">
+                <span>{(uploadLoaded / (1024 * 1024)).toFixed(1)} / {(uploadTotal / (1024 * 1024)).toFixed(1)} مگابایت</span>
+                <span>{uploadSpeed > 0 ? `${(uploadSpeed / (1024 * 1024)).toFixed(2)} MB/s` : ""}</span>
+                <button onClick={handleCancel} className="text-rose-600 hover:underline">لغو</button>
+              </div>
+              <div className="h-1.5 w-full overflow-hidden rounded-full bg-tg-hover">
+                <div className="h-full bg-sky-500 transition-all duration-150" style={{ width: `${uploadProgress}%` }} />
+              </div>
+            </>
           )}
         </div>
 
@@ -589,9 +651,16 @@ function PartUploadCard({
             {uploading === "highlight" ? `در حال آپلود برش... ${uploadProgress}%` : "افزودن برش"}
           </Button>
           {uploading === "highlight" && (
-            <div className="h-1.5 w-full overflow-hidden rounded-full bg-tg-hover">
-              <div className="h-full bg-amber-500 transition-all duration-150" style={{ width: `${uploadProgress}%` }} />
-            </div>
+            <>
+              <div className="flex items-center justify-between text-[11px] text-tg-secondary">
+                <span>{(uploadLoaded / (1024 * 1024)).toFixed(1)} / {(uploadTotal / (1024 * 1024)).toFixed(1)} مگابایت</span>
+                <span>{uploadSpeed > 0 ? `${(uploadSpeed / (1024 * 1024)).toFixed(2)} MB/s` : ""}</span>
+                <button onClick={handleCancel} className="text-rose-600 hover:underline">لغو</button>
+              </div>
+              <div className="h-1.5 w-full overflow-hidden rounded-full bg-tg-hover">
+                <div className="h-full bg-amber-500 transition-all duration-150" style={{ width: `${uploadProgress}%` }} />
+              </div>
+            </>
           )}
         </div>
 
@@ -622,9 +691,16 @@ function PartUploadCard({
             {uploading === "reel" ? `در حال آپلود ریلز... ${uploadProgress}%` : "افزودن ریلز"}
           </Button>
           {uploading === "reel" && (
-            <div className="h-1.5 w-full overflow-hidden rounded-full bg-tg-hover">
-              <div className="h-full bg-violet-500 transition-all duration-150" style={{ width: `${uploadProgress}%` }} />
-            </div>
+            <>
+              <div className="flex items-center justify-between text-[11px] text-tg-secondary">
+                <span>{(uploadLoaded / (1024 * 1024)).toFixed(1)} / {(uploadTotal / (1024 * 1024)).toFixed(1)} مگابایت</span>
+                <span>{uploadSpeed > 0 ? `${(uploadSpeed / (1024 * 1024)).toFixed(2)} MB/s` : ""}</span>
+                <button onClick={handleCancel} className="text-rose-600 hover:underline">لغو</button>
+              </div>
+              <div className="h-1.5 w-full overflow-hidden rounded-full bg-tg-hover">
+                <div className="h-full bg-violet-500 transition-all duration-150" style={{ width: `${uploadProgress}%` }} />
+              </div>
+            </>
           )}
         </div>
       </div>

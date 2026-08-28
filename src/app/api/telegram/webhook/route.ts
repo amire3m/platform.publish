@@ -12,8 +12,55 @@ export async function POST(req: Request) {
     return Response.json({ ok: true });
   }
 
-  const msg = (body as { message?: { message_id: number; chat: { id: number; type?: string }; from?: { id: number | string; first_name?: string; last_name?: string; username?: string }; video?: { file_id: string; file_unique_id: string }; document?: { file_id: string; file_unique_id: string; mime_type?: string; file_name?: string }; caption?: string; date?: number; message_thread_id?: number } })?.message;
+  const msg = (body as { message?: { message_id: number; chat: { id: number; type?: string }; from?: { id: number | string; first_name?: string; last_name?: string; username?: string }; video?: { file_id: string; file_unique_id: string }; document?: { file_id: string; file_unique_id: string; mime_type?: string; file_name?: string }; caption?: string; text?: string; date?: number; message_thread_id?: number; reply_to_message?: { message_id: number; video?: { file_id: string }; document?: { file_id: string; mime_type?: string; file_name?: string }; caption?: string; from?: { id: number | string } } } })?.message;
   const hasVideo = !!(msg?.video || (msg?.document && String(msg.document?.mime_type || "").startsWith("video/")));
+  const replyTarget = msg?.reply_to_message;
+  const hasVideoInReply = !!(replyTarget?.video || (replyTarget?.document && String(replyTarget?.document?.mime_type || "").startsWith("video/")));
+  const isLinkCommand = (t?: string) => !!t && /(لینک|link|\/link)/i.test(t);
+  // old file via reply: user replies "لینک" to an old video
+  if (msg && hasVideoInReply && isLinkCommand(msg.text)) {
+    const groupId = process.env.TELEGRAM_GROUP_ID;
+    if (String(msg.chat?.id) !== String(groupId)) {
+      return Response.json({ ok: true });
+    }
+    const targetId = String(replyTarget!.message_id);
+    const targetFileId = replyTarget!.video?.file_id || replyTarget!.document?.file_id || "";
+    try {
+      const { beautifyGroupVideoPrompt } = await import("@/lib/telegram/beautify");
+      const beautiful = beautifyGroupVideoPrompt({
+        messageId: replyTarget!.message_id,
+        from: replyTarget!.from as never,
+        caption: replyTarget!.caption,
+        date: msg.date,
+      });
+      // override text to indicate old file
+      const text = beautiful.text.replace("ویدیویی دریافت شد", "فایل قدیمی انتخاب شد") + "\n\n<i>ریپلای شما به این فایل بود — همین را لینک کنید:</i>";
+      const chatIdStr = String(msg.chat.id).replace("-100", "");
+      const url = "https://t.me/c/" + chatIdStr + "/" + targetId;
+      const kb = {
+        inline_keyboard: [
+          [
+            { text: "\u2795 \u0627\u0641\u0632\u0648\u062f\u0646 \u0628\u0647 \u0645\u062d\u0635\u0648\u0644 \u0645\u0648\u062c\u0648\u062f", callback_data: "link_existing:" + targetId },
+            { text: "\uD83C\uDD95 \u0633\u0627\u062e\u062a \u0645\u062d\u0635\u0648\u0644 \u062c\u062f\u06CC\u062f", callback_data: "link_new:" + targetId },
+          ],
+          [{ text: "\uD83D\uDD17 \u0645\u0634\u0627\u0647\u062f\u0647 \u062f\u0631 \u06AF\u0631\u0648\u0647", url }],
+        ],
+      };
+      const { TelegramClient } = await import("@/lib/telegram/client");
+      const client = TelegramClient.fromEnv();
+      try {
+        await client.sendMessage(text, msg.message_thread_id, { parseMode: "HTML", replyMarkup: kb, replyToMessageId: msg.message_id } as never);
+      } catch (err) {
+        const msgErr = (err as Error).message || "";
+        if (msgErr.includes("message thread not found") || msgErr.includes("thread not found")) {
+          await client.sendMessage(text, undefined, { parseMode: "HTML", replyMarkup: kb, replyToMessageId: msg.message_id } as never);
+        } else throw err;
+      }
+    } catch (err) {
+      console.error("[webhook] old file reply failed:", (err as Error).message);
+    }
+    return Response.json({ ok: true });
+  }
   if (msg && hasVideo) {
     const groupId = process.env.TELEGRAM_GROUP_ID;
     if (String(msg.chat?.id) !== String(groupId)) {

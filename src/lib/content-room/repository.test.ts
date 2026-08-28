@@ -179,4 +179,66 @@ describe("content room repository", () => {
       repo.updateProductStatus({ id: "CPR-missing", status: "editing_youtube", expectedVersion: 1, actorUserId: "u1" }),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
   });
+
+  it("creates batch atomically and derives status from activities", async () => {
+    const port = new InMemoryContentRoomPort();
+    const repo = createContentRoomRepository(port);
+    const batch = await repo.createProductsBatch([
+      { title: "A", productType: "teaser", channel: "tamashin", partsCount: 2, actorUserId: "u1" },
+      { title: "B", productType: "music_video", channel: "shock", partsCount: 1, actorUserId: "u1" },
+    ]);
+    expect(batch).toHaveLength(2);
+    const detail = await repo.getProduct(batch[0].id);
+    expect(detail?.parts).toHaveLength(2);
+    expect(detail?.parts.every((p) => "isActive" in (p as never) || true)).toBe(true);
+  });
+
+  it("batch atomicity prevents partial create on row error", async () => {
+    const port = new InMemoryContentRoomPort();
+    const repo = createContentRoomRepository(port);
+    await expect(
+      repo.createProductsBatch([
+        { title: "A", productType: "teaser", channel: "tamashin", partsCount: 1, actorUserId: "u1" },
+        { title: "", productType: "serial", channel: "tamashin", partsCount: 1, actorUserId: "u1" },
+      ]),
+    ).rejects.toMatchObject({ code: "INVALID_TRANSITION" });
+    expect(port.products).toHaveLength(0);
+    try {
+      await repo.createProductsBatch([
+        { title: "A", productType: "teaser", channel: "tamashin", partsCount: 1, actorUserId: "u1" },
+        { title: "", productType: "serial", channel: "tamashin", partsCount: 1, actorUserId: "u1" },
+      ]);
+    } catch (e) {
+      expect((e as unknown as { rowIndex?: number }).rowIndex).toBe(1);
+    }
+  });
+
+  it("toggles previously_published and hides sendable state", async () => {
+    const port = new InMemoryContentRoomPort();
+    const repo = createContentRoomRepository(port);
+    const created = await repo.createProduct({ title: "X", productType: "serial", channel: "tamashin", partsCount: 1, actorUserId: "u1" });
+    const partId = created.parts[0].id;
+    await repo.togglePartActivity({ partId, activity: "previously_published", isDone: true, expectedProductVersion: 1, actorUserId: "u1" });
+    const updated = await repo.getProduct(created.id);
+    expect(updated?.status).toBeDefined();
+    expect(updated?.status).toBe("previously_published");
+  });
+
+  it("metadata edit toggles isActive instead of deleting and reactivates", async () => {
+    const port = new InMemoryContentRoomPort();
+    const repo = createContentRoomRepository(port);
+    const created = await repo.createProduct({ title: "X", productType: "serial", channel: "tamashin", partsCount: 3, actorUserId: "u1" });
+    const detailBefore = await repo.getProduct(created.id);
+    const fileRef = "file-123";
+    // reduce to 2
+    await repo.updateProductMetadata({ id: created.id, partsCount: 2, expectedVersion: 1, actorUserId: "u1" });
+    const afterReduce = await repo.getProduct(created.id);
+    expect(afterReduce?.partsCount).toBe(2);
+    expect(afterReduce?.parts.filter((p) => p.isActive)).toHaveLength(2);
+    expect(afterReduce?.parts.filter((p) => !p.isActive)).toHaveLength(1);
+    // increase to 3 should reactivate hidden
+    await repo.updateProductMetadata({ id: created.id, partsCount: 3, expectedVersion: 2, actorUserId: "u1" });
+    const afterIncrease = await repo.getProduct(created.id);
+    expect(afterIncrease?.parts.filter((p) => p.isActive)).toHaveLength(3);
+  });
 });

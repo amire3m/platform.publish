@@ -38,6 +38,25 @@ export function parseTgdbMessage(text: string): Record<string, unknown> | null {
   }
 }
 
+export async function sendBeautifulWithHidden(
+  client: TelegramClient,
+  tgdbText: string,
+  beautiful: string | { text: string; parseMode?: string },
+  replyMarkup: unknown,
+  threadId?: number,
+): Promise<{ beautifulMessageId: number; hiddenMessageId: number }> {
+  const beautifulText = typeof beautiful === "string" ? beautiful : beautiful.text;
+  const parseMode = typeof beautiful === "string" ? "HTML" : (beautiful.parseMode ?? "HTML");
+  const beautifulMsg = await client.sendMessage(beautifulText, threadId, {
+    parseMode: parseMode as never,
+    replyMarkup: replyMarkup as never,
+  });
+  const hiddenMsg = await client.sendMessage(tgdbText, threadId, {
+    disableNotification: true,
+  } as never);
+  return { beautifulMessageId: beautifulMsg.message_id, hiddenMessageId: hiddenMsg.message_id };
+}
+
 async function tryGetClient(): Promise<TelegramClient | null> {
   const cfg = getTelegramConfig();
   if (!cfg) return null;

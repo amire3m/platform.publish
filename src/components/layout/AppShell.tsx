@@ -34,7 +34,7 @@ import { NotificationCenter } from "@/components/workflow/NotificationCenter";
 const NAV_ITEMS = [
   { href: "/dashboard", label: "داشبورد", icon: LayoutDashboard },
   { href: "/calendar", label: "تقویم انتشار", icon: CalendarDays },
-  { href: "/content", label: "کتابخانه محتوا", icon: FolderOpen },
+  { href: "/content", label: "محتوا", icon: FolderOpen },
   { href: "/content/new", label: "ایجاد محتوا", icon: PlusCircle },
   { href: "/accounts", label: "کانال‌ها و پیج‌ها", icon: Tv },
   { href: "/users", label: "کاربران و تیم", icon: Users },
@@ -120,7 +120,7 @@ export function AppShell({
   const workflowNavItem = { href: "/workflow", label: "اتاق انتشار", icon: ListChecks } as const;
   const mailNavItem = { href: "/inbox", label: "صندوق", icon: Mail } as const;
   const contentRoomNavItem = { href: "/content-room", label: "اتاق محتوا", icon: Package } as const;
-  const assetsNavItem = { href: "/assets", label: "کتابخانه", icon: Images } as const;
+  const assetsNavItem = { href: "/library", label: "کتابخانه", icon: Images } as const;
   const withWorkflow = canViewWorkflow
     ? ([NAV_ITEMS[0], workflowNavItem, ...NAV_ITEMS.slice(1)] as typeof NAV_ITEMS)
     : NAV_ITEMS;

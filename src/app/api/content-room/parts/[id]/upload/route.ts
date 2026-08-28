@@ -190,14 +190,65 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   // For cover we store telegram file id, for video we store file_id; optionally prefix with type
   const storedRef = fileId;
 
-  // Update DB with version bump
+  // Update DB with version bump — for highlight/reel (برش/ریلز) create multi-asset rows
   try {
     const now = new Date();
     const currentVersion = (part as unknown as { version?: number }).version ?? 1;
     const nextVersion = currentVersion + 1;
 
-    const filePatch: Record<string, string> =
-      type === "video" ? { fileRef: storedRef } : type === "cover" ? { coverFileRef: storedRef } : type === "highlight" ? { highlightFileRef: storedRef } : { reelFileRef: storedRef };
+    if (type === "highlight" || type === "reel") {
+      const kind = type === "highlight" ? "highlight" : "reel";
+      const { contentPartAssets } = await import("@/db/schema");
+      const assetId = generateEntityId("CPP");
+      const [asset] = await db
+        .insert(contentPartAssets)
+        .values({
+          id: assetId,
+          partId: id,
+          kind,
+          fileRef: storedRef,
+          fileName: file.name,
+          createdBy: (user as unknown as { id?: string }).id ?? null,
+          createdAt: now,
+        } as never)
+        .returning();
+      // bump part version for optimistic concurrency
+      const [updated] =
+        expectedVersion !== null
+          ? await (async () => {
+              const { and } = await import("drizzle-orm");
+              const [u] = await db
+                .update(contentParts)
+                .set({ version: nextVersion, updatedAt: now } as never)
+                .where(and(eq(contentParts.id, id), eq(contentParts.version, expectedVersion)) as never)
+                .returning();
+              if (!u) {
+                const [exists] = await db.select({ id: contentParts.id }).from(contentParts).where(eq(contentParts.id, id)).limit(1);
+                if (!exists) throw Object.assign(new Error("قسمت یافت نشد."), { code: "NOT_FOUND" });
+                throw Object.assign(new Error("نسخه قدیمی است."), { code: "VERSION_CONFLICT" });
+              }
+              return [u];
+            })()
+          : await db.update(contentParts).set({ version: nextVersion, updatedAt: now } as never).where(eq(contentParts.id, id)).returning();
+      try {
+        const { workflowEvents } = await import("@/db/schema");
+        await db.insert(workflowEvents).values({
+          id: generateEntityId("WEV"),
+          entityType: "content_part",
+          entityId: id,
+          action: "file_updated",
+          before: { kind, file_ref: null } as unknown as Record<string, unknown>,
+          after: { kind, fileRef: storedRef, assetId, version: nextVersion } as unknown as Record<string, unknown>,
+          actorUserId: (user as unknown as { id?: string }).id ?? null,
+          source: "api",
+          reason: null,
+          createdAt: now,
+        } as never);
+      } catch {}
+      return jsonOk({ part: updated, asset, telegramFileId: fileId, telegramMessageId: messageId, type });
+    }
+
+    const filePatch: Record<string, string> = type === "video" ? { fileRef: storedRef } : { coverFileRef: storedRef };
 
     if (expectedVersion !== null) {
       const { and } = await import("drizzle-orm");
@@ -224,7 +275,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
           entityType: "content_part",
           entityId: id,
           action: "file_updated",
-          before: { file_ref: (part as unknown as { fileRef: string | null }).fileRef, cover_file_ref: (part as unknown as { coverFileRef: string | null }).coverFileRef, highlight_file_ref: (part as unknown as { highlightFileRef: string | null }).highlightFileRef, reel_file_ref: (part as unknown as { reelFileRef: string | null }).reelFileRef } as unknown as Record<string, unknown>,
+          before: { file_ref: (part as unknown as { fileRef: string | null }).fileRef, cover_file_ref: (part as unknown as { coverFileRef: string | null }).coverFileRef } as unknown as Record<string, unknown>,
           after: { ...filePatch, version: nextVersion } as unknown as Record<string, unknown>,
           actorUserId: (user as unknown as { id?: string }).id ?? null,
           source: "api",
@@ -257,7 +308,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
           entityType: "content_part",
           entityId: id,
           action: "file_updated",
-          before: { file_ref: (part as unknown as { fileRef: string | null }).fileRef, cover_file_ref: (part as unknown as { coverFileRef: string | null }).coverFileRef, highlight_file_ref: (part as unknown as { highlightFileRef: string | null }).highlightFileRef, reel_file_ref: (part as unknown as { reelFileRef: string | null }).reelFileRef } as unknown as Record<string, unknown>,
+          before: { file_ref: (part as unknown as { fileRef: string | null }).fileRef, cover_file_ref: (part as unknown as { coverFileRef: string | null }).coverFileRef } as unknown as Record<string, unknown>,
           after: { ...filePatch, version: nextVersion } as unknown as Record<string, unknown>,
           actorUserId: (user as unknown as { id?: string }).id ?? null,
           source: "api",

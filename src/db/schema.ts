@@ -618,3 +618,22 @@ export const contentPartActivities = pgTable(
     uniq: uniqueIndex("cpa_part_activity_unique").on(t.partId, t.activity),
   }),
 );
+
+export const contentPartAssets = pgTable(
+  "content_part_assets",
+  {
+    id: text("id").primaryKey(),
+    partId: text("part_id")
+      .notNull()
+      .references(() => contentParts.id, { onDelete: "cascade" }),
+    kind: text("kind").notNull(), // highlight | reel
+    fileRef: text("file_ref").notNull(),
+    fileName: text("file_name"),
+    createdBy: text("created_by"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    partIdx: index("content_part_assets_part_idx").on(t.partId),
+    kindIdx: index("content_part_assets_kind_idx").on(t.kind),
+  }),
+);

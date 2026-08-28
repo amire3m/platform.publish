@@ -292,8 +292,19 @@ function PartUploadCard({
 
   const hasVideo = Boolean(part.fileRef);
   const hasCover = Boolean(part.coverFileRef);
-  const hasHighlight = Boolean(part.highlightFileRef);
-  const hasReel = Boolean(part.reelFileRef);
+  const { data: assetsData, mutate: mutateAssets } = useSWR<{ ok: boolean; data: { assets: Array<{ id: string; kind: string; fileRef: string; fileName: string | null; createdAt: string }> } }>(
+    `/api/content-room/parts/${part.id}/assets`,
+    async (url: string) => {
+      const res = await fetch(url);
+      const json = await res.json();
+      return json;
+    },
+  );
+  const highlights = assetsData?.data?.assets?.filter((a) => a.kind === "highlight") ?? [];
+  const reels = assetsData?.data?.assets?.filter((a) => a.kind === "reel") ?? [];
+  // keep legacy single-ref badge for migrated rows that haven't been moved
+  const hasHighlight = highlights.length > 0 || Boolean(part.highlightFileRef);
+  const hasReel = reels.length > 0 || Boolean(part.reelFileRef);
 
   function handleVideoSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0] ?? null;
@@ -376,7 +387,7 @@ function PartUploadCard({
         throw new Error(body.error ?? "خطا در آپلود");
       }
       const successMsg =
-        type === "video" ? `ویدئو قسمت ${part.partNumber} با موفقیت آپلود شد.` : type === "cover" ? `کاور قسمت ${part.partNumber} با موفقیت آپلود شد.` : type === "highlight" ? `هایلایت قسمت ${part.partNumber} با موفقیت آپلود شد.` : `ریلز قسمت ${part.partNumber} با موفقیت آپلود شد.`;
+        type === "video" ? `ویدئو قسمت ${part.partNumber} با موفقیت آپلود شد.` : type === "cover" ? `کاور قسمت ${part.partNumber} با موفقیت آپلود شد.` : type === "highlight" ? `برش قسمت ${part.partNumber} با موفقیت آپلود شد.` : `ریلز قسمت ${part.partNumber} با موفقیت آپلود شد.`;
       onToast(successMsg);
       setTimeout(() => onToast(null), 3000);
       if (type === "video") {
@@ -397,15 +408,31 @@ function PartUploadCard({
         if (reelInputRef.current) reelInputRef.current.value = "";
       }
       await onRefresh();
+      if (type === "highlight" || type === "reel") await mutateAssets();
     } catch (err) {
       const message = err instanceof Error ? err.message : "خطا در آپلود فایل";
       onError(message);
       if (message.includes("نسخه قدیمی") || message.includes("409")) {
         await onRefresh();
+        if (type === "highlight" || type === "reel") await mutateAssets();
       }
     } finally {
       setUploading(null);
       setUploadProgress(0);
+    }
+  }
+
+  async function handleDeleteAsset(assetId: string) {
+    try {
+      const res = await fetch(`/api/content-room/parts/${part.id}/assets?assetId=${assetId}`, { method: "DELETE" });
+      const body = await res.json();
+      if (!res.ok || !body.ok) throw new Error(body.error ?? "خطا در حذف");
+      await mutateAssets();
+      await onRefresh();
+      onToast("فایل حذف شد.");
+      setTimeout(() => onToast(null), 2000);
+    } catch (e) {
+      onError(e instanceof Error ? e.message : "خطا در حذف");
     }
   }
 
@@ -433,7 +460,7 @@ function PartUploadCard({
             {hasCover ? "کاور ✓" : "بدون کاور"}
           </span>
           <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${hasHighlight ? "bg-amber-500/15 text-amber-700" : "bg-slate-500/10 text-slate-500"}`}>
-            {hasHighlight ? "هایلایت ✓" : "بدون هایلایت"}
+            {hasHighlight ? "برش ✓" : "بدون برش"}
           </span>
           <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${hasReel ? "bg-violet-500/15 text-violet-700" : "bg-slate-500/10 text-slate-500"}`}>
             {hasReel ? "ریلز ✓" : "بدون ریلز"}
@@ -535,8 +562,19 @@ function PartUploadCard({
           )}
         </div>
 
-        <div className="flex flex-col gap-2">
-          <label className="text-xs font-medium text-tg-secondary">هایلایت (برش کوتاه، حداکثر ۲ گیگابایت، mp4/mov/webm)</label>
+        <div className="flex flex-col gap-2 rounded-lg border border-amber-500/20 bg-amber-500/5 p-2">
+          <label className="text-xs font-medium text-tg-secondary">برش‌ها (چند برش کوتاه برای هر قسمت — هر کدام حداکثر ۲ گیگابایت)</label>
+          {highlights.length > 0 && (
+            <div className="space-y-1">
+              {highlights.map((a) => (
+                <div key={a.id} className="flex items-center justify-between rounded bg-tg-surface px-2 py-1 text-[11px]">
+                  <span className="truncate" title={a.fileName ?? a.fileRef}>{a.fileName ?? a.fileRef.slice(0, 24)}</span>
+                  <button onClick={() => handleDeleteAsset(a.id)} className="mr-2 text-rose-600 hover:underline">حذف</button>
+                </div>
+              ))}
+              <p className="text-[11px] text-emerald-600">{highlights.length} برش ثبت شده</p>
+            </div>
+          )}
           <input
             ref={highlightInputRef}
             type="file"
@@ -547,9 +585,8 @@ function PartUploadCard({
           {highlightPreviewUrl && (
             <video src={highlightPreviewUrl} controls className="h-28 w-full rounded bg-black" />
           )}
-          {hasHighlight && !highlightPreviewUrl && <p className="text-[11px] text-emerald-600">هایلایت آپلود شده ✓</p>}
           <Button size="sm" variant="secondary" onClick={() => upload("highlight")} disabled={!highlightFile || uploading !== null} className="w-full min-h-[36px] text-xs">
-            {uploading === "highlight" ? `در حال آپلود هایلایت... ${uploadProgress}%` : hasHighlight ? "جایگزینی هایلایت" : "آپلود هایلایت"}
+            {uploading === "highlight" ? `در حال آپلود برش... ${uploadProgress}%` : "افزودن برش"}
           </Button>
           {uploading === "highlight" && (
             <div className="h-1.5 w-full overflow-hidden rounded-full bg-tg-hover">
@@ -558,8 +595,19 @@ function PartUploadCard({
           )}
         </div>
 
-        <div className="flex flex-col gap-2">
-          <label className="text-xs font-medium text-tg-secondary">ریلز (برش کوتاه عمودی، حداکثر ۲ گیگابایت، mp4/mov/webm)</label>
+        <div className="flex flex-col gap-2 rounded-lg border border-violet-500/20 bg-violet-500/5 p-2">
+          <label className="text-xs font-medium text-tg-secondary">ریلزها (چند ریلز برای هر قسمت — هر کدام حداکثر ۲ گیگابایت)</label>
+          {reels.length > 0 && (
+            <div className="space-y-1">
+              {reels.map((a) => (
+                <div key={a.id} className="flex items-center justify-between rounded bg-tg-surface px-2 py-1 text-[11px]">
+                  <span className="truncate" title={a.fileName ?? a.fileRef}>{a.fileName ?? a.fileRef.slice(0, 24)}</span>
+                  <button onClick={() => handleDeleteAsset(a.id)} className="mr-2 text-rose-600 hover:underline">حذف</button>
+                </div>
+              ))}
+              <p className="text-[11px] text-emerald-600">{reels.length} ریلز ثبت شده</p>
+            </div>
+          )}
           <input
             ref={reelInputRef}
             type="file"
@@ -570,9 +618,8 @@ function PartUploadCard({
           {reelPreviewUrl && (
             <video src={reelPreviewUrl} controls className="h-28 w-full rounded bg-black" />
           )}
-          {hasReel && !reelPreviewUrl && <p className="text-[11px] text-emerald-600">ریلز آپلود شده ✓</p>}
           <Button size="sm" variant="secondary" onClick={() => upload("reel")} disabled={!reelFile || uploading !== null} className="w-full min-h-[36px] text-xs">
-            {uploading === "reel" ? `در حال آپلود ریلز... ${uploadProgress}%` : hasReel ? "جایگزینی ریلز" : "آپلود ریلز"}
+            {uploading === "reel" ? `در حال آپلود ریلز... ${uploadProgress}%` : "افزودن ریلز"}
           </Button>
           {uploading === "reel" && (
             <div className="h-1.5 w-full overflow-hidden rounded-full bg-tg-hover">

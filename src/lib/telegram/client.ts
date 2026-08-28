@@ -210,12 +210,14 @@ export class TelegramClient {
     return callApi(this.cfg.botToken, "editMessageReplyMarkup", {chat_id:this.cfg.groupId, message_id:messageId, reply_markup:replyMarkup});
   }
 
-  async sendPrivateMessage(userTelegramId: string | number, text: string) {
+  async sendPrivateMessage(userTelegramId: string | number, text: string, opts?: { parseMode?: string; replyMarkup?: { inline_keyboard: unknown[][] } }) {
     return callApi<TgMessage>(this.cfg.botToken, "sendMessage", {
       chat_id: userTelegramId,
       text,
+      parse_mode: opts?.parseMode,
+      reply_markup: opts?.replyMarkup,
       disable_web_page_preview: true,
-    });
+    } as unknown as Record<string, unknown>);
   }
 
   async sendDocument(

@@ -16,7 +16,19 @@ import { and, lte, or, isNull, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { content, socialAccounts, credentials, telegramTopics } from "@/db/schema";
 import { TelegramClient, getTelegramConfig } from "./telegram/client";
-import { updateContentRecord, appendAuditEvent, notifyUser, buildTgdbMessage } from "./telegram/tgdb";
+import {
+  updateContentRecord,
+  appendAuditEvent,
+  notifyUser,
+  buildTgdbMessage,
+  sendBeautifulWithHidden,
+} from "./telegram/tgdb";
+import { beautifyPublishSuccess, beautifyPublishError } from "./telegram/beautify";
+import {
+  buildPublishSuccessKeyboard,
+  buildPublishErrorKeyboard,
+  buildPrivateNotifyKeyboard,
+} from "./telegram/keyboards";
 import { decryptSecret, encryptSecret } from "./crypto";
 import { youtubeProvider } from "./providers/youtube";
 import { instagramProvider, refreshInstagramToken } from "./providers/instagram";
@@ -367,16 +379,32 @@ async function processContent(row: typeof content.$inferSelect, opts?: { force?:
       const [publishedTopic] = await db.select().from(telegramTopics).where(eq(telegramTopics.key, "published")).limit(1);
       const [errorsTopic] = await db.select().from(telegramTopics).where(eq(telegramTopics.key, "errors")).limit(1);
       if (anySuccess) {
-        await client.sendMessage(
-          buildTgdbMessage("publish_success", { content_id: row.id, title: row.title, targets: updatedTargets }),
-          publishedTopic?.messageThreadId ?? undefined,
-        );
+        const tgdb = buildTgdbMessage("publish_success", {
+          content_id: row.id,
+          title: row.title,
+          targets: updatedTargets,
+        });
+        const beautiful = beautifyPublishSuccess({
+          content_id: row.id,
+          title: row.title || "بدون عنوان",
+          targets: updatedTargets as never,
+        });
+        const kb = buildPublishSuccessKeyboard(row.id);
+        await sendBeautifulWithHidden(client, tgdb, beautiful, kb, publishedTopic?.messageThreadId ?? undefined);
       }
       if (anyFailure) {
-        await client.sendMessage(
-          buildTgdbMessage("publish_error", { content_id: row.id, title: row.title, targets: updatedTargets }),
-          errorsTopic?.messageThreadId ?? undefined,
-        );
+        const tgdb = buildTgdbMessage("publish_error", {
+          content_id: row.id,
+          title: row.title,
+          targets: updatedTargets,
+        });
+        const beautiful = beautifyPublishError({
+          content_id: row.id,
+          title: row.title || "بدون عنوان",
+          targets: updatedTargets as never,
+        });
+        const kb = buildPublishErrorKeyboard(row.id);
+        await sendBeautifulWithHidden(client, tgdb, beautiful, kb, errorsTopic?.messageThreadId ?? undefined);
       }
     }
     const when = row.scheduledAtUtc ? formatJalaliDateTime(row.scheduledAtUtc) : formatJalaliDateTime(nowUtcIso());
@@ -385,11 +413,34 @@ async function processContent(row: typeof content.$inferSelect, opts?: { force?:
       const { users } = await import("@/db/schema");
       const [creatorUser] = await dbRef.select().from(users).where(eq(users.id, row.createdBy)).limit(1);
       if (creatorUser) {
-        const statusText = anySuccess && !anyFailure ? "با موفقیت منتشر شد ✅" : anyFailure ? "با خطا مواجه شد ❌" : "در حال انتشار است ⏳";
-        await notifyUser(
-          creatorUser.telegramId,
-          `محتوای «${row.title || row.id}» ${statusText}\nزمان: ${when}\nشناسه: ${row.id}`,
-        );
+        const isSuccess = anySuccess && !anyFailure;
+        const isFailure = anyFailure;
+        let beautifulText: string;
+        let parseMode: string | undefined;
+        let kb: unknown;
+        if (isSuccess) {
+          const b = beautifyPublishSuccess({ content_id: row.id, title: row.title || "بدون عنوان" });
+          beautifulText = `${b.text}\n📅 ${when}\n🆔 <code>${row.id}</code>`;
+          parseMode = b.parseMode;
+          kb = buildPrivateNotifyKeyboard(row.id, true);
+        } else if (isFailure) {
+          const b = beautifyPublishError({
+            content_id: row.id,
+            title: row.title || "بدون عنوان",
+            targets: updatedTargets as never,
+          });
+          beautifulText = `${b.text}\n📅 ${when}\n🆔 <code>${row.id}</code>`;
+          parseMode = b.parseMode;
+          kb = buildPrivateNotifyKeyboard(row.id, false);
+        } else {
+          beautifulText = `محتوای «${row.title || row.id}» در حال انتشار است ⏳\nزمان: ${when}\nشناسه: ${row.id}`;
+          parseMode = undefined;
+          kb = buildPrivateNotifyKeyboard(row.id, false);
+        }
+        await notifyUser(creatorUser.telegramId, beautifulText, {
+          parseMode,
+          replyMarkup: kb as never,
+        });
       }
     }
   } catch (err) {

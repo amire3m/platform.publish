@@ -21,6 +21,8 @@ import { eq } from "drizzle-orm";
 import { TelegramClient, TelegramNotConfiguredError, getTelegramConfig } from "./client";
 import { generateEntityId } from "@/lib/ids";
 import { nowUtcIso } from "@/lib/date/jalali";
+import { beautifyAnalytics, beautifyAudit, beautifyContent } from "./beautify";
+import { buildContentKeyboard } from "./keyboards";
 
 export const TGDB_MARKER = "TGDB|v1";
 
@@ -102,7 +104,7 @@ export async function createContentRecord(input: {
   const client = await tryGetClient();
   if (client) {
     try {
-      const text = buildTgdbMessage("content", {
+      const tgdbText = buildTgdbMessage("content", {
         id,
         version: 1,
         status: input.status,
@@ -120,8 +122,25 @@ export async function createContentRecord(input: {
         publication_results: [],
         error: null,
       });
-      const msg = await client.sendMessage(text, input.sourceTopicId ?? undefined);
-      metadataMessageId = msg.message_id;
+      const beautiful = beautifyContent({
+        id,
+        title: input.title,
+        status: input.status,
+        approvalStatus: "pending",
+        createdAt: nowIso,
+        createdBy: input.createdBy,
+        platformTargets: input.platformTargets as Array<{ platform: string }>,
+        description: input.description,
+      });
+      const kb = buildContentKeyboard(id, input.status, "pending");
+      const { beautifulMessageId } = await sendBeautifulWithHidden(
+        client,
+        tgdbText,
+        beautiful,
+        kb,
+        input.sourceTopicId ?? undefined,
+      );
+      metadataMessageId = beautifulMessageId;
       telegramSynced = true;
       await markSyncStatus("ok");
     } catch (err) {
@@ -169,11 +188,11 @@ export async function updateContentRecord(
 
   const updated = { ...existing, ...patch, version: existing.version + 1, updatedAt: new Date() };
 
-  if (opts?.resync !== false && existing.metadataMessageId) {
+  if (opts?.resync !== false) {
     const client = await tryGetClient();
     if (client) {
       try {
-        const text = buildTgdbMessage("content", {
+        const tgdbText = buildTgdbMessage("content", {
           id: updated.id,
           version: updated.version,
           status: updated.status,
@@ -196,7 +215,43 @@ export async function updateContentRecord(
           publication_results: updated.publishResults,
           error: updated.error,
         });
-        await client.editMessageText(existing.metadataMessageId, text);
+        const beautiful = beautifyContent({
+          id: updated.id,
+          title: updated.title,
+          status: updated.status,
+          approvalStatus: updated.approvalStatus,
+          createdAt: updated.updatedAt ?? nowUtcIso(),
+          createdBy: updated.createdBy,
+          platformTargets: (updated.platformTargets as Array<{ platform: string }>) ?? [],
+          description: updated.description,
+        });
+        const kb = buildContentKeyboard(updated.id, updated.status, updated.approvalStatus);
+        // Prefer editing the hidden message if we have metadataMessageId, but still ensure beautiful+hidden dual
+        if (existing.metadataMessageId) {
+          try {
+            await client.editMessageText(existing.metadataMessageId, tgdbText);
+            // also send beautiful as new visible message (keeps hidden editable for rebuild)
+            const beautiful2 = beautifyContent({
+              id: updated.id,
+              title: updated.title,
+              status: updated.status,
+              approvalStatus: updated.approvalStatus,
+              createdAt: updated.updatedAt ?? nowUtcIso(),
+              createdBy: updated.createdBy,
+              platformTargets: (updated.platformTargets as Array<{ platform: string }>) ?? [],
+              description: updated.description,
+            });
+            await client.sendMessage(beautiful2.text, updated.sourceTopicId ?? undefined, {
+              parseMode: beautiful2.parseMode as never,
+              replyMarkup: kb as never,
+            });
+          } catch {
+            // fallback to dual send
+            await sendBeautifulWithHidden(client, tgdbText, beautiful, kb, updated.sourceTopicId ?? undefined);
+          }
+        } else {
+          await sendBeautifulWithHidden(client, tgdbText, beautiful, kb, updated.sourceTopicId ?? undefined);
+        }
         await markSyncStatus("ok");
       } catch (err) {
         await markSyncStatus("degraded");
@@ -230,7 +285,7 @@ export async function appendAuditEvent(input: {
   if (client) {
     try {
       const [logsTopic] = await db.select().from(telegramTopics).where(eq(telegramTopics.key, "logs")).limit(1);
-      const text = buildTgdbMessage("audit_event", {
+      const tgdbText = buildTgdbMessage("audit_event", {
         id,
         content_id: input.entityId ?? null,
         action: input.action,
@@ -240,8 +295,30 @@ export async function appendAuditEvent(input: {
         user_telegram_id: input.actorTelegramId ?? null,
         created_at: nowUtcIso(),
       });
-      const msg = await client.sendMessage(text, logsTopic?.messageThreadId ?? undefined);
-      telegramMessageId = msg.message_id;
+      const beautiful = beautifyAudit({
+        action: input.action,
+        entity_type: input.entityType,
+        entity_id: input.entityId ?? "",
+        from: (input.before as { status?: string } | null)?.status ?? null,
+        to: (input.after as { status?: string } | null)?.status ?? null,
+      });
+      const kb = input.entityId
+        ? buildContentKeyboard(
+            input.entityId,
+            (input.after as { status?: string } | null)?.status ??
+              (input.before as { status?: string } | null)?.status ??
+              "draft",
+            null,
+          )
+        : undefined;
+      const { beautifulMessageId } = await sendBeautifulWithHidden(
+        client,
+        tgdbText,
+        beautiful,
+        kb ?? { inline_keyboard: [] },
+        logsTopic?.messageThreadId ?? undefined,
+      );
+      telegramMessageId = beautifulMessageId;
     } catch (err) {
       console.error("[tgdb] failed to write audit event to Telegram:", (err as Error).message);
     }
@@ -282,7 +359,7 @@ export async function saveAnalyticsSnapshot(input: {
   if (client) {
     try {
       const [reportsTopic] = await db.select().from(telegramTopics).where(eq(telegramTopics.key, "reports")).limit(1);
-      const text = buildTgdbMessage("analytics_snapshot", {
+      const tgdbText = buildTgdbMessage("analytics_snapshot", {
         id,
         platform: input.platform,
         account_id: input.accountId,
@@ -290,8 +367,25 @@ export async function saveAnalyticsSnapshot(input: {
         date_utc: input.dateUtc,
         ...input.metrics,
       });
-      const msg = await client.sendMessage(text, reportsTopic?.messageThreadId ?? undefined);
-      telegramMessageId = msg.message_id;
+      const beautiful = beautifyAnalytics({
+        platform: input.platform,
+        dateJalali: input.dateJalali,
+        dateUtc: input.dateUtc,
+        metrics: input.metrics,
+        views: input.metrics.views,
+      });
+      const base = (process.env.APP_BASE_URL || "http://localhost:3000").replace(/\/$/, "");
+      const kb = {
+        inline_keyboard: [[{ text: "🔗 مشاهده در پنل", url: `${base}/analytics` }]],
+      };
+      const { beautifulMessageId } = await sendBeautifulWithHidden(
+        client,
+        tgdbText,
+        beautiful,
+        kb,
+        reportsTopic?.messageThreadId ?? undefined,
+      );
+      telegramMessageId = beautifulMessageId;
     } catch (err) {
       console.error("[tgdb] failed to write analytics snapshot to Telegram:", (err as Error).message);
     }
@@ -323,11 +417,18 @@ export async function saveAnalyticsSnapshot(input: {
 // ---------------------------------------------------------------------------
 // Notifications (private chat with users who started the bot)
 // ---------------------------------------------------------------------------
-export async function notifyUser(telegramId: string, text: string) {
+export async function notifyUser(
+  telegramId: string,
+  text: string,
+  opts?: { parseMode?: string; replyMarkup?: unknown },
+) {
   const client = await tryGetClient();
   if (!client) return false;
   try {
-    await client.sendPrivateMessage(telegramId, text);
+    await client.sendPrivateMessage(telegramId, text, {
+      parseMode: opts?.parseMode ?? (text.includes("<") ? "HTML" : undefined),
+      replyMarkup: opts?.replyMarkup as never,
+    });
     return true;
   } catch (err) {
     console.error("[tgdb] failed to notify user:", (err as Error).message);

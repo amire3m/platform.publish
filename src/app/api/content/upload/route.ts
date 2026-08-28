@@ -22,7 +22,7 @@ import { db } from "@/db";
 import { socialAccounts, telegramTopics, appSettings, content as contentTable } from "@/db/schema";
 import { requirePermission, jsonError, jsonOk } from "@/lib/api-helpers";
 import { TelegramClient, TelegramNotConfiguredError } from "@/lib/telegram/client";
-import { createContentRecord } from "@/lib/telegram/tgdb";
+import { createContentRecord, buildTgdbMessage, sendBeautifulWithHidden } from "@/lib/telegram/tgdb";
 import {
   DEFAULT_CAPABILITY_CONFIG,
   TELEGRAM_BOT_API_FILE_LIMIT_MB,
@@ -176,13 +176,40 @@ export async function POST(req: Request) {
 
   // Long caption/description handling: keep them out of the main JSON blob
   // when they would push the message near Telegram's ~4096 char limit.
+  // Now sends beautiful HTML card + hidden TGDB dual message with glass button.
   let captionMessageId: number | null = null;
   let captionForRecord = meta.caption ?? "";
   if (captionForRecord.length > 600) {
     const [captionsTopic] = await db.select().from(telegramTopics).where(eq(telegramTopics.key, "captions")).limit(1);
     try {
-      const sent = await client.sendMessage(captionForRecord, captionsTopic?.messageThreadId ?? topicThreadId);
-      captionMessageId = sent.message_id;
+      const tgdbText = buildTgdbMessage("caption", {
+        title: meta.title ?? "",
+        caption: captionForRecord,
+        hashtags: meta.hashtags ?? [],
+      });
+      const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+      const beautiful = {
+        text: `<b>📝 کپشن — ${esc(meta.title ?? "بدون عنوان")}</b>\n${esc(captionForRecord.slice(0, 1000))}…`,
+        parseMode: "HTML" as const,
+      };
+      const captionKb = {
+        inline_keyboard: [
+          [
+            {
+              text: "🔗 مشاهده در پنل",
+              url: `${(process.env.APP_BASE_URL || "http://localhost:3000").replace(/\/$/, "")}/content`,
+            },
+          ],
+        ],
+      };
+      const { beautifulMessageId } = await sendBeautifulWithHidden(
+        client,
+        tgdbText,
+        beautiful,
+        captionKb,
+        captionsTopic?.messageThreadId ?? topicThreadId,
+      );
+      captionMessageId = beautifulMessageId;
       captionForRecord = `[در پیام جداگانه ذخیره شد: ${captionMessageId}] ${captionForRecord.slice(0, 120)}...`;
     } catch {
       // fall back to inline storage if the captions topic send fails

@@ -44,8 +44,12 @@ export interface ContentPart {
   partNumber: number;
   fileRef?: string | null;
   coverFileRef?: string | null;
+  highlightFileRef?: string | null;
+  reelFileRef?: string | null;
   playbackUrl?: string | null;
   coverUrl?: string | null;
+  highlightUrl?: string | null;
+  reelUrl?: string | null;
   version?: number | null;
   status?: string | null;
   isActive?: boolean;

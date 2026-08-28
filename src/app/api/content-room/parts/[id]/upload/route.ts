@@ -74,15 +74,16 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
 
   if (!(file instanceof File)) return jsonError("فایل ارسال نشده است.", 400, "FILE_REQUIRED");
   const type = typeof typeRaw === "string" ? typeRaw : "";
-  if (type !== "video" && type !== "cover") {
-    return jsonError("نوع فایل نامعتبر است. ویدئو یا کاور را انتخاب کنید.", 400, "INVALID_TYPE");
+  if (type !== "video" && type !== "cover" && type !== "highlight" && type !== "reel") {
+    return jsonError("نوع فایل نامعتبر است.", 400, "INVALID_TYPE");
   }
 
   // Validate size and mime
   const mime = file.type || "";
   const size = file.size;
+  const isVideoType = type === "video" || type === "highlight" || type === "reel";
 
-  if (type === "video") {
+  if (isVideoType) {
     if (size > MAX_VIDEO_BYTES) {
       return jsonError("حجم ویدئو نباید بیش از ۲ گیگابایت باشد. فایل‌های بزرگ‌تر را فشرده یا کوتاه کنید.", 422, "FILE_TOO_LARGE");
     }
@@ -134,8 +135,8 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   let fileId: string | null = null;
   let messageId: number | null = null;
   try {
-    if (type === "video") {
-      // Try sendVideo first, fall back to sendDocument
+    if (isVideoType) {
+      // Try sendVideo first, fall back to sendDocument (video/highlight/reel are all video)
       try {
         const sent = await client.sendVideo(uploadBlob, file.name);
         fileId = sent.video?.file_id ?? null;
@@ -195,12 +196,15 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     const currentVersion = (part as unknown as { version?: number }).version ?? 1;
     const nextVersion = currentVersion + 1;
 
+    const filePatch: Record<string, string> =
+      type === "video" ? { fileRef: storedRef } : type === "cover" ? { coverFileRef: storedRef } : type === "highlight" ? { highlightFileRef: storedRef } : { reelFileRef: storedRef };
+
     if (expectedVersion !== null) {
       const { and } = await import("drizzle-orm");
       const [updated] = await db
         .update(contentParts)
         .set({
-          ...(type === "video" ? { fileRef: storedRef } : { coverFileRef: storedRef }),
+          ...filePatch,
           version: nextVersion,
           updatedAt: now,
         } as never)
@@ -220,8 +224,8 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
           entityType: "content_part",
           entityId: id,
           action: "file_updated",
-          before: { file_ref: (part as unknown as { fileRef: string | null }).fileRef, cover_file_ref: (part as unknown as { coverFileRef: string | null }).coverFileRef } as unknown as Record<string, unknown>,
-          after: { ...(type === "video" ? { fileRef: storedRef } : { coverFileRef: storedRef }), version: nextVersion } as unknown as Record<string, unknown>,
+          before: { file_ref: (part as unknown as { fileRef: string | null }).fileRef, cover_file_ref: (part as unknown as { coverFileRef: string | null }).coverFileRef, highlight_file_ref: (part as unknown as { highlightFileRef: string | null }).highlightFileRef, reel_file_ref: (part as unknown as { reelFileRef: string | null }).reelFileRef } as unknown as Record<string, unknown>,
+          after: { ...filePatch, version: nextVersion } as unknown as Record<string, unknown>,
           actorUserId: (user as unknown as { id?: string }).id ?? null,
           source: "api",
           reason: null,
@@ -237,7 +241,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
       const [updated] = await db
         .update(contentParts)
         .set({
-          ...(type === "video" ? { fileRef: storedRef } : { coverFileRef: storedRef }),
+          ...filePatch,
           version: nextVersion,
           updatedAt: now,
         } as never)
@@ -253,8 +257,8 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
           entityType: "content_part",
           entityId: id,
           action: "file_updated",
-          before: { file_ref: (part as unknown as { fileRef: string | null }).fileRef, cover_file_ref: (part as unknown as { coverFileRef: string | null }).coverFileRef } as unknown as Record<string, unknown>,
-          after: { ...(type === "video" ? { fileRef: storedRef } : { coverFileRef: storedRef }), version: nextVersion } as unknown as Record<string, unknown>,
+          before: { file_ref: (part as unknown as { fileRef: string | null }).fileRef, cover_file_ref: (part as unknown as { coverFileRef: string | null }).coverFileRef, highlight_file_ref: (part as unknown as { highlightFileRef: string | null }).highlightFileRef, reel_file_ref: (part as unknown as { reelFileRef: string | null }).reelFileRef } as unknown as Record<string, unknown>,
+          after: { ...filePatch, version: nextVersion } as unknown as Record<string, unknown>,
           actorUserId: (user as unknown as { id?: string }).id ?? null,
           source: "api",
           reason: null,

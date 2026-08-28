@@ -92,6 +92,8 @@ export interface ContentPartRecord {
   partNumber: number;
   fileRef: string | null;
   coverFileRef: string | null;
+  highlightFileRef: string | null;
+  reelFileRef: string | null;
   version: number;
   status: string | null;
   isActive: boolean;
@@ -386,7 +388,7 @@ export class InMemoryContentRoomPort implements ContentRoomDatabasePort {
   async transactUpdatePartFile(
     partId: string,
     expectedVersion: number | null,
-    patch: Partial<Pick<ContentPartRecord, "fileRef" | "coverFileRef">>,
+    patch: Partial<Pick<ContentPartRecord, "fileRef" | "coverFileRef" | "highlightFileRef" | "reelFileRef">>,
     event: ContentRoomEventRecord,
   ): Promise<ContentPartRecord> {
     const idx = this.parts.findIndex((p) => p.id === partId);
@@ -799,6 +801,8 @@ function createDrizzleContentRoomPort(): ContentRoomDatabasePort {
         const setPatch: Record<string, unknown> = {};
         if (patch.fileRef !== undefined) setPatch.fileRef = patch.fileRef;
         if (patch.coverFileRef !== undefined) setPatch.coverFileRef = patch.coverFileRef;
+        if ((patch as Record<string, unknown>).highlightFileRef !== undefined) setPatch.highlightFileRef = (patch as Record<string, unknown>).highlightFileRef;
+        if ((patch as Record<string, unknown>).reelFileRef !== undefined) setPatch.reelFileRef = (patch as Record<string, unknown>).reelFileRef;
         setPatch.updatedAt = new Date();
         if (expectedVersion !== null) {
           setPatch.version = expectedVersion + 1;
@@ -883,6 +887,8 @@ function mapPartRow(row: Record<string, unknown>): ContentPartRecord {
     partNumber: (row.partNumber as number) ?? (row.part_number as number),
     fileRef: (row.fileRef as string | null) ?? (row.file_ref as string | null) ?? null,
     coverFileRef: (row.coverFileRef as string | null) ?? (row.cover_file_ref as string | null) ?? null,
+    highlightFileRef: (row.highlightFileRef as string | null) ?? (row.highlight_file_ref as string | null) ?? null,
+    reelFileRef: (row.reelFileRef as string | null) ?? (row.reel_file_ref as string | null) ?? null,
     version: (row.version as number) ?? 1,
     status: (row.status as string | null) ?? null,
     isActive: (row.isActive as boolean) ?? (row.is_active as boolean) ?? true,
@@ -931,6 +937,8 @@ function toPartInsert(p: ContentPartRecord): Record<string, unknown> {
     partNumber: p.partNumber,
     fileRef: p.fileRef,
     coverFileRef: p.coverFileRef,
+    highlightFileRef: p.highlightFileRef ?? null,
+    reelFileRef: p.reelFileRef ?? null,
     version: p.version,
     status: p.status,
     isActive: p.isActive ?? true,
@@ -1021,7 +1029,7 @@ export interface ContentRoomRepository {
   unarchiveProduct(command: { id: string; actorUserId: string }): Promise<ContentProductRecord>;
   getParts(productId: string): Promise<ContentPartRecord[]>;
   getPart?(id: string): Promise<ContentPartRecord | null>;
-  updatePartFile?(command: { partId: string; fileRef?: string | null; coverFileRef?: string | null; expectedVersion?: number | null; actorUserId: string }): Promise<ContentPartRecord>;
+  updatePartFile?(command: { partId: string; fileRef?: string | null; coverFileRef?: string | null; highlightFileRef?: string | null; reelFileRef?: string | null; expectedVersion?: number | null; actorUserId: string }): Promise<ContentPartRecord>;
 }
 
 export function createContentRoomRepository(port?: ContentRoomDatabasePort): ContentRoomRepository {
@@ -1073,6 +1081,8 @@ export function createContentRoomRepository(port?: ContentRoomDatabasePort): Con
           partNumber: i,
           fileRef: null,
           coverFileRef: null,
+          highlightFileRef: null,
+          reelFileRef: null,
           version: 1,
           status: null,
           isActive: true,
@@ -1137,6 +1147,8 @@ export function createContentRoomRepository(port?: ContentRoomDatabasePort): Con
             partNumber: i,
             fileRef: null,
             coverFileRef: null,
+            highlightFileRef: null,
+            reelFileRef: null,
             version: 1,
             status: null,
             isActive: true,
@@ -1261,6 +1273,8 @@ export function createContentRoomRepository(port?: ContentRoomDatabasePort): Con
                 // Simpler: just sequential from existing max+1
                 fileRef: null,
                 coverFileRef: null,
+                highlightFileRef: null,
+                reelFileRef: null,
                 version: 1,
                 status: null,
                 isActive: true,
@@ -1303,6 +1317,8 @@ export function createContentRoomRepository(port?: ContentRoomDatabasePort): Con
                 partNumber: maxNum + i,
                 fileRef: null,
                 coverFileRef: null,
+                highlightFileRef: null,
+                reelFileRef: null,
                 version: 1,
                 status: null,
                 isActive: true,

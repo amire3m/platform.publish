@@ -588,6 +588,8 @@ export const contentParts = pgTable(
     partNumber: integer("part_number").notNull(),
     fileRef: text("file_ref"),
     coverFileRef: text("cover_file_ref"),
+    highlightFileRef: text("highlight_file_ref"),
+    reelFileRef: text("reel_file_ref"),
     version: integer("version").notNull().default(1),
     status: text("status"),
     isActive: boolean("is_active").notNull().default(true),

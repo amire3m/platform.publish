@@ -262,8 +262,12 @@ function PartUploadCard({
     partNumber: number;
     fileRef?: string | null;
     coverFileRef?: string | null;
+    highlightFileRef?: string | null;
+    reelFileRef?: string | null;
     playbackUrl?: string | null;
     coverUrl?: string | null;
+    highlightUrl?: string | null;
+    reelUrl?: string | null;
     version?: number | null;
     status?: string | null;
   };
@@ -273,15 +277,23 @@ function PartUploadCard({
 }) {
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [coverFile, setCoverFile] = useState<File | null>(null);
-  const [uploading, setUploading] = useState<"video" | "cover" | null>(null);
+  const [highlightFile, setHighlightFile] = useState<File | null>(null);
+  const [reelFile, setReelFile] = useState<File | null>(null);
+  const [uploading, setUploading] = useState<"video" | "cover" | "highlight" | "reel" | null>(null);
   const [uploadProgress, setUploadProgress] = useState<number>(0);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [coverPreviewUrl, setCoverPreviewUrl] = useState<string | null>(null);
+  const [highlightPreviewUrl, setHighlightPreviewUrl] = useState<string | null>(null);
+  const [reelPreviewUrl, setReelPreviewUrl] = useState<string | null>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
   const coverInputRef = useRef<HTMLInputElement>(null);
+  const highlightInputRef = useRef<HTMLInputElement>(null);
+  const reelInputRef = useRef<HTMLInputElement>(null);
 
   const hasVideo = Boolean(part.fileRef);
   const hasCover = Boolean(part.coverFileRef);
+  const hasHighlight = Boolean(part.highlightFileRef);
+  const hasReel = Boolean(part.reelFileRef);
 
   function handleVideoSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0] ?? null;
@@ -305,8 +317,30 @@ function PartUploadCard({
     }
   }
 
-  async function upload(type: "video" | "cover") {
-    const file = type === "video" ? videoFile : coverFile;
+  function handleHighlightSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0] ?? null;
+    setHighlightFile(f);
+    if (f) {
+      const url = URL.createObjectURL(f);
+      setHighlightPreviewUrl(url);
+    } else {
+      setHighlightPreviewUrl(null);
+    }
+  }
+
+  function handleReelSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0] ?? null;
+    setReelFile(f);
+    if (f) {
+      const url = URL.createObjectURL(f);
+      setReelPreviewUrl(url);
+    } else {
+      setReelPreviewUrl(null);
+    }
+  }
+
+  async function upload(type: "video" | "cover" | "highlight" | "reel") {
+    const file = type === "video" ? videoFile : type === "cover" ? coverFile : type === "highlight" ? highlightFile : reelFile;
     if (!file) {
       onError("لطفاً ابتدا فایل را انتخاب کنید.");
       return;
@@ -341,16 +375,26 @@ function PartUploadCard({
       if (!body.ok) {
         throw new Error(body.error ?? "خطا در آپلود");
       }
-      onToast(type === "video" ? `ویدئو قسمت ${part.partNumber} با موفقیت آپلود شد.` : `کاور قسمت ${part.partNumber} با موفقیت آپلود شد.`);
+      const successMsg =
+        type === "video" ? `ویدئو قسمت ${part.partNumber} با موفقیت آپلود شد.` : type === "cover" ? `کاور قسمت ${part.partNumber} با موفقیت آپلود شد.` : type === "highlight" ? `هایلایت قسمت ${part.partNumber} با موفقیت آپلود شد.` : `ریلز قسمت ${part.partNumber} با موفقیت آپلود شد.`;
+      onToast(successMsg);
       setTimeout(() => onToast(null), 3000);
       if (type === "video") {
         setVideoFile(null);
         setPreviewUrl(null);
         if (videoInputRef.current) videoInputRef.current.value = "";
-      } else {
+      } else if (type === "cover") {
         setCoverFile(null);
         setCoverPreviewUrl(null);
         if (coverInputRef.current) coverInputRef.current.value = "";
+      } else if (type === "highlight") {
+        setHighlightFile(null);
+        setHighlightPreviewUrl(null);
+        if (highlightInputRef.current) highlightInputRef.current.value = "";
+      } else {
+        setReelFile(null);
+        setReelPreviewUrl(null);
+        if (reelInputRef.current) reelInputRef.current.value = "";
       }
       await onRefresh();
     } catch (err) {
@@ -369,7 +413,7 @@ function PartUploadCard({
     <div className="flex flex-col gap-3 rounded-lg border border-tg-border bg-tg-hover/20 px-3 py-3">
       <div className="flex items-center justify-between">
         <p className="text-sm font-semibold text-tg-text">قسمت {part.partNumber}</p>
-        <div className="flex gap-1">
+        <div className="flex flex-wrap gap-1">
           <span
             className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
               hasVideo
@@ -387,6 +431,12 @@ function PartUploadCard({
             }`}
           >
             {hasCover ? "کاور ✓" : "بدون کاور"}
+          </span>
+          <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${hasHighlight ? "bg-amber-500/15 text-amber-700" : "bg-slate-500/10 text-slate-500"}`}>
+            {hasHighlight ? "هایلایت ✓" : "بدون هایلایت"}
+          </span>
+          <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${hasReel ? "bg-violet-500/15 text-violet-700" : "bg-slate-500/10 text-slate-500"}`}>
+            {hasReel ? "ریلز ✓" : "بدون ریلز"}
           </span>
         </div>
       </div>
@@ -481,6 +531,52 @@ function PartUploadCard({
           {uploading === "cover" && (
             <div className="h-1.5 w-full overflow-hidden rounded-full bg-tg-hover">
               <div className="h-full bg-sky-500 transition-all duration-150" style={{ width: `${uploadProgress}%` }} />
+            </div>
+          )}
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <label className="text-xs font-medium text-tg-secondary">هایلایت (برش کوتاه، حداکثر ۲ گیگابایت، mp4/mov/webm)</label>
+          <input
+            ref={highlightInputRef}
+            type="file"
+            accept="video/mp4,video/quicktime,video/webm,video/*"
+            onChange={handleHighlightSelect}
+            className="w-full text-xs file:mr-2 file:rounded file:border-0 file:bg-amber-500 file:px-3 file:py-1 file:text-xs file:text-white"
+          />
+          {highlightPreviewUrl && (
+            <video src={highlightPreviewUrl} controls className="h-28 w-full rounded bg-black" />
+          )}
+          {hasHighlight && !highlightPreviewUrl && <p className="text-[11px] text-emerald-600">هایلایت آپلود شده ✓</p>}
+          <Button size="sm" variant="secondary" onClick={() => upload("highlight")} disabled={!highlightFile || uploading !== null} className="w-full min-h-[36px] text-xs">
+            {uploading === "highlight" ? `در حال آپلود هایلایت... ${uploadProgress}%` : hasHighlight ? "جایگزینی هایلایت" : "آپلود هایلایت"}
+          </Button>
+          {uploading === "highlight" && (
+            <div className="h-1.5 w-full overflow-hidden rounded-full bg-tg-hover">
+              <div className="h-full bg-amber-500 transition-all duration-150" style={{ width: `${uploadProgress}%` }} />
+            </div>
+          )}
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <label className="text-xs font-medium text-tg-secondary">ریلز (برش کوتاه عمودی، حداکثر ۲ گیگابایت، mp4/mov/webm)</label>
+          <input
+            ref={reelInputRef}
+            type="file"
+            accept="video/mp4,video/quicktime,video/webm,video/*"
+            onChange={handleReelSelect}
+            className="w-full text-xs file:mr-2 file:rounded file:border-0 file:bg-violet-500 file:px-3 file:py-1 file:text-xs file:text-white"
+          />
+          {reelPreviewUrl && (
+            <video src={reelPreviewUrl} controls className="h-28 w-full rounded bg-black" />
+          )}
+          {hasReel && !reelPreviewUrl && <p className="text-[11px] text-emerald-600">ریلز آپلود شده ✓</p>}
+          <Button size="sm" variant="secondary" onClick={() => upload("reel")} disabled={!reelFile || uploading !== null} className="w-full min-h-[36px] text-xs">
+            {uploading === "reel" ? `در حال آپلود ریلز... ${uploadProgress}%` : hasReel ? "جایگزینی ریلز" : "آپلود ریلز"}
+          </Button>
+          {uploading === "reel" && (
+            <div className="h-1.5 w-full overflow-hidden rounded-full bg-tg-hover">
+              <div className="h-full bg-violet-500 transition-all duration-150" style={{ width: `${uploadProgress}%` }} />
             </div>
           )}
         </div>

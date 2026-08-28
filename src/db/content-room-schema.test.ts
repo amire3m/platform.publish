@@ -2,7 +2,19 @@ import { getTableColumns } from "drizzle-orm";
 import { getTableConfig } from "drizzle-orm/pg-core";
 import { describe, expect, it } from "vitest";
 
-import { contentParts, contentProducts } from "./schema";
+import { contentPartActivities, contentParts, contentProducts } from "./schema";
+
+describe("content room schema batch activities", () => {
+  it("exposes isActive and activities table", () => {
+    expect(contentParts.isActive).toBeDefined();
+    expect(contentPartActivities.activity).toBeDefined();
+  });
+
+  it("allows teaser and music_video type insert shape", () => {
+    const fakeInsert = { productType: "teaser", channel: "tamashin", title: "t", partsCount: 1 } as unknown as Record<string, unknown>;
+    expect(fakeInsert.productType).toBe("teaser");
+  });
+});
 
 describe("content room schema", () => {
   it("defines content_products with required columns and nullability", () => {

@@ -590,11 +590,29 @@ export const contentParts = pgTable(
     coverFileRef: text("cover_file_ref"),
     version: integer("version").notNull().default(1),
     status: text("status"),
+    isActive: boolean("is_active").notNull().default(true),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => ({
     productIdx: index("content_part_product_idx").on(table.productId),
     productPartUnique: uniqueIndex("content_part_product_part_unique").on(table.productId, table.partNumber),
+  }),
+);
+
+export const contentPartActivities = pgTable(
+  "content_part_activities",
+  {
+    id: text("id").primaryKey(),
+    partId: text("part_id")
+      .notNull()
+      .references(() => contentParts.id, { onDelete: "cascade" }),
+    activity: text("activity").notNull(),
+    isDone: boolean("is_done").notNull().default(false),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    completedBy: text("completed_by"),
+  },
+  (t) => ({
+    uniq: uniqueIndex("cpa_part_activity_unique").on(t.partId, t.activity),
   }),
 );

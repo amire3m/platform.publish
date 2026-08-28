@@ -310,6 +310,51 @@ function PartUploadCard({
   const hasHighlight = highlights.length > 0 || Boolean(part.highlightFileRef);
   const hasReel = reels.length > 0 || Boolean(part.reelFileRef);
 
+  const { data: groupMediaData } = useSWR<{
+    ok: boolean;
+    data: { items: Array<{ messageId: string; fileId: string | null; fileName: string | null; mime: string | null; date: string | null; caption: string | null }> };
+  }>(
+    "/api/telegram/group-media",
+    async (url: string) => {
+      try {
+        const res = await fetch(url);
+        const json = await res.json();
+        return json;
+      } catch {
+        return null;
+      }
+    },
+  );
+  const groupItems = groupMediaData?.data?.items ?? [];
+  const [linking, setLinking] = useState<string | null>(null);
+
+  async function handleLinkGroupMedia(
+    item: { messageId: string; fileId: string | null; fileName: string | null },
+    kind: "video" | "cover" | "highlight" | "reel",
+  ) {
+    const key = `${item.messageId}:${kind}`;
+    setLinking(key);
+    onError(null);
+    try {
+      const res = await fetch(`/api/content-room/parts/${part.id}/link`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messageId: item.messageId, fileId: item.fileId ?? undefined, fileName: item.fileName ?? undefined, kind }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok || !(body as { ok?: boolean }).ok) throw new Error((body as { error?: string }).error ?? `خطا در لینک (${res.status})`);
+      const label = kind === "video" ? "ویدئو" : kind === "cover" ? "کاور" : kind === "highlight" ? "برش" : "ریلز";
+      onToast(`ویدیو ${item.messageId} به عنوان ${label} لینک شد.`);
+      setTimeout(() => onToast(null), 3000);
+      await mutateAssets();
+      await onRefresh();
+    } catch (e) {
+      onError(e instanceof Error ? e.message : "خطا در لینک");
+    } finally {
+      setLinking(null);
+    }
+  }
+
   function handleVideoSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0] ?? null;
     setVideoFile(f);
@@ -703,6 +748,71 @@ function PartUploadCard({
             </>
           )}
         </div>
+      </div>
+
+      <div className="rounded-lg border border-tg-border bg-tg-surface/50 p-2">
+        <p className="text-xs font-semibold text-tg-text">ویدیوهای اخیر گروه</p>
+        <p className="mt-1 text-[11px] text-tg-secondary">ویدیوهای اخیر ارسال‌شده در گروه تلگرام؛ با یک کلیک به این قسمت لینک کنید (بدون آپلود مجدد ۲ گیگ).</p>
+        {groupItems.length === 0 ? (
+          <p className="mt-2 text-xs text-tg-secondary">ویدیویی برای نمایش وجود ندارد.</p>
+        ) : (
+          <div className="mt-2 space-y-2">
+            {groupItems.map((m) => (
+              <div
+                key={m.messageId}
+                className="flex flex-col gap-2 rounded-md border border-tg-border bg-tg-surface px-2 py-2 sm:flex-row sm:items-center sm:justify-between"
+              >
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-xs font-medium text-tg-text" title={m.fileName ?? `ویدیو ${m.messageId}`}>
+                    {m.fileName ?? `ویدیو ${m.messageId}`}
+                  </p>
+                  <p className="text-[11px] text-tg-secondary">
+                    پیام {m.messageId}
+                    {m.caption ? ` · ${m.caption.slice(0, 40)}` : ""}
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-1">
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    disabled={linking === `${m.messageId}:video`}
+                    onClick={() => handleLinkGroupMedia(m, "video")}
+                    className="min-h-[30px] text-[11px]"
+                  >
+                    لینک به عنوان ویدئو
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    disabled={linking === `${m.messageId}:cover`}
+                    onClick={() => handleLinkGroupMedia(m, "cover")}
+                    className="min-h-[30px] text-[11px]"
+                  >
+                    لینک به عنوان کاور
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    disabled={linking === `${m.messageId}:highlight`}
+                    onClick={() => handleLinkGroupMedia(m, "highlight")}
+                    className="min-h-[30px] text-[11px]"
+                  >
+                    لینک به عنوان برش
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    disabled={linking === `${m.messageId}:reel`}
+                    onClick={() => handleLinkGroupMedia(m, "reel")}
+                    className="min-h-[30px] text-[11px]"
+                  >
+                    لینک به عنوان ریلز
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

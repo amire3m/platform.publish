@@ -189,8 +189,8 @@ export class TelegramClient {
     });
   }
 
-  async sendMessage(text: string, messageThreadId?: number, opts?: {parseMode?: string, replyMarkup?: {inline_keyboard: unknown[][]}, disableNotification?: boolean}) {
-    return callApi<TgMessage>(this.cfg.botToken, "sendMessage", {
+  async sendMessage(text: string, messageThreadId?: number, opts?: {parseMode?: string, replyMarkup?: {inline_keyboard: unknown[][]}, disableNotification?: boolean, replyToMessageId?: number, replyParameters?: Record<string, unknown>}) {
+    const payload: Record<string, unknown> = {
       chat_id: this.cfg.groupId,
       text,
       message_thread_id: messageThreadId,
@@ -198,7 +198,14 @@ export class TelegramClient {
       reply_markup: opts?.replyMarkup,
       disable_notification: opts?.disableNotification,
       disable_web_page_preview: true,
-    } as unknown as Record<string, unknown>);
+    };
+    if (opts?.replyToMessageId) {
+      (payload as Record<string, unknown>).reply_to_message_id = opts.replyToMessageId;
+      (payload as Record<string, unknown>).reply_parameters = { message_id: opts.replyToMessageId, ...(opts.replyParameters || {}) };
+    } else if (opts?.replyParameters) {
+      (payload as Record<string, unknown>).reply_parameters = opts.replyParameters;
+    }
+    return callApi<TgMessage>(this.cfg.botToken, "sendMessage", payload as unknown as Record<string, unknown>);
   }
   async editMessageText(messageId:number, text:string, opts?: {parseMode?:string, replyMarkup?:unknown}) {
     return callApi(this.cfg.botToken, "editMessageText", {chat_id:this.cfg.groupId, message_id:messageId, text, parse_mode:opts?.parseMode, reply_markup:opts?.replyMarkup});

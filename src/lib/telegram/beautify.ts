@@ -128,3 +128,36 @@ export function beautifyImport(batch: {
   const text = `<b>📥 ورود داده — ${nFa} رکورد</b>\n⏳ پردازش با موفقیت انجام شد.`;
   return { text, parseMode: "HTML" as const };
 }
+export function beautifyGroupVideoPrompt(p: {
+  messageId: number | string;
+  from?: { id?: number | string; first_name?: string; last_name?: string; username?: string };
+  caption?: string | null;
+  date?: string | Date | number;
+}): { text: string; parseMode: "HTML" } {
+  const idStr = String(p.messageId);
+  const idFa = toPersianDigits(idStr);
+  let dateStr: string;
+  try {
+    if (p.date !== undefined && p.date !== null) {
+      const d = typeof p.date === "number" ? new Date(p.date * 1000) : p.date as string | Date;
+      dateStr = formatJalaliDateTime(d);
+    } else {
+      dateStr = formatJalaliDateTime(new Date());
+    }
+  } catch {
+    dateStr = formatJalaliDateTime(new Date());
+  }
+  const senderRaw = p.from
+    ? p.from.username
+      ? "@" + p.from.username
+      : [p.from.first_name, p.from.last_name].filter(Boolean).join(" ") || String(p.from.id ?? "\u0646\u0627\u0634\u0646\u0627\u0633")
+    : "\u0646\u0627\u0634\u0646\u0627\u0633";
+  const sender = escapeHtml(senderRaw);
+  const caption = p.caption ? escapeHtml(p.caption.slice(0, 300)) : "";
+  const text =
+    "<b>\uD83D\uDCE5 \u0648\u06CC\u062F\u06CC\u0648\u06CC\u06CC \u062F\u0631\u06CC\u0627\u0641\u062A \u0634\u062F \u2014 \u0645\u06CC\u200C\u062E\u0648\u0627\u0647\u06CC\u062F \u0622\u0646 \u0631\u0627 \u0628\u0647 \u0645\u062D\u0635\u0648\u0644\u200C\u0647\u0627 \u0627\u0636\u0627\u0641\u0647 \u06A9\u0646\u06CC\u062F\u061F</b>\n" +
+    "\uD83C\uDD94 <code>" + escapeHtml(idStr) + "</code> (" + idFa + ") | \uD83D\uDCC5 " + escapeHtml(dateStr) + " | \uD83D\uDC64 " + sender +
+    (caption ? "\n\uD83D\uDCDD " + caption : "") +
+    "\n\n\u0644\u0637\u0641\u0627\u064B \u06CC\u06A9\u06CC \u0627\u0632 \u06AF\u0632\u06CC\u0646\u0647\u200C\u0647\u0627 \u0631\u0627 \u0627\u0646\u062A\u062E\u0627\u0628 \u06A9\u0646\u06CC\u062F:";
+  return { text, parseMode: "HTML" as const };
+}

@@ -40,8 +40,6 @@ const NAV_ITEMS = [
   { href: "/users", label: "کاربران و تیم", icon: Users },
   { href: "/analytics", label: "آنالیز", icon: BarChart3 },
   { href: "/reports", label: "گزارش‌ها", icon: FileText },
-  { href: "/audit-logs", label: "لاگ فعالیت‌ها", icon: ScrollText },
-  { href: "/errors", label: "خطاها", icon: AlertTriangle },
   { href: "/settings/telegram", label: "تنظیمات تلگرام", icon: Send },
   { href: "/settings/youtube", label: "تنظیمات یوتیوب", icon: YoutubeIcon },
   { href: "/settings/instagram", label: "تنظیمات اینستاگرام", icon: InstagramIcon },

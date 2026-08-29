@@ -366,6 +366,7 @@ export class TelegramClient {
               headers.set("content-length", String(end - start + 1));
             }
           }
+          console.log(`[telegram] serving large file directly from ${p} size=${size} range=${range} -> ${status}`);
           const stream = fs.createReadStream(p, { start, end });
           const readable = new ReadableStream({
             start(controller) {
@@ -378,8 +379,11 @@ export class TelegramClient {
             },
           });
           return new Response(readable as unknown as BodyInit, { status, headers });
-        } catch {}
+        } catch (e) {
+          console.error(`[telegram] fallback stat failed for ${p}:`, (e as Error).message);
+        }
       }
+      console.error(`[telegram] fallback failed for ${fp2} hostPath=${hostPath}`);
     }
     throw new Error("دریافت فایل از تلگرام ناموفق بود.");
   }

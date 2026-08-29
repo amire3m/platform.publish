@@ -34,8 +34,6 @@ import { NotificationCenter } from "@/components/workflow/NotificationCenter";
 const NAV_ITEMS = [
   { href: "/dashboard", label: "داشبورد", icon: LayoutDashboard },
   { href: "/calendar", label: "تقویم انتشار", icon: CalendarDays },
-  { href: "/content", label: "محتوا", icon: FolderOpen },
-  { href: "/content/new", label: "ایجاد محتوا", icon: PlusCircle },
   { href: "/accounts", label: "کانال‌ها و پیج‌ها", icon: Tv },
   { href: "/users", label: "کاربران و تیم", icon: Users },
   { href: "/analytics", label: "آنالیز", icon: BarChart3 },

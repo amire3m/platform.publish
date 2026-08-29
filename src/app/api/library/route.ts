@@ -1,6 +1,6 @@
 import { desc, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { contentParts, contentProducts, contentPartAssets } from "@/db/schema";
+import { contentParts, contentProducts, contentPartAssets, workflowEvents } from "@/db/schema";
 import { jsonError, jsonOk } from "@/lib/api-helpers";
 import { getCurrentUser } from "@/lib/auth";
 import jwt from "jsonwebtoken";
@@ -85,7 +85,39 @@ export async function GET(req: Request) {
     items.push({ id: a.id, filename: a.fileName ?? `${baseTitle} - قسمت ${partNum} - ${type}`, type, kind: a.kind, channel, size: 0, createdAt: a.createdAt, playbackUrl: buildUrl(token), source: "asset", partId: a.partId, fileRef: a.fileRef });
   }
 
-  // also include legacy assets from telegram via existing assets table? For now return combined, sorted by date
+  // also include recent group videos not yet linked (so library never empty)
+  try {
+    const recentGroup = await db
+      .select()
+      .from(workflowEvents)
+      .where(eq(workflowEvents.action, "group_video_replied"))
+      .orderBy(desc(workflowEvents.createdAt))
+      .limit(20);
+    for (const ev of recentGroup) {
+      const after = (ev as unknown as { after: Record<string, unknown> }).after ?? {};
+      const fileId = (after.fileId as string) || (after.file_id as string) || "";
+      if (!fileId || fileId.startsWith("tg_msg_") || fileId.startsWith("sample_")) continue;
+      const messageId = String((ev as unknown as { entityId: string }).entityId ?? after.messageId ?? "");
+      if (typeFilter && typeFilter !== "video") continue;
+      if (q && !messageId.includes(q)) continue;
+      // avoid duplicate if already linked as asset (same fileId)
+      if (items.some((it) => (it as Record<string, unknown>).fileRef === fileId)) continue;
+      const token = buildToken(fileId, "video/mp4");
+      items.push({
+        id: `group-${messageId}`,
+        filename: `ویدیوی گروه — پیام ${messageId}`,
+        type: "video",
+        channel: "",
+        size: 0,
+        createdAt: (ev as unknown as { createdAt: Date }).createdAt,
+        playbackUrl: buildUrl(token),
+        source: "group",
+        messageId,
+        fileRef: fileId,
+      });
+    }
+  } catch {}
+
   items.sort((a, b) => new Date(b.createdAt as string).getTime() - new Date(a.createdAt as string).getTime());
   return jsonOk({ items: items.slice(0, 100) });
 }

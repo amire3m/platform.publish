@@ -93,6 +93,8 @@ export async function GET(req: Request) {
       .where(eq(workflowEvents.action, "group_video_replied"))
       .orderBy(desc(workflowEvents.createdAt))
       .limit(20);
+    const groupId = process.env.TELEGRAM_GROUP_ID || "-1002326782937";
+    const chatIdForLink = groupId.replace("-100", "");
     for (const ev of recentGroup) {
       const after = (ev as unknown as { after: Record<string, unknown> }).after ?? {};
       const fileId = (after.fileId as string) || (after.file_id as string) || "";
@@ -103,6 +105,7 @@ export async function GET(req: Request) {
       // avoid duplicate if already linked as asset (same fileId)
       if (items.some((it) => (it as Record<string, unknown>).fileRef === fileId)) continue;
       const token = buildToken(fileId, "video/mp4");
+      const telegramLink = `https://t.me/c/${chatIdForLink}/${messageId}`;
       items.push({
         id: `group-${messageId}`,
         filename: `ویدیوی گروه — پیام ${messageId}`,
@@ -111,6 +114,7 @@ export async function GET(req: Request) {
         size: 0,
         createdAt: (ev as unknown as { createdAt: Date }).createdAt,
         playbackUrl: buildUrl(token),
+        telegramLink,
         source: "group",
         messageId,
         fileRef: fileId,

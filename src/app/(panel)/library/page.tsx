@@ -25,8 +25,9 @@ export default function LibraryPage() {
     return s ? `?${s}` : "";
   }, [q, type, channel]);
 
-  const { data, isLoading, error } = useSWR<{ items: Array<{ id: string; filename: string; type: string; channel: string; playbackUrl: string; createdAt: string }> }>(`/api/library${qs}`, fetcher);
+  const { data, isLoading, error } = useSWR<{ items: Array<{ id: string; filename: string; type: string; channel: string; playbackUrl: string; telegramLink?: string; createdAt: string }> }>(`/api/library${qs}`, fetcher);
   const items = data?.items ?? [];
+  const [failedIds, setFailedIds] = useState<Set<string>>(new Set());
 
   return (
     <div className="space-y-6" dir="rtl">
@@ -68,11 +69,30 @@ export default function LibraryPage() {
             <p className="line-clamp-1 text-sm font-semibold" title={it.filename}>{it.filename}</p>
             <div className="overflow-hidden rounded-lg border border-tg-border bg-black">
               {it.type === "cover" ? (
-                <img src={it.playbackUrl} alt={it.filename} className="max-h-48 w-full object-contain" />
+                <img src={it.playbackUrl} alt={it.filename} className="max-h-48 w-full object-contain" onError={(e) => setFailedIds((s) => new Set(s).add(it.id))} />
+              ) : failedIds.has(it.id) ? (
+                <div className="flex h-48 flex-col items-center justify-center gap-2 bg-zinc-900 p-4 text-white">
+                  <p className="text-xs">پخش مستقیم برای فایل‌های حجیم از طریق ربات محدود است.</p>
+                  {it.telegramLink ? (
+                    <a href={it.telegramLink} target="_blank" rel="noopener noreferrer" className="rounded bg-tg-accent px-3 py-1 text-xs text-white">
+                      مشاهده در تلگرام
+                    </a>
+                  ) : (
+                    <p className="text-[11px] opacity-70">لینک تلگرام در دسترس نیست</p>
+                  )}
+                </div>
               ) : (
-                <video src={it.playbackUrl} controls preload="metadata" playsInline className="max-h-48 w-full" />
+                <video
+                  src={it.playbackUrl}
+                  controls
+                  preload="metadata"
+                  playsInline
+                  className="max-h-48 w-full"
+                  onError={() => setFailedIds((s) => new Set(s).add(it.id))}
+                />
               )}
             </div>
+            {failedIds.has(it.id) && it.telegramLink && <a href={it.telegramLink} target="_blank" className="text-[11px] text-tg-accent hover:underline">مشاهده در تلگرام</a>}
             <p className="text-[11px] text-tg-secondary">{new Date(it.createdAt).toLocaleDateString("fa-IR")}</p>
           </Card>
         ))}

@@ -285,10 +285,22 @@ export class TelegramClient {
     });
   }
 
+  private normalizeFilePath(filePath: string): string {
+    if (!filePath) return filePath;
+    if (filePath.startsWith("/")) {
+      const idx = filePath.indexOf("/videos/");
+      if (idx !== -1) return filePath.slice(idx + 1);
+      const parts = filePath.split("/").filter(Boolean);
+      if (parts.length >= 2) return parts.slice(-2).join("/");
+    }
+    return filePath.replace(/^\/+/, "");
+  }
+
   async downloadFile(fileId: string): Promise<Buffer> {
     const info = await this.getFile(fileId);
     if (!info.file_path) throw new Error("مسیر فایل در تلگرام یافت نشد (احتمالاً فایل قدیمی یا حجیم است).");
-    const res = await fetch(`${API_ROOT}/file/bot${this.cfg.botToken}/${info.file_path}`);
+    const cleanPath = this.normalizeFilePath(info.file_path);
+    const res = await fetch(`${API_ROOT}/file/bot${this.cfg.botToken}/${cleanPath}`);
     if (!res.ok) throw new Error("دریافت فایل از تلگرام ناموفق بود.");
     const arrayBuffer = await res.arrayBuffer();
     return Buffer.from(arrayBuffer);
@@ -297,7 +309,8 @@ export class TelegramClient {
   async downloadFileResponse(fileId: string, range?: string | null): Promise<Response> {
     const info = await this.getFile(fileId);
     if (!info.file_path) throw new Error("مسیر فایل در تلگرام یافت نشد (احتمالاً فایل قدیمی یا حجیم است).");
-    const res = await fetch(`${API_ROOT}/file/bot${this.cfg.botToken}/${info.file_path}`, {
+    const cleanPath = this.normalizeFilePath(info.file_path);
+    const res = await fetch(`${API_ROOT}/file/bot${this.cfg.botToken}/${cleanPath}`, {
       headers: range ? { range } : undefined,
     });
     if (!res.ok && res.status !== 206) throw new Error("دریافت فایل از تلگرام ناموفق بود.");

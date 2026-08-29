@@ -27,6 +27,7 @@ export function ContentRoomDetail({ product, onRefresh }: Props) {
   const [sendLoading, setSendLoading] = useState(false);
   const [sendResult, setSendResult] = useState<{ programId: string } | null>(null);
   const [editOpen, setEditOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<"checklist" | "files" | "group">("checklist");
 
   const currentStatus = product.status as ContentStatus;
   const pres = contentStatusPresentation(currentStatus);
@@ -210,11 +211,6 @@ export function ContentRoomDetail({ product, onRefresh }: Props) {
           </div>
         )}
 
-        <div className="space-y-3 rounded-lg border border-tg-border bg-tg-hover/20 p-3">
-          <p className="text-xs font-semibold text-tg-secondary">چک‌لیست فعالیت‌ها (هر قسمت مستقل)</p>
-          <PartActivitiesGrid parts={product.parts as never} onToggle={handleToggle} />
-        </div>
-
         <div className="flex flex-wrap gap-2">
           <Button
             onClick={handleSend}
@@ -228,8 +224,31 @@ export function ContentRoomDetail({ product, onRefresh }: Props) {
         </div>
       </Card>
 
-      <Card className="space-y-3">
-        <h2 className="text-sm font-bold text-tg-text">قسمت‌ها (آپلود فایل)</h2>
+      <div className="flex gap-2 border-b border-tg-border">
+        {[
+          { key: "checklist", label: "چک‌لیست" },
+          { key: "files", label: `فایل‌ها (${product.parts?.filter((p) => (p as { isActive?: boolean }).isActive ?? true).length ?? 0} قسمت)` },
+        ].map((t) => (
+          <button
+            key={t.key}
+            onClick={() => setActiveTab(t.key as never)}
+            className={`-mb-px border-b-2 px-4 py-2 text-sm font-medium ${activeTab === t.key ? "border-tg-accent text-tg-accent" : "border-transparent text-tg-secondary hover:text-tg-text"}`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {activeTab === "checklist" && (
+        <Card className="space-y-3">
+          <h2 className="text-sm font-bold text-tg-text">چک‌لیست فعالیت‌ها (هر قسمت مستقل)</h2>
+          <PartActivitiesGrid parts={product.parts as never} onToggle={handleToggle} />
+        </Card>
+      )}
+
+      {activeTab === "files" && (
+        <Card className="space-y-3">
+          <h2 className="text-sm font-bold text-tg-text">قسمت‌ها (آپلود فایل)</h2>
         {product.parts && product.parts.length > 0 ? (
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {[...product.parts]
@@ -246,6 +265,7 @@ export function ContentRoomDetail({ product, onRefresh }: Props) {
           <p className="text-xs text-tg-secondary">قسمت‌های پنهان (کاهش تعداد قسمت) فایل‌ها و تیک‌های قبلی را حفظ کرده‌اند؛ با افزایش تعداد قسمت دوباره فعال می‌شوند.</p>
         )}
       </Card>
+      )}
 
       <EditProductDialog open={editOpen} product={product} onClose={() => setEditOpen(false)} onSuccess={onRefresh} />
     </div>

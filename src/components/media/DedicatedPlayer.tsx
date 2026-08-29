@@ -127,7 +127,7 @@ export function DedicatedPlayer({ src, poster, title, className, onError }: Prop
     <div
       ref={containerRef}
       dir="ltr"
-      className={`group relative overflow-hidden rounded-xl border border-tg-border bg-black ${className ?? ""}`}
+      className={`group relative overflow-hidden rounded-xl border border-tg-border bg-black ${className ?? "aspect-video w-full"}`}
       onMouseMove={resetHideTimer}
       onMouseLeave={() => playing && !showSettings && setShowControls(false)}
       onClick={(e) => {

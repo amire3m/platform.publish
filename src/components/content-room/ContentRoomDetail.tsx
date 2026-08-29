@@ -563,7 +563,7 @@ function PartUploadCard({
       </div>
 
       {part.playbackUrl && (
-        <DedicatedPlayer src={part.playbackUrl} poster={part.coverUrl ?? undefined} title={`قسمت ${part.partNumber} — ویدئوی خام`} className="aspect-video w-full" />
+        <DedicatedPlayer src={part.playbackUrl} poster={part.coverUrl ?? undefined} title={`قسمت ${part.partNumber} — ویدئوی خام`} className="aspect-video w-full max-h-[320px]" />
       )}
       {part.coverFileRef && (
         <div className="space-y-1">
@@ -580,7 +580,7 @@ function PartUploadCard({
       {previewUrl && (
         <div className="space-y-1">
           <p className="text-xs font-medium text-tg-secondary">پیش‌نمایش ویدئو انتخاب‌شده:</p>
-          <DedicatedPlayer src={previewUrl} title={videoFile?.name} className="h-28 w-full" />
+          <DedicatedPlayer src={previewUrl} title={videoFile?.name} className="h-40 w-full" />
           {videoFile && (
             <p className="text-[11px] text-tg-secondary">
               {(videoFile.size / (1024 * 1024)).toFixed(1)} مگابایت · {videoFile.type || "نامشخص"}
@@ -680,7 +680,7 @@ function PartUploadCard({
             className="w-full text-xs file:mr-2 file:rounded file:border-0 file:bg-amber-500 file:px-3 file:py-1 file:text-xs file:text-white"
           />
           {highlightPreviewUrl && (
-            <DedicatedPlayer src={highlightPreviewUrl} title={highlightFile?.name} className="h-28 w-full" />
+            <DedicatedPlayer src={highlightPreviewUrl} title={highlightFile?.name} className="h-40 w-full" />
           )}
           <Button size="sm" variant="secondary" onClick={() => upload("highlight")} disabled={!highlightFile || uploading !== null} className="w-full min-h-[36px] text-xs">
             {uploading === "highlight" ? `در حال آپلود برش... ${uploadProgress}%` : "افزودن برش"}
@@ -720,7 +720,7 @@ function PartUploadCard({
             className="w-full text-xs file:mr-2 file:rounded file:border-0 file:bg-violet-500 file:px-3 file:py-1 file:text-xs file:text-white"
           />
           {reelPreviewUrl && (
-            <DedicatedPlayer src={reelPreviewUrl} title={reelFile?.name} className="h-28 w-full" />
+            <DedicatedPlayer src={reelPreviewUrl} title={reelFile?.name} className="h-40 w-full" />
           )}
           <Button size="sm" variant="secondary" onClick={() => upload("reel")} disabled={!reelFile || uploading !== null} className="w-full min-h-[36px] text-xs">
             {uploading === "reel" ? `در حال آپلود ریلز... ${uploadProgress}%` : "افزودن ریلز"}

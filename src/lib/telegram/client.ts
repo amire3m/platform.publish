@@ -299,26 +299,23 @@ export class TelegramClient {
   async downloadFile(fileId: string): Promise<Buffer> {
     const info = await this.getFile(fileId);
     if (!info.file_path) throw new Error("مسیر فایل در تلگرام یافت نشد (احتمالاً فایل قدیمی یا حجیم است).");
+    // Direct volume fallback first for large files
+    if ((info.file_path as string).startsWith("/")) {
+      const fp = info.file_path as string;
+      const hostPath = `/var/lib/docker/volumes/tg-bot-api-data/_data${fp.substring("/var/lib/telegram-bot-api".length)}`;
+      const fs = await import("fs/promises");
+      for (const p of [hostPath, fp]) {
+        try {
+          const buf = await fs.readFile(p);
+          if (buf.length > 0) return buf as unknown as Buffer;
+        } catch {}
+      }
+    }
     const cleanPath = this.normalizeFilePath(info.file_path);
     const res = await fetch(`${API_ROOT}/file/bot${this.cfg.botToken}/${cleanPath}`);
     if (res.ok) {
       const arrayBuffer = await res.arrayBuffer();
       return Buffer.from(arrayBuffer);
-    }
-    // Fallback for large files stored in Local Bot API volume (docker)
-    if (res.status === 501 && (info.file_path as string).startsWith("/")) {
-      const fp = info.file_path as string;
-      const hostPath = `/var/lib/docker/volumes/tg-bot-api-data/_data${fp.substring("/var/lib/telegram-bot-api".length)}`;
-      const fs = await import("fs/promises");
-      try {
-        const buf = await fs.readFile(hostPath);
-        return buf as unknown as Buffer;
-      } catch {}
-      // also try absolute host path directly
-      try {
-        const buf2 = await fs.readFile(fp);
-        return buf2 as unknown as Buffer;
-      } catch {}
     }
     throw new Error("دریافت فایل از تلگرام ناموفق بود.");
   }
@@ -326,6 +323,54 @@ export class TelegramClient {
   async downloadFileResponse(fileId: string, range?: string | null): Promise<Response> {
     const info = await this.getFile(fileId);
     if (!info.file_path) throw new Error("مسیر فایل در تلگرام یافت نشد (احتمالاً فایل قدیمی یا حجیم است).");
+    // Direct volume fallback first for large files (avoid HTTP 501)
+    if ((info.file_path as string).startsWith("/")) {
+      const fp2 = info.file_path as string;
+      const hostPath = `/var/lib/docker/volumes/tg-bot-api-data/_data${fp2.substring("/var/lib/telegram-bot-api".length)}`;
+      const fs = await import("fs");
+      const fsp = await import("fs/promises");
+      const tryPaths = [hostPath, fp2];
+      for (const p of tryPaths) {
+        try {
+          const stat = await fsp.stat(p);
+          const size = stat.size;
+          // If file exists locally and is large, serve directly
+          if (size > 0) {
+            let start = 0;
+            let end = size - 1;
+            let status = 200;
+            const headers = new Headers();
+            headers.set("content-type", contentTypeFromPath(fp2) || "video/mp4");
+            headers.set("accept-ranges", "bytes");
+            headers.set("content-length", String(size));
+            if (range) {
+              const m = range.match(/bytes=(\d+)-(\d*)/);
+              if (m) {
+                start = parseInt(m[1] || "0", 10);
+                if (m[2]) end = parseInt(m[2], 10);
+                if (end >= size) end = size - 1;
+                status = 206;
+                headers.set("content-range", `bytes ${start}-${end}/${size}`);
+                headers.set("content-length", String(end - start + 1));
+              }
+            }
+            console.log(`[telegram] serving large file directly from ${p} size=${size} range=${range} -> ${status}`);
+            const stream = fs.createReadStream(p, { start, end });
+            const readable = new ReadableStream({
+              start(controller) {
+                stream.on("data", (chunk) => controller.enqueue(chunk));
+                stream.on("end", () => controller.close());
+                stream.on("error", (e) => controller.error(e));
+              },
+              cancel() {
+                stream.destroy();
+              },
+            });
+            return new Response(readable as unknown as BodyInit, { status, headers });
+          }
+        } catch {}
+      }
+    }
     const cleanPath = this.normalizeFilePath(info.file_path);
     const res = await fetch(`${API_ROOT}/file/bot${this.cfg.botToken}/${cleanPath}`, {
       headers: range ? { range } : undefined,
@@ -336,54 +381,6 @@ export class TelegramClient {
       const headers = new Headers(res.headers);
       headers.set("content-type", inferredType);
       return new Response(res.body, { status: res.status, headers });
-    }
-    // Fallback for large files: serve directly from docker volume
-    if (res.status === 501 && (info.file_path as string).startsWith("/")) {
-      const fp2 = info.file_path as string;
-      const hostPath = `/var/lib/docker/volumes/tg-bot-api-data/_data${fp2.substring("/var/lib/telegram-bot-api".length)}`;
-      const fs = await import("fs");
-      const fsp = await import("fs/promises");
-      const tryPaths = [hostPath, fp2];
-      for (const p of tryPaths) {
-        try {
-          const stat = await fsp.stat(p);
-          const size = stat.size;
-          let start = 0;
-          let end = size - 1;
-          let status = 200;
-          const headers = new Headers();
-          headers.set("content-type", contentTypeFromPath(fp2) || "video/mp4");
-          headers.set("accept-ranges", "bytes");
-          headers.set("content-length", String(size));
-          if (range) {
-            const m = range.match(/bytes=(\d+)-(\d*)/);
-            if (m) {
-              start = parseInt(m[1] || "0", 10);
-              if (m[2]) end = parseInt(m[2], 10);
-              if (end >= size) end = size - 1;
-              status = 206;
-              headers.set("content-range", `bytes ${start}-${end}/${size}`);
-              headers.set("content-length", String(end - start + 1));
-            }
-          }
-          console.log(`[telegram] serving large file directly from ${p} size=${size} range=${range} -> ${status}`);
-          const stream = fs.createReadStream(p, { start, end });
-          const readable = new ReadableStream({
-            start(controller) {
-              stream.on("data", (chunk) => controller.enqueue(chunk));
-              stream.on("end", () => controller.close());
-              stream.on("error", (e) => controller.error(e));
-            },
-            cancel() {
-              stream.destroy();
-            },
-          });
-          return new Response(readable as unknown as BodyInit, { status, headers });
-        } catch (e) {
-          console.error(`[telegram] fallback stat failed for ${p}:`, (e as Error).message);
-        }
-      }
-      console.error(`[telegram] fallback failed for ${fp2} hostPath=${hostPath}`);
     }
     throw new Error("دریافت فایل از تلگرام ناموفق بود.");
   }

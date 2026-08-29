@@ -4,6 +4,7 @@ import useSWR from "swr";
 import { Search, Play, Film, Image as ImageIcon } from "lucide-react";
 import { Card, Input, Select, Button, EmptyState, Skeleton } from "@/components/ui";
 import { ChannelOptions } from "@/components/ChannelOptions";
+import { DedicatedPlayer } from "@/components/media/DedicatedPlayer";
 
 const fetcher = async (url: string) => {
   const res = await fetch(url);
@@ -82,14 +83,7 @@ export default function LibraryPage() {
                   )}
                 </div>
               ) : (
-                <video
-                  src={it.playbackUrl}
-                  controls
-                  preload="metadata"
-                  playsInline
-                  className="max-h-48 w-full"
-                  onError={() => setFailedIds((s) => new Set(s).add(it.id))}
-                />
+                <DedicatedPlayer src={it.playbackUrl} title={it.filename} className="max-h-48 w-full" onError={() => setFailedIds((s) => new Set(s).add(it.id))} />
               )}
             </div>
             {failedIds.has(it.id) && it.telegramLink && <a href={it.telegramLink} target="_blank" className="text-[11px] text-tg-accent hover:underline">مشاهده در تلگرام</a>}

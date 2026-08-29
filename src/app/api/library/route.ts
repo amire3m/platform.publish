@@ -60,17 +60,19 @@ export async function GET(req: Request) {
     const channel = prod?.channel ?? "";
     const baseTitle = prod?.title ?? "";
     const p = part as unknown as { id: string; partNumber: number; fileRef: string | null; coverFileRef: string | null; createdAt: Date };
-    if (p.fileRef && (!typeFilter || typeFilter === "video")) {
-      const token = buildToken(p.fileRef, "video/mp4");
+    const isRealFileId = (v: string | null) => !!v && !v.startsWith("tg_msg_") && !v.startsWith("sample_");
+    if (isRealFileId(p.fileRef) && (!typeFilter || typeFilter === "video")) {
+      const token = buildToken(p.fileRef!, "video/mp4");
       items.push({ id: `${p.id}-video`, filename: `${baseTitle} - قسمت ${p.partNumber} - ویدئو`, type: "video", channel, channelLabel: channel, size: 0, createdAt: p.createdAt, playbackUrl: buildUrl(token), source: "part", partId: p.id });
     }
-    if (p.coverFileRef && (!typeFilter || typeFilter === "cover")) {
-      const token = buildToken(p.coverFileRef, "image/jpeg");
+    if (isRealFileId(p.coverFileRef) && (!typeFilter || typeFilter === "cover")) {
+      const token = buildToken(p.coverFileRef!, "image/jpeg");
       items.push({ id: `${p.id}-cover`, filename: `${baseTitle} - قسمت ${p.partNumber} - کاور`, type: "cover", channel, size: 0, createdAt: p.createdAt, playbackUrl: buildUrl(token), source: "part", partId: p.id });
     }
   }
   for (const asset of assetRows) {
     const a = asset as unknown as { id: string; partId: string; kind: string; fileRef: string; fileName: string | null; createdAt: Date };
+    if (!a.fileRef || a.fileRef.startsWith("tg_msg_") || a.fileRef.startsWith("sample_")) continue;
     const part = filteredParts.find((p) => (p as unknown as { id: string }).id === a.partId) as unknown as { partNumber: number } | undefined;
     const prod = part ? productById.get((filteredParts.find((p)=> (p as unknown as {id:string}).id===a.partId) as unknown as {productId:string})?.productId) as unknown as { channel: string; title: string } | undefined : undefined;
     const channel = prod?.channel ?? "";

@@ -20,7 +20,7 @@ import { useToast } from "@/components/providers";
 import { Button, Card, EmptyState, Skeleton } from "@/components/ui";
 import { formatAnalyticsNumber, formatComparison, formatWatchMinutes } from "@/lib/analytics/presentation";
 import { analyticsFilterKey, analyticsFiltersChanged, buildAnalyticsSyncRequest, createRequestGenerationGuard } from "@/lib/analytics/analytics-controls";
-import { runAnalyticsSync } from "@/lib/analytics/sync-controller";
+import { runAnalyticsSync } from "@/lib/analytics/sync-controller-client";
 import type { PublicAccountDto } from "@/lib/accounts/public";
 import type { AnalyticsOverview, AnalyticsRange, MetricTotals } from "@/lib/analytics/types";
 import type { AccountSyncResult } from "@/lib/analytics/sync";

@@ -1,17 +1,19 @@
 "use client";
 import { useState } from "react";
-import { Radio, MonitorPlay, CalendarClock, Tv, History } from "lucide-react";
+import { Radio, MonitorPlay, CalendarClock, Tv, History, Palette } from "lucide-react";
 import LiveTab from "./LiveTab";
 import ChannelsTab from "./ChannelsTab";
 import SchedulesTab from "./SchedulesTab";
 import HistoryTab from "./HistoryTab";
+import ScenesTab from "./ScenesTab";
 
-type TabKey = "live" | "schedules" | "channels" | "history";
+type TabKey = "live" | "schedules" | "channels" | "scenes" | "history";
 
 const TABS: { key: TabKey; label: string; icon: typeof Radio }[] = [
   { key: "live", label: "پخش زنده", icon: MonitorPlay },
   { key: "schedules", label: "برنامه‌ها", icon: CalendarClock },
   { key: "channels", label: "کانال‌ها", icon: Tv },
+  { key: "scenes", label: "صحنه‌ها", icon: Palette },
   { key: "history", label: "تاریخچه", icon: History },
 ];
 
@@ -25,7 +27,7 @@ export default function LivePage() {
           <Radio className="h-5 w-5 text-rose-500" />
           کنداکتور لایو
         </h1>
-        <p className="text-sm text-tg-secondary">پخش زنده پلی‌لیست یوتیوب به RTMP با مدیریت صف حین پخش، برنامه‌های روزانه و کانال‌های ذخیره‌شده.</p>
+        <p className="text-sm text-tg-secondary">پخش زنده پلی‌لیست یوتیوب یا منبع m3u8 به RTMP — با صحنه‌های گرافیکی، PiP و برنامه‌های روزانه.</p>
       </div>
 
       <div className="flex flex-wrap gap-1.5 border-b border-tg-border pb-2">
@@ -46,6 +48,7 @@ export default function LivePage() {
       {tab === "live" && <LiveTab />}
       {tab === "schedules" && <SchedulesTab />}
       {tab === "channels" && <ChannelsTab />}
+      {tab === "scenes" && <ScenesTab />}
       {tab === "history" && <HistoryTab />}
     </div>
   );

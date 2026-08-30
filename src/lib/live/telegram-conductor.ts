@@ -20,6 +20,8 @@ import {
   schedulesKeyboard,
   formatSettings,
   settingsKeyboard,
+  formatScenesMenu,
+  scenesKeyboard,
   NEXT_POSITION,
   LIVE_PANEL_EDIT_ERROR,
   type LivePanelView,
@@ -93,15 +95,19 @@ async function editPanel(ctx: LivePanelContext, messageId: number): Promise<void
 }
 
 async function settingsView(): Promise<LiveSettingsView> {
-  const [row] = await db.select().from(appSettings).where(eq(appSettings.id, 1)).limit(1);
-  const live = (row?.capabilityConfig as Record<string, unknown> | undefined)?.live as
-    | { logoPath?: string; position?: string; opacity?: number }
-    | undefined;
+  const cfg = await liveGraphicsConfig();
   return {
-    logoPath: live?.logoPath ?? "",
-    position: live?.position ?? "top-right",
-    opacity: Math.min(1, Math.max(0, live?.opacity ?? 0.8)),
+    logoPath: cfg?.logoPath ?? "",
+    position: cfg?.position ?? "top-right",
+    opacity: Math.min(1, Math.max(0, cfg?.opacity ?? 0.8)),
   };
+}
+
+async function liveGraphicsConfig() {
+  const [row] = await db.select().from(appSettings).where(eq(appSettings.id, 1)).limit(1);
+  return (row?.capabilityConfig as Record<string, unknown> | undefined)?.live as
+    | { logoPath?: string; position?: string; opacity?: number; scenes?: import("./scene").Scene[]; activeSceneName?: string }
+    | undefined;
 }
 
 async function saveSettings(v: LiveSettingsView): Promise<void> {
@@ -232,6 +238,27 @@ export async function handleLiveCallback(
         const v = await settingsView();
         await ctx.edit(messageId, { text: formatSettings(v), keyboard: settingsKeyboard(v) });
         return { ok: true, message: "تنظیمات." };
+      }
+      case "scene_menu": {
+        const s = getStreamer().toPublic();
+        const { parseScenes } = await import("./scene");
+        const cfg = await liveGraphicsConfig();
+        const { scenes, activeName } = parseScenes(cfg);
+        const views = scenes.map((sc) => ({ name: sc.name, itemCount: sc.items.length, active: sc.name === (s.sceneName ?? activeName) }));
+        await ctx.edit(messageId, {
+          text: formatScenesMenu(views, s.sourceType === "m3u8"),
+          keyboard: scenesKeyboard(views),
+        });
+        return { ok: true, message: "صحنه‌ها." };
+      }
+      case "scene_apply": {
+        const { loadLiveScene } = await import("./start");
+        const scene = await loadLiveScene(decodeURIComponent(arg));
+        if (!scene) return { ok: false, message: "صحنه پیدا نشد." };
+        if (!getStreamer().applyScene(scene)) return { ok: false, message: "جلسه فعالی وجود ندارد." };
+        const instant = getStreamer().session?.sourceType === "m3u8";
+        await editPanel(ctx, messageId);
+        return { ok: true, message: instant ? `صحنه «${scene.name}» فوری اعمال شد.` : `صحنه «${scene.name}» از ویدیوی بعدی اعمال می‌شود.` };
       }
       case "cycle_position": {
         const v = await settingsView();

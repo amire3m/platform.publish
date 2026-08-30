@@ -119,6 +119,7 @@ export function mainMenuKeyboard(s: PublicSession | null): TgButton[][] {
   if (active) {
     return [
       [{ text: "⏭ رد کردن", callback_data: cb("skip") }, { text: "⏹ توقف", callback_data: cb("stop") }],
+      [{ text: "🎨 صحنه‌ها", callback_data: cb("scene_menu") }],
       [{ text: "🔄 بروزرسانی", callback_data: cb("menu") }],
     ];
   }
@@ -130,6 +131,30 @@ export function mainMenuKeyboard(s: PublicSession | null): TgButton[][] {
     ],
     [{ text: "⚙️ تنظیمات", callback_data: cb("settings_menu") }, { text: "🔄 بروزرسانی", callback_data: cb("menu") }],
   ];
+}
+
+// ---------------------------------------------------------------------------
+// Scenes menu (Phase C)
+// ---------------------------------------------------------------------------
+export function formatScenesMenu(scenes: { name: string; itemCount: number; active: boolean }[], instant: boolean): string {
+  if (scenes.length === 0) {
+    return "🎨 <b>صحنه‌ها</b>\n\nهنوز صحنه‌ای پیکربندی نشده است.\nاز پنل وب → تنظیمات لایو، صحنه بسازید (لوگو/متن/PiP).";
+  }
+  return [
+    "🎨 <b>صحنه‌ها</b>",
+    instant ? "<i>سوییچ فوری روی منبع زنده</i>" : "<i>اعمال از ویدیوی بعدی (منبع پلی‌لیست)</i>",
+    "",
+    ...scenes.map((s) => `${s.active ? "🟢" : "⚪️"} <b>${escapeHtml(s.name)}</b> — ${s.itemCount} لایه`),
+  ].join("\n");
+}
+
+export function scenesKeyboard(scenes: { name: string; active: boolean }[]): TgButton[][] {
+  const kb: TgButton[][] = scenes.map((s) => [
+    { text: s.active ? "● فعال" : "سوییچ", callback_data: cb("scene_apply", s.name) },
+    { text: s.name.slice(0, 20), callback_data: cb("noop") },
+  ]);
+  kb.push([{ text: "◀️ بازگشت", callback_data: cb("menu") }]);
+  return kb;
 }
 
 export function channelPickKeyboard(channels: { id: string; name: string }[]): TgButton[][] {

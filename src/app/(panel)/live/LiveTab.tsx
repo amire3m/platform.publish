@@ -43,6 +43,11 @@ interface ChannelPublic {
   isActive: boolean;
 }
 
+interface SceneRow {
+  name: string;
+  items: { kind: string }[];
+}
+
 export const liveFetcher = async <T,>(url: string): Promise<T> => {
   const res = await fetch(url);
   const body = await parseJsonResponse<{ ok: boolean; data: T; error?: string }>(res);
@@ -91,6 +96,7 @@ export default function LiveTab() {
   const { showToast } = useToast();
   const { data, error, mutate } = useSWR<LivePublic>("/api/live/playlist", liveFetcher, { refreshInterval: 4000 });
   const { data: channels } = useSWR<ChannelPublic[]>("/api/live/channels", liveFetcher, { refreshInterval: 60000 });
+  const { data: settings } = useSWR<{ scenes?: SceneRow[] }>("/api/live/settings", liveFetcher, { refreshInterval: 60000 });
   const [playlistInput, setPlaylistInput] = useState("");
   const [channelRef, setChannelRef] = useState("");
   const [rtmpUrl, setRtmpUrl] = useState("rtmp://a.rtmp.youtube.com/live2");
@@ -270,6 +276,26 @@ export default function LiveTab() {
                   {data.loop ? " (سپس از ابتدا تکرار می‌شود)" : ""}
                 </p>
               )}
+            </div>
+          )}
+
+          {(settings?.scenes ?? []).length > 0 && (
+            <div className="flex flex-wrap items-center gap-2 rounded-lg border border-tg-border bg-tg-hover/20 p-3">
+              <span className="text-xs font-semibold text-tg-text">صحنه فعلی:</span>
+              <span className="rounded-full bg-tg-accent/15 px-2.5 py-1 text-[11px] text-tg-accent">{data.sceneName ?? "بدون گرافیک"}</span>
+              <select
+                value=""
+                onChange={(e) => { if (e.target.value) control({ action: "scene", sceneName: e.target.value }, "صحنه تغییر کرد."); }}
+                className="rounded-lg border border-tg-border bg-tg-bg px-2 py-1.5 text-xs text-tg-text"
+              >
+                <option value="">سوییچ به…</option>
+                {(settings?.scenes ?? []).map((s) => (
+                  <option key={s.name} value={s.name}>{s.name}</option>
+                ))}
+              </select>
+              <span className="text-[11px] text-tg-secondary">
+                {data.sourceType === "m3u8" ? "سوییچ فوری" : "اعمال از ویدیوی بعدی"}
+              </span>
             </div>
           )}
         </Card>

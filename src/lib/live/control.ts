@@ -7,6 +7,7 @@ export interface ControlRequestBody {
   input?: string;
   videoId?: string;
   direction?: number;
+  sceneName?: string;
 }
 
 /** Dispatch a queue-control action against the streamer. Returns public session or null on no-op. */
@@ -55,7 +56,19 @@ export async function dispatchControl(
       }
       return { ok: true, session: streamer.toPublic() };
     }
+    case "scene": {
+      const name = body?.sceneName?.trim();
+      if (!name) return { ok: false, error: "نام صحنه الزامی است.", status: 422 };
+      const { loadLiveScene } = await import("./start");
+      const { parseScenes } = await import("./scene");
+      const scene = await loadLiveScene(name);
+      if (!scene) return { ok: false, error: "صحنه پیدا نشد.", status: 404 };
+      if (!streamer.applyScene(scene)) {
+        return { ok: false, error: "جلسه فعالی برای تغییر صحنه وجود ندارد.", status: 409 };
+      }
+      return { ok: true, session: streamer.toPublic() };
+    }
     default:
-      return { ok: false, error: "اقدام نامعتبر است. skip/stop/add/remove/move/replay بفرستید.", status: 400 };
+      return { ok: false, error: "اقدام نامعتبر است. skip/stop/add/remove/move/replay/scene بفرستید.", status: 400 };
   }
 }

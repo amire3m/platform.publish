@@ -15,6 +15,7 @@ import {
   type LiveQuality,
   type PlaylistItem,
 } from "./yt-dlp";
+import { buildSceneArgs } from "./scene";
 
 type FfmpegProcess = ChildProcessByStdio<null, Readable, Readable>;
 
@@ -43,8 +44,10 @@ export interface LiveSession {
   /** DB row id (LSE-…) assigned by the API/conductor; null → no persistence. */
   sessionId: string | null;
   overlayEnabled: boolean;
-  /** Overlay resolved at start (logo path/position/opacity) — server-only. */
+  /** Legacy single-logo overlay (pre-scenes) — converted to a scene at spawn time. */
   overlay: import("./yt-dlp").OverlayConfig | null;
+  /** Resolved graphics scene (Phase C) — wins over legacy overlay when present. */
+  scene: import("./scene").Scene | null;
   scheduleRef: string | null;
   channelRef: string | null;
   /** "playlist" = YouTube queue, "m3u8" = single live/VOD HLS source. */
@@ -63,6 +66,7 @@ export interface StartLiveOptions {
   sessionId?: string;
   overlayEnabled?: boolean;
   overlay?: import("./yt-dlp").OverlayConfig | null;
+  scene?: import("./scene").Scene | null;
   scheduleRef?: string;
   channelRef?: string;
   sceneName?: string;
@@ -75,7 +79,7 @@ export interface LiveStreamerDeps {
     inputs: string[],
     target: string,
     quality: LiveQuality,
-    overlay: import("./yt-dlp").OverlayConfig | null,
+    scene: import("./scene").Scene | null,
     sourceType?: "playlist" | "m3u8",
   ) => FfmpegProcess;
   now?: () => number;
@@ -130,6 +134,7 @@ class PlaylistStreamer {
       sessionId: opts.sessionId ?? null,
       overlayEnabled: opts.overlayEnabled ?? false,
       overlay: opts.overlay ?? null,
+      scene: opts.scene ?? null,
       scheduleRef: opts.scheduleRef ?? null,
       channelRef: opts.channelRef ?? null,
       sourceType,
@@ -182,7 +187,7 @@ class PlaylistStreamer {
     s.state = "live";
     void this.persistSafe();
     try {
-      const overlay = s.overlayEnabled ? s.overlay : null;
+      const scene = s.overlayEnabled ? (s.scene ?? overlayToScene(s.overlay)) : null;
       let inputs: string[];
       if (s.sourceType === "m3u8") {
         // Single HLS source — passed straight to ffmpeg (no yt-dlp extraction).
@@ -192,7 +197,7 @@ class PlaylistStreamer {
         if (this.stopping || s.state !== "live") return;
         inputs = urls.audioUrl ? [urls.videoUrl, urls.audioUrl] : [urls.videoUrl];
       }
-      this.proc = this.deps.spawnFfmpeg(inputs, s.rtmpTarget, s.quality, overlay, s.sourceType);
+      this.proc = this.deps.spawnFfmpeg(inputs, s.rtmpTarget, s.quality, scene, s.sourceType);
       this.proc.stderr.on("data", (chunk: Buffer) => {
         const t = parseFfmpegTime(chunk.toString());
         if (t !== null && this.session && this.session.queue[this.session.currentIndex] === item) {
@@ -303,6 +308,25 @@ class PlaylistStreamer {
     });
   }
 
+  /**
+   * Switch the graphics scene mid-session.
+   * m3u8 sources: instant (ffmpeg respawns on the live edge).
+   * Playlist sources: applies from the next video (filter graph is fixed per spawn).
+   */
+  applyScene(scene: import("./scene").Scene): boolean {
+    const s = this.session;
+    if (!s || !this.isActive()) return false;
+    s.scene = scene;
+    s.sceneName = scene.name;
+    this.deps.onEvent?.("live_scene_switched", { scene: scene.name, sourceType: s.sourceType, instant: s.sourceType === "m3u8" });
+    if (s.sourceType === "m3u8" && this.proc) {
+      this.proc.kill("SIGKILL");
+      this.proc = null; // close handler → runNext replays the source with the new scene
+    }
+    void this.persistSafe();
+    return true;
+  }
+
   stop(reason = "manual"): boolean {
     const s = this.session;
     if (!s || !this.isActive()) return false;
@@ -374,18 +398,32 @@ function defaultSpawnFfmpeg(
   inputs: string[],
   target: string,
   quality: LiveQuality,
-  overlay: import("./yt-dlp").OverlayConfig | null,
+  scene: import("./scene").Scene | null,
   sourceType: "playlist" | "m3u8" = "playlist",
 ): FfmpegProcess {
-  const args = sourceType === "m3u8"
-    ? buildM3u8Args(inputs[0], target, quality)
-    : buildFfmpegArgs(inputs, target, quality, overlay ?? undefined);
+  let args: string[];
+  if (scene && scene.items.length > 0 && quality === "720") {
+    args = buildSceneArgs(inputs, target, scene);
+  } else if (sourceType === "m3u8") {
+    args = buildM3u8Args(inputs[0], target, quality);
+  } else {
+    args = buildFfmpegArgs(inputs, target, quality);
+  }
   const child = spawn("ffmpeg", args, { stdio: ["ignore", "pipe", "pipe"] });
   child.stderr.resume();
   child.on("error", (err) => {
     console.error("[live] ffmpeg spawn error:", err.message);
   });
   return child;
+}
+
+/** Convert legacy single-logo overlay config into a one-item scene. */
+function overlayToScene(overlay: import("./yt-dlp").OverlayConfig | null): import("./scene").Scene | null {
+  if (!overlay?.logoPath) return null;
+  return {
+    name: "legacy",
+    items: [{ kind: "image", value: overlay.logoPath, position: overlay.position, opacity: overlay.opacity, scale: 0.18 }],
+  };
 }
 
 /** Real persist: upsert session + items snapshot into DB. Non-fatal on error. */

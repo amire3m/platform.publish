@@ -9,11 +9,20 @@ interface LiveSettings {
   logoPath?: string;
   position?: string;
   opacity?: number;
+  /** Phase C: graphics scenes (720p encoder composition). */
+  scenes?: unknown[];
+  activeSceneName?: string;
 }
 
 function readLive(row: { capabilityConfig: unknown } | undefined): LiveSettings {
   const cfg = (row?.capabilityConfig as Record<string, unknown> | undefined)?.live as LiveSettings | undefined;
-  return { logoPath: cfg?.logoPath ?? "", position: cfg?.position ?? "top-right", opacity: cfg?.opacity ?? 0.8 };
+  return {
+    logoPath: cfg?.logoPath ?? "",
+    position: cfg?.position ?? "top-right",
+    opacity: cfg?.opacity ?? 0.8,
+    scenes: cfg?.scenes ?? [],
+    activeSceneName: cfg?.activeSceneName ?? undefined,
+  };
 }
 
 export async function GET() {
@@ -39,6 +48,14 @@ export async function PATCH(req: Request) {
     }
     if (body.opacity !== undefined && (typeof body.opacity !== "number" || body.opacity < 0 || body.opacity > 1)) {
       return jsonError("شفافیت باید بین ۰ و ۱ باشد.", 422, "VALIDATION_ERROR");
+    }
+    if (body.scenes !== undefined) {
+      if (!Array.isArray(body.scenes)) return jsonError("صحنه‌ها باید آرایه باشند.", 422, "VALIDATION_ERROR");
+      for (const s of body.scenes as { name?: unknown; items?: unknown }[]) {
+        if (typeof s?.name !== "string" || !s.name.trim() || !Array.isArray(s.items)) {
+          return jsonError("هر صحنه به نام و آرایه آیتم‌ها نیاز دارد.", 422, "VALIDATION_ERROR");
+        }
+      }
     }
     const [current] = await db.select().from(appSettings).where(eq(appSettings.id, 1)).limit(1);
     const merged: LiveSettings = { ...readLive(current), ...body };

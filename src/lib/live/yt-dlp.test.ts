@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildFormatSelector,
+  buildFfmpegArgs,
   maskTarget,
   normalizePlaylistUrl,
   parseFfmpegTime,
@@ -11,6 +12,20 @@ describe("yt-dlp helpers", () => {
   it("builds passthrough format selectors", () => {
     expect(buildFormatSelector("1080")).toBe("137+140/136+140/18");
     expect(buildFormatSelector("720")).toBe("136+140/18");
+  });
+
+  it("builds ffmpeg args per mode", () => {
+    const inputs = ["https://v", "https://a"];
+    const encode = buildFfmpegArgs(inputs, "rtmp://t/K", "720");
+    expect(encode).toContain("-c:v");
+    expect(encode).toContain("libx264");
+    expect(encode).toContain("ultrafast");
+    expect(encode.join(" ")).toContain("expr:gte(t,n_forced*2)");
+    expect(encode.slice(-3)).toEqual(["-f", "flv", "rtmp://t/K"]);
+    const copy = buildFfmpegArgs(inputs, "rtmp://t/K", "1080");
+    expect(copy).toContain("-c");
+    expect(copy).toContain("copy");
+    expect(copy).not.toContain("libx264");
   });
 
   it("parses flat playlist lines", () => {

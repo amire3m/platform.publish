@@ -65,7 +65,7 @@ export default function LivePage() {
   const [playlistInput, setPlaylistInput] = useState("");
   const [rtmpUrl, setRtmpUrl] = useState("rtmp://a.rtmp.youtube.com/live2");
   const [streamKey, setStreamKey] = useState("");
-  const [quality, setQuality] = useState("1080");
+  const [quality, setQuality] = useState("720");
   const [loop, setLoop] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [controlBusy, setControlBusy] = useState(false);
@@ -146,11 +146,12 @@ export default function LivePage() {
               <p className="mt-1 text-[11px] text-tg-secondary">از YouTube Studio → Go Live → Stream settings. فقط رمزنگاری‌شده استفاده و هرگز نمایش داده نمی‌شود.</p>
             </div>
             <div>
-              <label className="text-xs font-medium text-tg-secondary">حداکثر کیفیت (passthrough)</label>
+              <label className="text-xs font-medium text-tg-secondary">حالت استریم</label>
               <Select value={quality} onChange={(e) => setQuality(e.target.value)} className="mt-1">
-                <option value="1080">تا 1080p</option>
-                <option value="720">تا 720p (کم‌مصرف‌تر)</option>
+                <option value="720">720p — پیشنهادی (کلیدفریم ۲ ثانیه، بدون هشدار یوتیوب)</option>
+                <option value="1080">1080p بدون انکود (کیفیت کامل — ممکن است هشدار بافر بدهد)</option>
               </Select>
+              <p className="mt-1 text-[11px] text-tg-secondary">حالت 720p با انکود سبک (ultrafast) کلیدفریم هر ۲ ثانیه می‌سازد و روی این سرور با حاشیه ۲× اجرا می‌شود.</p>
             </div>
             <div className="flex items-end gap-2">
               <label className="flex items-center gap-2 text-sm text-tg-text">

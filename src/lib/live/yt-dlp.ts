@@ -27,6 +27,35 @@ export function buildFormatSelector(quality: LiveQuality): string {
   return quality === "720" ? "136+140/18" : "137+140/136+140/18";
 }
 
+/**
+ * Build ffmpeg args for one item.
+ * - 720: light re-encode (x264 ultrafast) with a forced 2-second keyframe interval —
+ *   satisfies YouTube's "keyframe frequency of four seconds or less" ingestion rule.
+ *   Verified on-server: ~2x realtime on a single core, drop=0.
+ * - 1080: pure passthrough (-c copy) — zero CPU, but keyframe cadence follows the
+ *   source (YouTube may warn about buffering).
+ * Audio is always copied (YouTube sources are AAC, which FLV supports).
+ */
+export function buildFfmpegArgs(inputs: string[], target: string, quality: LiveQuality): string[] {
+  const args: string[] = ["-hide_banner", "-loglevel", "warning"];
+  for (const input of inputs) args.push("-i", input);
+  if (inputs.length === 2) args.push("-map", "0:v:0", "-map", "1:a:0");
+  if (quality === "1080") {
+    args.push("-c", "copy");
+  } else {
+    args.push(
+      "-vf", "scale=-2:720",
+      "-c:v", "libx264", "-preset", "ultrafast",
+      "-b:v", "2500k", "-maxrate", "2500k", "-bufsize", "5000k",
+      "-pix_fmt", "yuv420p",
+      "-force_key_frames", "expr:gte(t,n_forced*2)",
+      "-c:a", "copy",
+    );
+  }
+  args.push("-f", "flv", target);
+  return args;
+}
+
 interface RunResult {
   code: number;
   stdout: string;

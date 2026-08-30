@@ -4,6 +4,7 @@
 import { spawn, type ChildProcessByStdio } from "node:child_process";
 import type { Readable } from "node:stream";
 import {
+  buildFfmpegArgs,
   fetchPlaylistItems,
   fetchStreamUrls,
   maskTarget,
@@ -50,7 +51,7 @@ export interface StartLiveOptions {
 export interface LiveStreamerDeps {
   fetchItems: typeof fetchPlaylistItems;
   fetchUrls: typeof fetchStreamUrls;
-  spawnFfmpeg: (inputs: string[], target: string) => FfmpegProcess;
+  spawnFfmpeg: (inputs: string[], target: string, quality: LiveQuality) => FfmpegProcess;
   now?: () => number;
   onEvent?: (action: string, detail: Record<string, unknown>) => void;
 }
@@ -139,7 +140,7 @@ class PlaylistStreamer {
       const urls = await this.deps.fetchUrls(item.videoId, s.quality);
       if (this.stopping || s.state !== "live") return;
       const inputs = urls.audioUrl ? [urls.videoUrl, urls.audioUrl] : [urls.videoUrl];
-      this.proc = this.deps.spawnFfmpeg(inputs, s.rtmpTarget);
+      this.proc = this.deps.spawnFfmpeg(inputs, s.rtmpTarget, s.quality);
       this.proc.stderr.on("data", (chunk: Buffer) => {
         const t = parseFfmpegTime(chunk.toString());
         if (t !== null && this.session && this.session.queue[this.session.currentIndex] === item) {
@@ -226,10 +227,8 @@ function buildTarget(rtmpUrl: string, streamKey: string): string {
   return `${base}/${key}`;
 }
 
-function defaultSpawnFfmpeg(inputs: string[], target: string): FfmpegProcess {
-  const args: string[] = ["-hide_banner", "-loglevel", "warning"];
-  for (const input of inputs) args.push("-i", input);
-  args.push("-c", "copy", "-f", "flv", target);
+function defaultSpawnFfmpeg(inputs: string[], target: string, quality: LiveQuality): FfmpegProcess {
+  const args = buildFfmpegArgs(inputs, target, quality);
   const child = spawn("ffmpeg", args, { stdio: ["ignore", "pipe", "pipe"] });
   child.stderr.resume();
   child.on("error", (err) => {

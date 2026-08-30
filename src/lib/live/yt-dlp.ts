@@ -17,6 +17,22 @@ export interface StreamUrls {
 
 export type LiveQuality = "1080" | "720";
 
+export type OverlayPosition = "top-left" | "top-right" | "bottom-left" | "bottom-right";
+
+export interface OverlayConfig {
+  logoPath: string;
+  position: OverlayPosition;
+  /** 0..1 */
+  opacity: number;
+}
+
+const OVERLAY_POS: Record<OverlayPosition, string> = {
+  "top-left": "10:10",
+  "top-right": "W-w-10:10",
+  "bottom-left": "10:H-h-10",
+  "bottom-right": "W-w-10:H-h-10",
+};
+
 export function ytDlpPath(): string {
   return process.env.LIVE_YTDLP_PATH?.trim() || "yt-dlp";
 }
@@ -36,12 +52,35 @@ export function buildFormatSelector(quality: LiveQuality): string {
  *   source (YouTube may warn about buffering).
  * Audio is always copied (YouTube sources are AAC, which FLV supports).
  */
-export function buildFfmpegArgs(inputs: string[], target: string, quality: LiveQuality): string[] {
+export function buildFfmpegArgs(
+  inputs: string[],
+  target: string,
+  quality: LiveQuality,
+  overlay?: OverlayConfig,
+): string[] {
   const args: string[] = ["-hide_banner", "-loglevel", "warning"];
   for (const input of inputs) args.push("-i", input);
-  if (inputs.length === 2) args.push("-map", "0:v:0", "-map", "1:a:0");
+  if (inputs.length === 2 && !(quality === "720" && overlay && overlay.logoPath && overlay.opacity > 0)) {
+    args.push("-map", "0:v:0", "-map", "1:a:0");
+  }
   if (quality === "1080") {
+    // Overlay requires re-encoding — ignored in passthrough mode.
     args.push("-c", "copy");
+  } else if (overlay && overlay.logoPath && overlay.opacity > 0) {
+    const logoIdx = inputs.length;
+    args.push("-i", overlay.logoPath);
+    const audioMap = inputs.length === 2 ? "1:a" : "0:a?";
+    args.push(
+      "-filter_complex",
+      `[0:v]scale=-2:720[v];[${logoIdx}:v]colorchannelmixer=aa=${overlay.opacity.toFixed(2)}[wm];[v][wm]overlay=${OVERLAY_POS[overlay.position] ?? OVERLAY_POS["top-right"]}[vout]`,
+      "-map", "[vout]",
+      "-map", audioMap,
+      "-c:v", "libx264", "-preset", "ultrafast",
+      "-b:v", "2500k", "-maxrate", "2500k", "-bufsize", "5000k",
+      "-pix_fmt", "yuv420p",
+      "-force_key_frames", "expr:gte(t,n_forced*2)",
+      "-c:a", "copy",
+    );
   } else {
     args.push(
       "-vf", "scale=-2:720",
@@ -157,4 +196,36 @@ export function maskTarget(target: string): string {
   const idx = target.lastIndexOf("/");
   if (idx === -1 || idx === target.length - 1) return "***";
   return `${target.slice(0, idx + 1)}***`;
+}
+
+/** Extract an 11-char YouTube video id from a raw id or a watch/shorts/youtu.be URL. */
+export function extractVideoId(input: string): string | null {
+  const s = input.trim();
+  if (/^[a-zA-Z0-9_-]{11}$/.test(s)) return s;
+  const patterns = [
+    /[?&]v=([a-zA-Z0-9_-]{11})/,
+    /youtu\.be\/([a-zA-Z0-9_-]{11})/,
+    /shorts\/([a-zA-Z0-9_-]{11})/,
+    /live\/([a-zA-Z0-9_-]{11})/,
+  ];
+  for (const p of patterns) {
+    const m = s.match(p);
+    if (m) return m[1];
+  }
+  return null;
+}
+
+/** Fetch metadata for a single video (used by queue add during live playback). */
+export async function fetchVideoMeta(videoId: string): Promise<PlaylistItem> {
+  const res = await run(ytDlpPath(), [
+    "--no-warnings", "--quiet",
+    "--print", "%(id)s\t%(title)s\t%(duration)s",
+    `https://www.youtube.com/watch?v=${videoId}`,
+  ]);
+  const line = res.stdout.split("\n").map((l) => l.trim()).find(Boolean);
+  const item = line ? parsePlaylistLine(line) : null;
+  if (res.code !== 0 || !item) {
+    throw new Error(`خواندن ویدیو ${videoId} ناموفق بود: ${res.stderr.split("\n").filter(Boolean).slice(-1)[0] ?? "unknown"}`);
+  }
+  return item;
 }

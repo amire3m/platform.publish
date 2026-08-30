@@ -5,6 +5,7 @@ import { spawn, type ChildProcessByStdio } from "node:child_process";
 import type { Readable } from "node:stream";
 import {
   buildFfmpegArgs,
+  extractVideoId,
   fetchPlaylistItems,
   fetchStreamUrls,
   maskTarget,
@@ -37,6 +38,13 @@ export interface LiveSession {
   currentElapsedSec: number;
   error: string | null;
   finishedAt: number | null;
+  /** DB row id (LSE-…) assigned by the API/conductor; null → no persistence. */
+  sessionId: string | null;
+  overlayEnabled: boolean;
+  /** Overlay resolved at start (logo path/position/opacity) — server-only. */
+  overlay: import("./yt-dlp").OverlayConfig | null;
+  scheduleRef: string | null;
+  channelRef: string | null;
 }
 
 export interface StartLiveOptions {
@@ -46,14 +54,21 @@ export interface StartLiveOptions {
   quality?: LiveQuality;
   loop?: boolean;
   maxItems?: number;
+  sessionId?: string;
+  overlayEnabled?: boolean;
+  overlay?: import("./yt-dlp").OverlayConfig | null;
+  scheduleRef?: string;
+  channelRef?: string;
 }
 
 export interface LiveStreamerDeps {
   fetchItems: typeof fetchPlaylistItems;
   fetchUrls: typeof fetchStreamUrls;
-  spawnFfmpeg: (inputs: string[], target: string, quality: LiveQuality) => FfmpegProcess;
+  spawnFfmpeg: (inputs: string[], target: string, quality: LiveQuality, overlay: import("./yt-dlp").OverlayConfig | null) => FfmpegProcess;
   now?: () => number;
   onEvent?: (action: string, detail: Record<string, unknown>) => void;
+  fetchMeta?: (videoId: string) => Promise<PlaylistItem>;
+  persist?: (session: LiveSession) => Promise<void>;
 }
 
 const NEXT_DELAY_MS = 1500;
@@ -71,6 +86,7 @@ class PlaylistStreamer {
       spawnFfmpeg: defaultSpawnFfmpeg,
       now: () => Date.now(),
       onEvent: logEventSafe,
+      persist: persistSessionSnapshot,
       ...deps,
     };
   }
@@ -86,7 +102,7 @@ class PlaylistStreamer {
     if (!rtmpTarget) throw new Error("RTMP URL و کلید استریم الزامی است.");
     const session: LiveSession = {
       state: "starting",
-      quality: opts.quality ?? "1080",
+      quality: opts.quality ?? "720",
       loop: opts.loop ?? true,
       playlistInput: opts.playlistInput,
       rtmpTarget,
@@ -96,6 +112,11 @@ class PlaylistStreamer {
       currentElapsedSec: 0,
       error: null,
       finishedAt: null,
+      sessionId: opts.sessionId ?? null,
+      overlayEnabled: opts.overlayEnabled ?? false,
+      overlay: opts.overlay ?? null,
+      scheduleRef: opts.scheduleRef ?? null,
+      channelRef: opts.channelRef ?? null,
     };
     this.session = session;
     this.stopping = false;
@@ -105,6 +126,7 @@ class PlaylistStreamer {
       session.queue = items.map((it) => ({ ...it, status: "pending" as const }));
       session.state = "live";
       this.deps.onEvent?.("live_started", { items: items.length, quality: session.quality, target: maskTarget(rtmpTarget) });
+      void this.persistSafe();
       void this.runNext();
       return session;
     } catch (err) {
@@ -125,6 +147,7 @@ class PlaylistStreamer {
         s.queue.forEach((q) => { q.status = "pending"; });
         s.currentIndex = -1;
         this.deps.onEvent?.("live_loop", { items: s.queue.length });
+        void this.persistSafe();
         setTimeout(() => void this.runNext(), NEXT_DELAY_MS);
         return;
       }
@@ -136,11 +159,13 @@ class PlaylistStreamer {
     item.status = "playing";
     s.currentElapsedSec = 0;
     s.state = "live";
+    void this.persistSafe();
     try {
       const urls = await this.deps.fetchUrls(item.videoId, s.quality);
       if (this.stopping || s.state !== "live") return;
       const inputs = urls.audioUrl ? [urls.videoUrl, urls.audioUrl] : [urls.videoUrl];
-      this.proc = this.deps.spawnFfmpeg(inputs, s.rtmpTarget, s.quality);
+      const overlay = s.overlayEnabled ? s.overlay : null;
+      this.proc = this.deps.spawnFfmpeg(inputs, s.rtmpTarget, s.quality, overlay);
       this.proc.stderr.on("data", (chunk: Buffer) => {
         const t = parseFfmpegTime(chunk.toString());
         if (t !== null && this.session && this.session.queue[this.session.currentIndex] === item) {
@@ -154,12 +179,14 @@ class PlaylistStreamer {
         if (code !== 0 && code !== null && !this.stopping) {
           this.deps.onEvent?.("live_item_failed", { videoId: item.videoId, code });
         }
+        void this.persistSafe();
         setTimeout(() => void this.runNext(), NEXT_DELAY_MS);
       });
       this.deps.onEvent?.("live_item_started", { videoId: item.videoId, title: item.title, index: nextIndex + 1 });
     } catch (err) {
       item.status = "failed";
       this.deps.onEvent?.("live_item_failed", { videoId: item.videoId, error: err instanceof Error ? err.message : "?" });
+      void this.persistSafe();
       setTimeout(() => void this.runNext(), NEXT_DELAY_MS);
     }
   }
@@ -174,6 +201,79 @@ class PlaylistStreamer {
     this.deps.onEvent?.("live_item_skipped", { videoId: item?.videoId });
     setTimeout(() => void this.runNext(), 200);
     return true;
+  }
+
+  /** Append a single video (URL or id) to the end of the queue during playback. */
+  async addItem(input: string): Promise<PlaylistItem> {
+    const s = this.session;
+    if (!s || !this.isActive()) throw new Error("جلسه لایو فعالی وجود ندارد.");
+    const videoId = extractVideoId(input);
+    if (!videoId) throw new Error("لینک یا شناسه ویدیو نامعتبر است.");
+    if (s.queue.some((q) => q.videoId === videoId && (q.status === "pending" || q.status === "playing"))) {
+      throw new Error("این ویدیو از قبل در صف است.");
+    }
+    const meta = await this.deps.fetchMeta?.(videoId);
+    const item: LiveQueueItem = {
+      videoId,
+      title: meta?.title ?? videoId,
+      durationSec: meta?.durationSec ?? null,
+      status: "pending",
+    };
+    s.queue.push(item);
+    this.deps.onEvent?.("live_queue_added", { videoId, title: item.title, queueLength: s.queue.length });
+    void this.persistSafe();
+    return item;
+  }
+
+  /** Remove a pending item by video id. Playing/done items cannot be removed. */
+  removeItem(videoId: string): boolean {
+    const s = this.session;
+    if (!s) return false;
+    const idx = s.queue.findIndex((q) => q.videoId === videoId);
+    if (idx === -1 || s.queue[idx].status !== "pending" || idx <= s.currentIndex) return false;
+    s.queue.splice(idx, 1);
+    this.deps.onEvent?.("live_queue_removed", { videoId });
+    void this.persistSafe();
+    return true;
+  }
+
+  /** Move a pending item up (-1) or down (+1) within the pending range. */
+  moveItem(videoId: string, dir: -1 | 1): boolean {
+    const s = this.session;
+    if (!s) return false;
+    const idx = s.queue.findIndex((q) => q.videoId === videoId);
+    if (idx === -1 || s.queue[idx].status !== "pending") return false;
+    const target = idx + dir;
+    if (target <= s.currentIndex || target >= s.queue.length) return false;
+    if (s.queue[target].status !== "pending") return false;
+    [s.queue[idx], s.queue[target]] = [s.queue[target], s.queue[idx]];
+    void this.persistSafe();
+    return true;
+  }
+
+  /** Re-queue a finished/failed/skipped item so it plays right after the current one. */
+  replayItem(videoId: string): boolean {
+    const s = this.session;
+    if (!s || !this.isActive()) return false;
+    const idx = s.queue.findIndex((q) => q.videoId === videoId);
+    if (idx === -1 || idx === s.currentIndex) return false;
+    const item = s.queue[idx];
+    if (item.status !== "done" && item.status !== "failed" && item.status !== "skipped") return false;
+    s.queue.splice(idx, 1);
+    if (idx < s.currentIndex) s.currentIndex -= 1;
+    item.status = "pending";
+    s.queue.splice(s.currentIndex + 1, 0, item);
+    this.deps.onEvent?.("live_queue_replayed", { videoId });
+    void this.persistSafe();
+    return true;
+  }
+
+  private persistSafe(): void {
+    const s = this.session;
+    if (!s?.sessionId || !this.deps.persist) return;
+    void this.deps.persist(s).catch((err) => {
+      console.error("[live] persist failed:", err instanceof Error ? err.message : err);
+    });
   }
 
   stop(reason = "manual"): boolean {
@@ -197,12 +297,13 @@ class PlaylistStreamer {
     s.queue.forEach((q) => { if (q.status === "playing") q.status = "done"; });
     this.deps.onEvent?.("live_stopped", { reason: reason ?? "playlist_end", items: s.queue.length });
     this.stopping = false;
+    void this.persistSafe();
   }
 
   /** Session safe for API exposure — stream key masked, no proc handles. */
   toPublic() {
     const s = this.session;
-    if (!s) return { state: "idle" as const, queue: [], currentIndex: -1, currentElapsedSec: 0, rtmpTarget: null, error: null };
+    if (!s) return { state: "idle" as const, queue: [], currentIndex: -1, currentElapsedSec: 0, rtmpTarget: null, error: null, sessionId: null, overlayEnabled: false, scheduleRef: null, channelRef: null };
     return {
       state: s.state,
       quality: s.quality,
@@ -216,6 +317,10 @@ class PlaylistStreamer {
       finishedAt: s.finishedAt,
       error: s.error,
       isActive: this.isActive(),
+      sessionId: s.sessionId,
+      overlayEnabled: s.overlayEnabled,
+      scheduleRef: s.scheduleRef,
+      channelRef: s.channelRef,
     };
   }
 }
@@ -227,14 +332,59 @@ function buildTarget(rtmpUrl: string, streamKey: string): string {
   return `${base}/${key}`;
 }
 
-function defaultSpawnFfmpeg(inputs: string[], target: string, quality: LiveQuality): FfmpegProcess {
-  const args = buildFfmpegArgs(inputs, target, quality);
+function defaultSpawnFfmpeg(
+  inputs: string[],
+  target: string,
+  quality: LiveQuality,
+  overlay: import("./yt-dlp").OverlayConfig | null,
+): FfmpegProcess {
+  const args = buildFfmpegArgs(inputs, target, quality, overlay ?? undefined);
   const child = spawn("ffmpeg", args, { stdio: ["ignore", "pipe", "pipe"] });
   child.stderr.resume();
   child.on("error", (err) => {
     console.error("[live] ffmpeg spawn error:", err.message);
   });
   return child;
+}
+
+/** Real persist: upsert session + items snapshot into DB. Non-fatal on error. */
+export async function persistSessionSnapshot(session: LiveSession): Promise<void> {
+  if (!session.sessionId) return;
+  const { db } = await import("@/db");
+  const { liveSessions, liveSessionItems } = await import("@/db/schema");
+  const { eq } = await import("drizzle-orm");
+  const itemsPlayed = session.queue.filter((q) => q.status === "done").length;
+  const itemsFailed = session.queue.filter((q) => q.status === "failed").length;
+  const secondsStreamed = session.queue
+    .filter((q) => q.status === "done")
+    .reduce((acc, q) => acc + (q.durationSec ?? 0), 0);
+  const state = session.state === "stopping" ? "stopping" : session.state === "error" ? "error" : session.state === "stopped" ? "stopped" : "live";
+  await db
+    .update(liveSessions)
+    .set({
+      state,
+      finishedAt: session.finishedAt ? new Date(session.finishedAt) : null,
+      error: session.error,
+      stats: { itemsPlayed, itemsFailed, secondsStreamed },
+      updatedAt: new Date(),
+    })
+    .where(eq(liveSessions.id, session.sessionId));
+  // Replace item snapshot (small tables; simplest correct approach).
+  await db.delete(liveSessionItems).where(eq(liveSessionItems.sessionRef, session.sessionId));
+  if (session.queue.length > 0) {
+    const { generateEntityId } = await import("@/lib/ids");
+    await db.insert(liveSessionItems).values(
+      session.queue.map((q, i) => ({
+        id: generateEntityId("LSI"),
+        sessionRef: session.sessionId as string,
+        position: i,
+        videoId: q.videoId,
+        title: q.title,
+        durationSec: q.durationSec,
+        status: q.status,
+      })),
+    );
+  }
 }
 
 async function logEventSafe(action: string, after: Record<string, unknown>): Promise<void> {

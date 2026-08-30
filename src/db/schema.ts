@@ -637,3 +637,85 @@ export const contentPartAssets = pgTable(
     kindIdx: index("content_part_assets_kind_idx").on(t.kind),
   }),
 );
+
+// ---------------------------------------------------------------------------
+// Live conductor: channel profiles, daily schedules, session history
+// ---------------------------------------------------------------------------
+export const liveChannels = pgTable("live_channels", {
+  id: text("id").primaryKey(), // LCH-1405-000001
+  name: text("name").notNull(),
+  provider: text("provider").notNull().default("youtube"), // youtube | custom
+  rtmpUrl: text("rtmp_url").notNull(),
+  /** AES-256-GCM payload from encryptSecret() — never exposed via API. */
+  streamKeyEncrypted: text("stream_key_encrypted").notNull(),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const liveSchedules = pgTable("live_schedules", {
+  id: text("id").primaryKey(), // LSC-1405-000001
+  name: text("name").notNull(),
+  channelRef: text("channel_ref").notNull(),
+  playlistInput: text("playlist_input").notNull(),
+  quality: text("quality").$type<"720" | "1080">().notNull().default("720"),
+  loop: boolean("loop").notNull().default(true),
+  overlayEnabled: boolean("overlay_enabled").notNull().default(false),
+  /** Tehran local time "HH:MM". endTehran null = run until queue/loop ends. */
+  startTehran: text("start_tehran").notNull(),
+  endTehran: text("end_tehran"),
+  /** JS convention: 0=Sunday … 6=Saturday. */
+  daysOfWeek: jsonb("days_of_week").$type<number[]>().notNull().default([]),
+  enabled: boolean("enabled").notNull().default(true),
+  lastStartedAt: timestamp("last_started_at", { withTimezone: true }),
+  lastError: text("last_error"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const liveSessions = pgTable(
+  "live_sessions",
+  {
+    id: text("id").primaryKey(), // LSE-1405-000001
+    scheduleRef: text("schedule_ref"),
+    channelRef: text("channel_ref"),
+    playlistInput: text("playlist_input").notNull().default(""),
+    quality: text("quality").$type<"720" | "1080">().notNull().default("720"),
+    loop: boolean("loop").notNull().default(true),
+    overlayEnabled: boolean("overlay_enabled").notNull().default(false),
+    trigger: text("trigger").notNull().default("manual"), // manual | schedule
+    state: text("state").notNull().default("live"), // live | stopping | stopped | interrupted | error
+    startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+    error: text("error"),
+    stats: jsonb("stats")
+      .$type<{ itemsPlayed: number; itemsFailed: number; secondsStreamed: number }>()
+      .notNull()
+      .default({ itemsPlayed: 0, itemsFailed: 0, secondsStreamed: 0 }),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    startedIdx: index("live_sessions_started_idx").on(t.startedAt),
+    stateIdx: index("live_sessions_state_idx").on(t.state),
+  }),
+);
+
+export const liveSessionItems = pgTable(
+  "live_session_items",
+  {
+    id: text("id").primaryKey(), // LSI-1405-000001
+    sessionRef: text("session_ref")
+      .notNull()
+      .references(() => liveSessions.id, { onDelete: "cascade" }),
+    position: integer("position").notNull(),
+    videoId: text("video_id").notNull(),
+    title: text("title").notNull().default(""),
+    durationSec: integer("duration_sec"),
+    status: text("status").notNull().default("pending"), // pending | playing | done | failed | skipped
+    startedAt: timestamp("started_at", { withTimezone: true }),
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+  },
+  (t) => ({
+    sessionIdx: index("live_session_items_session_idx").on(t.sessionRef),
+  }),
+);

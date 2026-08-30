@@ -136,6 +136,72 @@ describe("PlaylistStreamer", () => {
     ).rejects.toThrow("پلی‌لیست خالی");
     expect(sessionOf(streamer).state).toBe("error");
   });
+
+  it("adds a single video to the queue during playback", async () => {
+    const { deps, procs } = makeDeps(ITEMS);
+    deps.fetchMeta = vi.fn().mockResolvedValue({ videoId: "addedVid123", title: "Added", durationSec: 30 });
+    const streamer = new PlaylistStreamer(deps);
+    await streamer.start({ playlistInput: "PLtest", rtmpUrl: "rtmp://x/live", streamKey: "KEY", loop: false });
+    await streamer.addItem("https://www.youtube.com/watch?v=addedVid123");
+    const s = sessionOf(streamer);
+    expect(s.queue).toHaveLength(3);
+    expect(s.queue[2].videoId).toBe("addedVid123");
+    expect(s.queue[2].status).toBe("pending");
+    expect(deps.fetchMeta).toHaveBeenCalledWith("addedVid123");
+    procs[0].close(0);
+    await vi.advanceTimersByTimeAsync(2000);
+    procs[1].close(0);
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(s.queue[2].status).toBe("playing");
+  });
+
+  it("removes and moves pending items only", async () => {
+    const { deps } = makeDeps(ITEMS);
+    deps.fetchMeta = vi.fn().mockResolvedValue({ videoId: "thirdVid123", title: "Third", durationSec: 5 });
+    const streamer = new PlaylistStreamer(deps);
+    await streamer.start({ playlistInput: "PLtest", rtmpUrl: "rtmp://x/live", streamKey: "KEY", loop: false });
+    await streamer.addItem("thirdVid123");
+    // move new item up (index 2 → 1)
+    expect(streamer.moveItem("thirdVid123", -1)).toBe(true);
+    let s = sessionOf(streamer);
+    expect(s.queue[1].videoId).toBe("thirdVid123");
+    // remove playing item must fail
+    expect(streamer.removeItem("vid1")).toBe(false);
+    // remove pending works
+    expect(streamer.removeItem("thirdVid123")).toBe(true);
+    s = sessionOf(streamer);
+    expect(s.queue.map((q: { videoId: string }) => q.videoId)).toEqual(["vid1", "vid2"]);
+  });
+
+  it("replays a done item by moving it next", async () => {
+    const { deps, procs } = makeDeps(ITEMS);
+    const streamer = new PlaylistStreamer(deps);
+    await streamer.start({ playlistInput: "PLtest", rtmpUrl: "rtmp://x/live", streamKey: "KEY", loop: false });
+    procs[0].close(0);
+    await vi.advanceTimersByTimeAsync(2000);
+    let s = sessionOf(streamer);
+    expect(s.queue[0].status).toBe("done");
+    expect(s.currentIndex).toBe(1);
+    expect(streamer.replayItem("vid1")).toBe(true);
+    s = sessionOf(streamer);
+    expect(s.currentIndex).toBe(0);
+    expect(s.queue[1].videoId).toBe("vid1");
+    expect(s.queue[1].status).toBe("pending");
+    procs[1].close(0);
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(sessionOf(streamer).queue[1].status).toBe("playing");
+  });
+
+  it("calls persist on session start and item transitions", async () => {
+    const { deps, procs } = makeDeps(ITEMS);
+    deps.persist = vi.fn().mockResolvedValue(undefined);
+    const streamer = new PlaylistStreamer(deps);
+    await streamer.start({ playlistInput: "PLtest", rtmpUrl: "rtmp://x/live", streamKey: "KEY", loop: false, sessionId: "LSE-1" });
+    expect(deps.persist).toHaveBeenCalledWith(expect.objectContaining({ sessionId: "LSE-1" }));
+    procs[0].close(0);
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(deps.persist).toHaveBeenCalledWith(expect.objectContaining({ sessionId: "LSE-1", currentIndex: 1 }));
+  });
 });
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

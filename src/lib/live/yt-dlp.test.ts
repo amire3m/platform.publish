@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildFormatSelector,
   buildFfmpegArgs,
+  extractVideoId,
   maskTarget,
   normalizePlaylistUrl,
   parseFfmpegTime,
@@ -26,6 +27,27 @@ describe("yt-dlp helpers", () => {
     expect(copy).toContain("-c");
     expect(copy).toContain("copy");
     expect(copy).not.toContain("libx264");
+  });
+
+  it("adds overlay via filter_complex only in encode mode", () => {
+    const overlay = { logoPath: "/opt/logo.png", position: "top-right" as const, opacity: 0.8 };
+    const withOverlay = buildFfmpegArgs(["https://v", "https://a"], "rtmp://t/K", "720", overlay);
+    const joined = withOverlay.join(" ");
+    expect(joined).toContain("filter_complex");
+    expect(joined).toContain("colorchannelmixer=aa=0.8");
+    expect(joined).toContain("W-w-10:10");
+    expect(joined).toContain("-map");
+    // passthrough ignores overlay
+    const copy = buildFfmpegArgs(["https://v"], "rtmp://t/K", "1080", overlay);
+    expect(copy.join(" ")).not.toContain("filter_complex");
+  });
+
+  it("extracts video ids from urls and raw ids", () => {
+    expect(extractVideoId("dQw4w9WgXcQ")).toBe("dQw4w9WgXcQ");
+    expect(extractVideoId("https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=1s")).toBe("dQw4w9WgXcQ");
+    expect(extractVideoId("https://youtu.be/dQw4w9WgXcQ")).toBe("dQw4w9WgXcQ");
+    expect(extractVideoId("https://www.youtube.com/shorts/dQw4w9WgXcQ")).toBe("dQw4w9WgXcQ");
+    expect(extractVideoId("https://example.com/nope")).toBeNull();
   });
 
   it("parses flat playlist lines", () => {

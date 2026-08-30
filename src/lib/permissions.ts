@@ -25,6 +25,7 @@ export type Permission =
   | "update_assigned_content"
   | "manage_content_room"
   | "manage_channels"
+  | "manage_live"
   | "view_dashboard"
   | "view_assets"
   | "view_archive";
@@ -57,6 +58,7 @@ export const ALL_PERMISSIONS: Permission[] = [
   "update_assigned_content",
   "manage_content_room",
   "manage_channels",
+  "manage_live",
   "view_dashboard",
   "view_assets",
   "view_archive",
@@ -92,6 +94,7 @@ export const ROLE_DEFAULT_PERMISSIONS: Record<Role, Permission[]> = {
     "update_assigned_content",
     "manage_content_room",
     "manage_channels",
+    "manage_live",
     "view_dashboard",
     "view_assets",
     "view_archive",
@@ -107,7 +110,7 @@ export const ROLE_DEFAULT_PERMISSIONS: Record<Role, Permission[]> = {
     "update_assigned_content",
     "view_assets",
   ],
-  publisher: ["view_content", "publish_now", "schedule_content", "view_analytics", "view_workflow", "manage_publications", "view_content_room", "view_assets"],
+  publisher: ["view_content", "publish_now", "schedule_content", "view_analytics", "view_workflow", "manage_publications", "view_content_room", "manage_live", "view_assets"],
   analyst: ["view_content", "view_analytics", "export_data", "view_workflow", "view_content_room", "view_assets", "view_archive"],
   viewer: ["view_content", "view_workflow", "view_content_room", "view_assets", "view_archive"],
 };

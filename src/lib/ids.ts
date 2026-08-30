@@ -30,7 +30,11 @@ export function generateEntityId(
     | "WNT"
     | "WIB"
     | "CPR"
-    | "CPP",
+    | "CPP"
+    | "LCH"
+    | "LSC"
+    | "LSE"
+    | "LSI",
 ): string {
   const { jy } = todayJalali();
   const suffix = prefix === "ANS" ? analyticsSnapshotSuffix() : legacySuffix();

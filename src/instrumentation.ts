@@ -26,6 +26,15 @@ export async function register() {
     console.error("[analytics] failed to schedule daily sync:", (err as Error).message);
   }
 
+  // Live conductor: mark DB sessions from a previous process as interrupted.
+  try {
+    const { reconcileInterruptedSessions } = await import("@/lib/live/conductor");
+    await reconcileInterruptedSessions();
+    console.log("[live] interrupted session reconciliation done");
+  } catch (err) {
+    console.error("[live] interrupted reconciliation failed:", (err as Error).message);
+  }
+
   const { runPublishTick } = await import("@/lib/worker");
   const intervalMs = Number(process.env.WORKER_TICK_INTERVAL_MS || 60_000);
 
@@ -34,6 +43,10 @@ export async function register() {
     instrumentationRunning = true;
     Promise.allSettled([
       runPublishTick(),
+      (async () => {
+        const { runLiveConductorTickReal } = await import("@/lib/live/conductor");
+        return runLiveConductorTickReal();
+      })(),
       (async () => {
         const { reconcileWorkflowTargets } = await import("@/lib/workflow/reconciliation");
         return reconcileWorkflowTargets();

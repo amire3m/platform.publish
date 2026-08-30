@@ -4,6 +4,7 @@ import useSWR from "swr";
 import { Radio, SkipForward, Square, Play, AlertTriangle, ListVideo, Plus, Trash2, ArrowUp, ArrowDown, RotateCcw } from "lucide-react";
 import { Button, Card, Input, Select, EmptyState, Skeleton } from "@/components/ui";
 import { useToast } from "@/components/providers";
+import { parseJsonResponse } from "@/lib/client/http";
 
 interface QueueItem {
   videoId: string;
@@ -37,7 +38,7 @@ interface ChannelPublic {
 
 export const liveFetcher = async <T,>(url: string): Promise<T> => {
   const res = await fetch(url);
-  const body = await res.json();
+  const body = await parseJsonResponse<{ ok: boolean; data: T; error?: string }>(res);
   if (!res.ok || !body.ok) throw new Error(body.error ?? "خطا");
   return body.data as T;
 };
@@ -109,7 +110,7 @@ export default function LiveTab() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      const body = await res.json();
+      const body = await parseJsonResponse<{ ok: boolean; error?: string }>(res);
       if (!res.ok || !body.ok) throw new Error(body.error ?? "شروع لایو ناموفق بود");
       showToast("لایو شروع شد — وضعیت را همین‌جا دنبال کنید.", "success");
       setStreamKey("");
@@ -129,7 +130,7 @@ export default function LiveTab() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
-      const resp = await res.json();
+      const resp = await parseJsonResponse<{ ok: boolean; error?: string }>(res);
       if (!res.ok || !resp.ok) throw new Error(resp.error ?? "اقدام ناموفق بود");
       showToast(okMsg, "info");
       await mutate();

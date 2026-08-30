@@ -4,6 +4,7 @@ import useSWR from "swr";
 import { Plus, Trash2, CalendarClock, AlertTriangle } from "lucide-react";
 import { Button, Card, Input, Select } from "@/components/ui";
 import { useToast } from "@/components/providers";
+import { parseJsonResponse } from "@/lib/client/http";
 import { liveFetcher } from "./LiveTab";
 
 interface ScheduleRow {
@@ -56,7 +57,7 @@ export default function SchedulesTab() {
         headers: body ? { "Content-Type": "application/json" } : undefined,
         body: body ? JSON.stringify(body) : undefined,
       });
-      const resp = await res.json();
+      const resp = await parseJsonResponse<{ ok: boolean; error?: string }>(res);
       if (!res.ok || !resp.ok) throw new Error(resp.error ?? "خطا");
       showToast("انجام شد.", "success");
       await mutate();

@@ -6,6 +6,7 @@ import { appSettings, liveChannels, liveSchedules } from "@/db/schema";
 import { hasPermission } from "@/lib/permissions";
 import { getStreamer } from "./playlist-streamer";
 import { startLiveFromChannel } from "./start";
+import { isM3u8Source } from "./yt-dlp";
 import {
   cb,
   parseLiveCallback,
@@ -150,7 +151,7 @@ export async function handleLiveCallback(
         // arg = channelId → ask for playlist via reply flow
         setPendingStart(telegramId, { channelId: arg, messageId, expiresAt: Date.now() + 10 * 60_000 });
         await ctx.edit(messageId, {
-          text: "📋 <b>لینک یا شناسه پلی‌لیست را به همین پیام ریپلای کنید.</b>\n\nمثال: <code>https://www.youtube.com/playlist?list=PL...</code>\n\n⏱ ۱۰ دقیقه فرصت دارید.",
+          text: "📋 <b>لینک پلی‌لیست یوتیوب یا m3u8 را به همین پیام ریپلای کنید.</b>\n\nمثال: <code>https://www.youtube.com/playlist?list=PL...</code>\nیا: <code>https://tv.example.com/live.m3u8</code>\n\n⏱ ۱۰ دقیقه فرصت دارید.",
           keyboard: [[{ text: "❌ انصراف", callback_data: cb("cancel_pending") }]],
         });
         return { ok: true, message: "منتظر پلی‌لیست…" };
@@ -318,9 +319,10 @@ export function consumePendingStart(telegramId: string): PendingStart | null {
   return p;
 }
 
-/** Normalize user input to a playlist URL yt-dlp accepts (raw list id → URL). */
+/** Normalize user input to a playlist URL yt-dlp accepts (raw list id → URL). m3u8 URLs pass through. */
 export function isPlaylistInput(text: string): boolean {
   const s = text.trim();
+  if (isM3u8Source(s)) return true;
   if (/^https?:\/\/(www\.)?youtube\.com\/playlist\?/i.test(s)) return true;
   return /^[a-zA-Z0-9_-]{12,50}$/.test(s);
 }

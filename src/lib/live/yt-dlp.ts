@@ -125,6 +125,39 @@ function run(cmd: string, args: string[], timeoutMs = 180_000): Promise<RunResul
   });
 }
 
+/** Detect an HLS (m3u8) source — used as a live/VOD program source instead of a YouTube playlist. */
+export function isM3u8Source(input: string): boolean {
+  return /\.m3u8(\?|$)/i.test(input.trim());
+}
+
+/**
+ * ffmpeg args for an m3u8 program source. YouTube-source streams are h264+aac,
+ * which FLV/RTMP accepts directly → pure copy (~2-3% CPU). Reconnect flags keep
+ * a live TV source alive across network hiccups.
+ */
+export function buildM3u8Args(url: string, target: string, quality: LiveQuality): string[] {
+  const args: string[] = [
+    "-hide_banner", "-loglevel", "warning",
+    "-reconnect", "1", "-reconnect_streamed", "1", "-reconnect_delay_max", "10",
+    "-rw_timeout", "15000000",
+    "-i", url,
+  ];
+  if (quality === "1080") {
+    args.push("-c", "copy");
+  } else {
+    args.push(
+      "-vf", "scale=-2:720",
+      "-c:v", "libx264", "-preset", "ultrafast",
+      "-b:v", "2500k", "-maxrate", "2500k", "-bufsize", "5000k",
+      "-pix_fmt", "yuv420p",
+      "-force_key_frames", "expr:gte(t,n_forced*2)",
+      "-c:a", "copy",
+    );
+  }
+  args.push("-f", "flv", target);
+  return args;
+}
+
 /** Parse one flat-playlist line "id\ttitle\tduration". Returns null for invalid rows. */
 export function parsePlaylistLine(line: string): PlaylistItem | null {
   const parts = line.split("\t").map((s) => s.trim());

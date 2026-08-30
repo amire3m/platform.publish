@@ -26,6 +26,13 @@ interface LivePublic {
   finishedAt?: number | null;
   error?: string | null;
   isActive?: boolean;
+  sourceType?: "playlist" | "m3u8";
+  sceneName?: string | null;
+  elapsedTotalSec?: number;
+  plannedTotalSec?: number;
+  remainingSec?: number | null;
+  positionPct?: number | null;
+  nextItem?: { title: string; startAtSec: number } | null;
 }
 
 interface ChannelPublic {
@@ -154,8 +161,9 @@ export default function LiveTab() {
           <h2 className="text-sm font-bold text-tg-text">شروع جلسه جدید</h2>
           <div className="grid gap-3 md:grid-cols-2">
             <div className="md:col-span-2">
-              <label className="text-xs font-medium text-tg-secondary">لینک یا شناسه پلی‌لیست یوتیوب</label>
-              <Input value={playlistInput} onChange={(e) => setPlaylistInput(e.target.value)} placeholder="https://www.youtube.com/playlist?list=PL... یا PL..." className="mt-1" />
+              <label className="text-xs font-medium text-tg-secondary">منبع پخش — پلی‌لیست یوتیوب یا m3u8</label>
+              <Input value={playlistInput} onChange={(e) => setPlaylistInput(e.target.value)} placeholder="https://www.youtube.com/playlist?list=PL... یا https://tv.example.com/live.m3u8" className="mt-1" dir="ltr" />
+              <p className="mt-1 text-[11px] text-tg-secondary">لینک m3u8 به‌صورت passthrough پخش می‌شود (تقریباً بدون مصرف CPU) و خودکار reconnect می‌شود.</p>
             </div>
             <div>
               <label className="text-xs font-medium text-tg-secondary">کانال مقصد</label>
@@ -232,7 +240,7 @@ export default function LiveTab() {
               <p className="text-xs text-tg-secondary">در حال پخش ({data.currentIndex + 1} از {data.queue.length})</p>
               <p className="mt-1 truncate text-sm font-semibold text-tg-text" title={current.title}>{current.title}</p>
               <div className="mt-2 flex items-center justify-between text-[11px] text-tg-secondary">
-                <span>گذشته: {formatSec(data.currentElapsedSec)}</span>
+                <span>دقیقه {formatSec(data.currentElapsedSec)} از {formatSec(current.durationSec)}</span>
                 <span>کل: {formatSec(current.durationSec)}</span>
               </div>
               {current.durationSec ? (
@@ -240,6 +248,28 @@ export default function LiveTab() {
                   <div className="h-full rounded-full bg-rose-500" style={{ width: `${Math.min(100, Math.round((data.currentElapsedSec / current.durationSec) * 100))}%` }} />
                 </div>
               ) : null}
+            </div>
+          )}
+
+          {data.sourceType === "playlist" && (data.plannedTotalSec ?? 0) > 0 && (
+            <div className="rounded-lg border border-tg-border bg-tg-hover/20 p-3">
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-semibold text-tg-text">موقعیت در برنامه</span>
+                <span className="text-tg-secondary">{data.positionPct ?? 0}٪</span>
+              </div>
+              <div className="mt-2 flex items-center justify-between text-[11px] text-tg-secondary">
+                <span>دقیقه {formatSec(data.elapsedTotalSec ?? 0)} از کل {formatSec(data.plannedTotalSec ?? 0)}</span>
+                <span>مانده: {formatSec(data.remainingSec ?? null)}</span>
+              </div>
+              <div className="mt-1 h-2 w-full overflow-hidden rounded-full bg-tg-hover">
+                <div className="h-full rounded-full bg-tg-accent" style={{ width: `${data.positionPct ?? 0}%` }} />
+              </div>
+              {data.nextItem && (
+                <p className="mt-2 text-[11px] text-tg-secondary">
+                  بعدی: <span className="text-tg-text" title={data.nextItem.title}>{data.nextItem.title.slice(0, 40)}</span>
+                  {data.loop ? " (سپس از ابتدا تکرار می‌شود)" : ""}
+                </p>
+              )}
             </div>
           )}
         </Card>

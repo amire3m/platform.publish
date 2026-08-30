@@ -56,6 +56,12 @@ export interface PublicSession {
   currentIndex: number;
   currentElapsedSec: number;
   error?: string | null;
+  sourceType?: "playlist" | "m3u8";
+  elapsedTotalSec?: number;
+  plannedTotalSec?: number;
+  remainingSec?: number | null;
+  positionPct?: number | null;
+  nextItem?: { title: string; startAtSec: number } | null;
 }
 
 const STATE_FA: Record<string, string> = {
@@ -77,10 +83,15 @@ export function formatSessionStatus(s: PublicSession | null): string {
     const elapsed = formatDur(s.currentElapsedSec);
     const total = current.durationSec != null ? formatDur(current.durationSec) : "—";
     lines.push(`▶️ <b>${escapeHtml(current.title)}</b>`);
-    lines.push(`⏱ ${elapsed} / ${total} · (${s.currentIndex + 1} از ${s.queue.length})`);
+    lines.push(`⏱ دقیقه ${elapsed} از ${total} · (${s.currentIndex + 1} از ${s.queue.length})`);
     if (s.quality) lines.push(`🎚 کیفیت: ${s.quality}p`);
   } else {
     lines.push("در حال آماده‌سازی ویدیوی اول...");
+  }
+  if ((s.sourceType ?? "playlist") === "playlist" && (s.plannedTotalSec ?? 0) > 0) {
+    lines.push("", `📍 موقعیت در برنامه: دقیقه ${formatDur(s.elapsedTotalSec ?? 0)} از ${formatDur(s.plannedTotalSec ?? 0)} (${s.positionPct ?? 0}٪)`);
+    if (s.remainingSec != null) lines.push(`⏳ مانده تا پایان چرخه: ${formatDur(s.remainingSec)}`);
+    if (s.nextItem) lines.push(`⏭ بعدی: ${escapeHtml(s.nextItem.title.slice(0, 40))}`);
   }
   if (s.error) lines.push("", `⚠️ ${escapeHtml(s.error)}`);
   return lines.join("\n");

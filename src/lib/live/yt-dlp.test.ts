@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   buildFormatSelector,
   buildFfmpegArgs,
+  buildM3u8Args,
   extractVideoId,
+  isM3u8Source,
   maskTarget,
   normalizePlaylistUrl,
   parseFfmpegTime,
@@ -48,6 +50,22 @@ describe("yt-dlp helpers", () => {
     expect(extractVideoId("https://youtu.be/dQw4w9WgXcQ")).toBe("dQw4w9WgXcQ");
     expect(extractVideoId("https://www.youtube.com/shorts/dQw4w9WgXcQ")).toBe("dQw4w9WgXcQ");
     expect(extractVideoId("https://example.com/nope")).toBeNull();
+  });
+
+  it("detects m3u8 sources and builds copy args with reconnect", () => {
+    expect(isM3u8Source("https://tv.example.com/live/index.m3u8")).toBe(true);
+    expect(isM3u8Source("https://tv.example.com/live/index.m3u8?token=1")).toBe(true);
+    expect(isM3u8Source("https://tv.example.com/live/index.M3U8")).toBe(true);
+    expect(isM3u8Source("PL1234567890")).toBe(false);
+    expect(isM3u8Source("https://example.com/video.mp4")).toBe(false);
+
+    const copy = buildM3u8Args("https://tv/x.m3u8", "rtmp://t/K", "1080");
+    const joined = copy.join(" ");
+    expect(joined).toContain("-reconnect 1");
+    expect(joined).toContain("-c copy");
+    expect(copy.slice(-3)).toEqual(["-f", "flv", "rtmp://t/K"]);
+    const enc = buildM3u8Args("https://tv/x.m3u8", "rtmp://t/K", "720");
+    expect(enc).toContain("libx264");
   });
 
   it("parses flat playlist lines", () => {

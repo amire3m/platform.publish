@@ -5,9 +5,11 @@ import { spawn, type ChildProcessByStdio } from "node:child_process";
 import type { Readable } from "node:stream";
 import {
   buildFfmpegArgs,
+  buildM3u8Args,
   extractVideoId,
   fetchPlaylistItems,
   fetchStreamUrls,
+  isM3u8Source,
   maskTarget,
   parseFfmpegTime,
   type LiveQuality,
@@ -45,6 +47,10 @@ export interface LiveSession {
   overlay: import("./yt-dlp").OverlayConfig | null;
   scheduleRef: string | null;
   channelRef: string | null;
+  /** "playlist" = YouTube queue, "m3u8" = single live/VOD HLS source. */
+  sourceType: "playlist" | "m3u8";
+  /** Active graphics scene name (Phase C). */
+  sceneName: string | null;
 }
 
 export interface StartLiveOptions {
@@ -59,12 +65,19 @@ export interface StartLiveOptions {
   overlay?: import("./yt-dlp").OverlayConfig | null;
   scheduleRef?: string;
   channelRef?: string;
+  sceneName?: string;
 }
 
 export interface LiveStreamerDeps {
   fetchItems: typeof fetchPlaylistItems;
   fetchUrls: typeof fetchStreamUrls;
-  spawnFfmpeg: (inputs: string[], target: string, quality: LiveQuality, overlay: import("./yt-dlp").OverlayConfig | null) => FfmpegProcess;
+  spawnFfmpeg: (
+    inputs: string[],
+    target: string,
+    quality: LiveQuality,
+    overlay: import("./yt-dlp").OverlayConfig | null,
+    sourceType?: "playlist" | "m3u8",
+  ) => FfmpegProcess;
   now?: () => number;
   onEvent?: (action: string, detail: Record<string, unknown>) => void;
   fetchMeta?: (videoId: string) => Promise<PlaylistItem>;
@@ -100,10 +113,12 @@ class PlaylistStreamer {
     if (this.isActive()) throw new Error("یک جلسه لایو فعال وجود دارد؛ ابتدا آن را متوقف کنید.");
     const rtmpTarget = buildTarget(opts.rtmpUrl, opts.streamKey);
     if (!rtmpTarget) throw new Error("RTMP URL و کلید استریم الزامی است.");
+    const sourceType = isM3u8Source(opts.playlistInput) ? "m3u8" : "playlist";
     const session: LiveSession = {
       state: "starting",
       quality: opts.quality ?? "720",
-      loop: opts.loop ?? true,
+      // m3u8 sources never "end" → always reconnect via loop semantics.
+      loop: sourceType === "m3u8" ? true : (opts.loop ?? true),
       playlistInput: opts.playlistInput,
       rtmpTarget,
       queue: [],
@@ -117,15 +132,21 @@ class PlaylistStreamer {
       overlay: opts.overlay ?? null,
       scheduleRef: opts.scheduleRef ?? null,
       channelRef: opts.channelRef ?? null,
+      sourceType,
+      sceneName: opts.sceneName ?? null,
     };
     this.session = session;
     this.stopping = false;
     try {
-      const items = await this.deps.fetchItems(opts.playlistInput, opts.maxItems ?? 200);
-      if (items.length === 0) throw new Error("پلی‌لیست خالی است یا پیدا نشد.");
-      session.queue = items.map((it) => ({ ...it, status: "pending" as const }));
+      if (sourceType === "m3u8") {
+        session.queue = [{ videoId: "m3u8", title: "منبع زنده HLS", durationSec: null, status: "pending" }];
+      } else {
+        const items = await this.deps.fetchItems(opts.playlistInput, opts.maxItems ?? 200);
+        if (items.length === 0) throw new Error("پلی‌لیست خالی است یا پیدا نشد.");
+        session.queue = items.map((it) => ({ ...it, status: "pending" as const }));
+      }
       session.state = "live";
-      this.deps.onEvent?.("live_started", { items: items.length, quality: session.quality, target: maskTarget(rtmpTarget) });
+      this.deps.onEvent?.("live_started", { items: session.queue.length, quality: session.quality, sourceType, target: maskTarget(rtmpTarget) });
       void this.persistSafe();
       void this.runNext();
       return session;
@@ -161,11 +182,17 @@ class PlaylistStreamer {
     s.state = "live";
     void this.persistSafe();
     try {
-      const urls = await this.deps.fetchUrls(item.videoId, s.quality);
-      if (this.stopping || s.state !== "live") return;
-      const inputs = urls.audioUrl ? [urls.videoUrl, urls.audioUrl] : [urls.videoUrl];
       const overlay = s.overlayEnabled ? s.overlay : null;
-      this.proc = this.deps.spawnFfmpeg(inputs, s.rtmpTarget, s.quality, overlay);
+      let inputs: string[];
+      if (s.sourceType === "m3u8") {
+        // Single HLS source — passed straight to ffmpeg (no yt-dlp extraction).
+        inputs = [s.playlistInput];
+      } else {
+        const urls = await this.deps.fetchUrls(item.videoId, s.quality);
+        if (this.stopping || s.state !== "live") return;
+        inputs = urls.audioUrl ? [urls.videoUrl, urls.audioUrl] : [urls.videoUrl];
+      }
+      this.proc = this.deps.spawnFfmpeg(inputs, s.rtmpTarget, s.quality, overlay, s.sourceType);
       this.proc.stderr.on("data", (chunk: Buffer) => {
         const t = parseFfmpegTime(chunk.toString());
         if (t !== null && this.session && this.session.queue[this.session.currentIndex] === item) {
@@ -303,7 +330,11 @@ class PlaylistStreamer {
   /** Session safe for API exposure — stream key masked, no proc handles. */
   toPublic() {
     const s = this.session;
-    if (!s) return { state: "idle" as const, queue: [], currentIndex: -1, currentElapsedSec: 0, rtmpTarget: null, error: null, sessionId: null, overlayEnabled: false, scheduleRef: null, channelRef: null };
+    if (!s) return { state: "idle" as const, queue: [], currentIndex: -1, currentElapsedSec: 0, rtmpTarget: null, error: null, sessionId: null, overlayEnabled: false, scheduleRef: null, channelRef: null, sourceType: "playlist" as const, elapsedTotalSec: 0, plannedTotalSec: 0, remainingSec: null as number | null, positionPct: null as number | null, nextItem: null as { title: string; startAtSec: number } | null, sceneName: null as string | null };
+    const finished = s.queue.filter((q) => q.status === "done" || q.status === "failed" || q.status === "skipped");
+    const elapsedTotalSec = Math.round(finished.reduce((a, q) => a + (q.durationSec ?? 0), 0) + (s.queue[s.currentIndex]?.status === "playing" ? s.currentElapsedSec : 0));
+    const plannedTotalSec = Math.round(s.queue.reduce((a, q) => a + (q.durationSec ?? 0), 0));
+    const next = s.queue[s.currentIndex + 1] ?? null;
     return {
       state: s.state,
       quality: s.quality,
@@ -321,6 +352,13 @@ class PlaylistStreamer {
       overlayEnabled: s.overlayEnabled,
       scheduleRef: s.scheduleRef,
       channelRef: s.channelRef,
+      sourceType: s.sourceType,
+      sceneName: s.sceneName,
+      elapsedTotalSec,
+      plannedTotalSec,
+      remainingSec: plannedTotalSec > 0 ? Math.max(0, plannedTotalSec - elapsedTotalSec) : null,
+      positionPct: plannedTotalSec > 0 ? Math.min(100, Math.round((elapsedTotalSec / plannedTotalSec) * 100)) : null,
+      nextItem: next ? { title: next.title, startAtSec: elapsedTotalSec } : null,
     };
   }
 }
@@ -337,8 +375,11 @@ function defaultSpawnFfmpeg(
   target: string,
   quality: LiveQuality,
   overlay: import("./yt-dlp").OverlayConfig | null,
+  sourceType: "playlist" | "m3u8" = "playlist",
 ): FfmpegProcess {
-  const args = buildFfmpegArgs(inputs, target, quality, overlay ?? undefined);
+  const args = sourceType === "m3u8"
+    ? buildM3u8Args(inputs[0], target, quality)
+    : buildFfmpegArgs(inputs, target, quality, overlay ?? undefined);
   const child = spawn("ffmpeg", args, { stdio: ["ignore", "pipe", "pipe"] });
   child.stderr.resume();
   child.on("error", (err) => {

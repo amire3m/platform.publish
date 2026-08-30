@@ -17,6 +17,15 @@ export async function register() {
   if (process.env.NEXT_RUNTIME !== "nodejs") return;
   if (process.env.DISABLE_PUBLISH_WORKER === "1") return;
 
+  // Smart analytics auto-sync: daily 03:00 Asia/Tehran for all 4 Emro YT channels
+  try {
+    const { scheduleDailySync } = await import("@/lib/analytics/sync-controller");
+    scheduleDailySync();
+    console.log("[analytics] daily auto-sync scheduled for 03:00 Asia/Tehran");
+  } catch (err) {
+    console.error("[analytics] failed to schedule daily sync:", (err as Error).message);
+  }
+
   const { runPublishTick } = await import("@/lib/worker");
   const intervalMs = Number(process.env.WORKER_TICK_INTERVAL_MS || 60_000);
 
@@ -77,6 +86,15 @@ export async function register() {
             .where(eq(workflowNotifications.id, n.id) as never);
         }
         return result;
+      })(),
+      (async () => {
+        try {
+          const { runAnalyticsAutoSyncTick } = await import("@/lib/analytics/sync-controller");
+          return runAnalyticsAutoSyncTick();
+        } catch (err) {
+          console.error("[analytics] auto-sync tick failed:", (err as Error).message);
+          return { enqueued: [] as string[] };
+        }
       })(),
     ]).finally(() => {
       instrumentationRunning = false;

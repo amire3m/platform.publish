@@ -73,6 +73,10 @@ describe("panel group media", () => {
 
     render(<ContentRoomDetail product={product as never} onRefresh={vi.fn()} />);
 
+    // The group-media section lives under the "files" tab; switch to it first
+    const filesTab = await screen.findByRole("button", { name: /فایل‌ها/ });
+    filesTab.click();
+
     await waitFor(() => expect(screen.getByText("ویدیوهای اخیر گروه")).toBeInTheDocument());
     expect(screen.getByText("لینک به عنوان برش")).toBeInTheDocument();
     expect(screen.getByText("لینک به عنوان ریلز")).toBeInTheDocument();

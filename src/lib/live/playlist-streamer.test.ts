@@ -204,8 +204,7 @@ describe("PlaylistStreamer", () => {
   });
 });
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function sessionOf(streamer: PlaylistStreamer): any {
+function sessionOf(streamer: PlaylistStreamer): Record<string, unknown> & { queue: Array<{ videoId: string; status: string }>; currentIndex: number } {
   // access private session for assertions
-  return (streamer as unknown as { session: unknown }).session;
+  return (streamer as unknown as { session: unknown }).session as never;
 }

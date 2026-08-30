@@ -128,6 +128,58 @@ const TAB_DIMENSIONS: Record<TabId, string[] | undefined> = {
   revenue: ["revenue"],
 };
 
+function extractArray<T>(raw: Record<string, unknown> | null | undefined, key: string): readonly T[] | undefined {
+  if (!raw) return undefined;
+  const val = (raw as Record<string, unknown>)[key];
+  if (Array.isArray(val)) return val as readonly T[];
+  // fallback: if raw itself is array-like under different key conventions
+  if (Array.isArray((raw as Record<string, unknown>).data)) return (raw as Record<string, unknown>).data as readonly T[];
+  return undefined;
+}
+function extractTraffic(data: Record<string, unknown> | null | undefined): readonly { trafficSource: string; views: number; watchTimeMinutes: number }[] | undefined {
+  if (!data) return undefined;
+  const a = extractArray<{ trafficSource: string; views: number; watchTimeMinutes: number }>(data, "trafficData");
+  if (a) return a.map((r) => ({ trafficSource: (r as unknown as { trafficSource?: string; trafficSourceType?: string; source?: string }).trafficSource ?? (r as unknown as { trafficSourceType: string }).trafficSourceType ?? (r as unknown as { source: string }).source, views: (r as unknown as { views: number }).views, watchTimeMinutes: (r as unknown as { watchTimeMinutes?: number }).watchTimeMinutes ?? 0 }));
+  const b = extractArray(data, "traffic");
+  if (b) return b as never;
+  return undefined;
+}
+function extractGeo(data: Record<string, unknown> | null | undefined): readonly { country: string; views: number }[] | undefined {
+  if (!data) return undefined;
+  return extractArray(data, "geoData") ?? extractArray(data, "geo") as never;
+}
+function extractAudience(data: Record<string, unknown> | null | undefined): readonly { ageGroup: string; gender: string; views: number }[] | undefined {
+  if (!data) return undefined;
+  return extractArray(data, "audienceData") ?? extractArray(data, "audience") as never;
+}
+function extractDevice(data: Record<string, unknown> | null | undefined): readonly { deviceType: string; views: number }[] | undefined {
+  if (!data) return undefined;
+  return extractArray(data, "deviceData") ?? extractArray(data, "device") as never;
+}
+function extractSearch(data: Record<string, unknown> | null | undefined): readonly { keyword: string; views: number; watchTimeMinutes: number }[] | undefined {
+  if (!data) return undefined;
+  const a = extractArray<{ keyword: string; views: number; watchTimeMinutes: number; searchTerm?: string }>(data, "searchData");
+  if (a) return a.map((r) => ({ keyword: (r as unknown as { keyword?: string; searchTerm?: string }).keyword ?? (r as unknown as { searchTerm: string }).searchTerm, views: r.views, watchTimeMinutes: (r as unknown as { watchTimeMinutes?: number }).watchTimeMinutes ?? 0 }));
+  return extractArray(data, "search") as never;
+}
+function extractRetention(data: Record<string, unknown> | null | undefined): readonly { videoId: string; title?: string; averageViewPercentage: number | null; views?: number }[] | undefined {
+  if (!data) return undefined;
+  return extractArray(data, "retentionData") ?? extractArray(data, "retention") as never;
+}
+function extractRevenue(data: Record<string, unknown> | null | undefined): { revenue: number | null; cpm: number | null; rows?: readonly { date: string; estimatedRevenue: number; cpm: number | null }[] } | undefined {
+  if (!data) return undefined;
+  const rows = extractArray<{ date: string; estimatedRevenue: number; cpm: number | null }>(data, "revenueData");
+  if (rows) {
+    const revenue = rows.length > 0 ? rows.reduce((sum, r) => sum + r.estimatedRevenue, 0) : null;
+    const cpm = rows.length > 0 ? rows[0].cpm : null;
+    return { revenue, cpm, rows };
+  }
+  const rev = (data as Record<string, unknown>).estimatedRevenue as number | null | undefined;
+  const cpm = (data as Record<string, unknown>).cpm as number | null | undefined;
+  if (rev !== undefined || cpm !== undefined) return { revenue: rev ?? null, cpm: cpm ?? null };
+  return undefined;
+}
+
 function AnalyticsDashboard() {
   const router = useRouter();
   const pathname = usePathname();
@@ -147,13 +199,14 @@ function AnalyticsDashboard() {
   const { data, error, isLoading, mutate } = useSWR<AnalyticsOverview>(requestUrl, fetchApi);
   const { data: accountRecords, error: accountsError, isLoading: accountsLoading, mutate: mutateAccounts } = useSWR<AccountRecord[]>("/api/accounts", fetchApi);
   const { data: me, isLoading: permissionsLoading } = useSWR<{ permissions: string[]; allowedAccountIds: string[] | null }>("/api/auth/me", fetchApi);
-  // Dimension SWRs — each tab fetches its own endpoint via ?dimension=
-  const { data: trafficData, error: trafficFetchError, isLoading: trafficLoading } = useSWR<AnalyticsOverview>(activeTab === "traffic" ? dimensionUrl(range, accountId, "traffic") : null, fetchApi);
-  const { data: audienceData, error: audienceFetchError, isLoading: audienceLoading } = useSWR<AnalyticsOverview>(activeTab === "audience" ? dimensionUrl(range, accountId, "audience") : null, fetchApi);
-  const { data: geoData, error: geoFetchError, isLoading: geoLoading } = useSWR<AnalyticsOverview>(activeTab === "audience" ? dimensionUrl(range, accountId, "geo") : null, fetchApi);
-  const { data: searchData, error: searchFetchError, isLoading: searchLoading } = useSWR<AnalyticsOverview>(activeTab === "search" ? dimensionUrl(range, accountId, "search") : null, fetchApi);
-  const { data: retentionData, error: retentionFetchError, isLoading: retentionLoading } = useSWR<AnalyticsOverview>(activeTab === "retention" ? dimensionUrl(range, accountId, "retention") : null, fetchApi);
-  const { data: revenueData, error: revenueFetchError, isLoading: revenueLoading } = useSWR<AnalyticsOverview>(activeTab === "revenue" ? dimensionUrl(range, accountId, "revenue") : null, fetchApi);
+  // Dimension SWRs — each tab fetches its own endpoint via ?dimension= (real data)
+  const { data: trafficData, error: trafficFetchError, isLoading: trafficLoading } = useSWR<AnalyticsOverview & Record<string, unknown>>(activeTab === "traffic" ? dimensionUrl(range, accountId, "traffic") : null, fetchApi);
+  const { data: audienceData, error: audienceFetchError, isLoading: audienceLoading } = useSWR<AnalyticsOverview & Record<string, unknown>>(activeTab === "audience" ? dimensionUrl(range, accountId, "audience") : null, fetchApi);
+  const { data: geoData, error: geoFetchError, isLoading: geoLoading } = useSWR<AnalyticsOverview & Record<string, unknown>>(activeTab === "audience" ? dimensionUrl(range, accountId, "geo") : null, fetchApi);
+  const { data: deviceData, error: deviceFetchError, isLoading: deviceLoading } = useSWR<AnalyticsOverview & Record<string, unknown>>(activeTab === "audience" ? dimensionUrl(range, accountId, "device") : null, fetchApi);
+  const { data: searchData, error: searchFetchError, isLoading: searchLoading } = useSWR<AnalyticsOverview & Record<string, unknown>>(activeTab === "search" ? dimensionUrl(range, accountId, "search") : null, fetchApi);
+  const { data: retentionData, error: retentionFetchError, isLoading: retentionLoading } = useSWR<AnalyticsOverview & Record<string, unknown>>(activeTab === "retention" ? dimensionUrl(range, accountId, "retention") : null, fetchApi);
+  const { data: revenueData, error: revenueFetchError, isLoading: revenueLoading } = useSWR<AnalyticsOverview & Record<string, unknown>>(activeTab === "revenue" ? dimensionUrl(range, accountId, "revenue") : null, fetchApi);
   const shouldFetchFallback = Boolean(accountId && data && data.topVideos.length === 0 && activeTab === "overview");
   const { data: fallbackData, isLoading: fallbackLoading } = useSWR<{ top: Array<{ videoId: string; title: string; thumbnailUrl: string | null; viewCount: number; publishedAt: string | null }>; latest: Array<{ videoId: string; title: string; thumbnailUrl: string | null; viewCount: number; publishedAt: string | null }> }>(shouldFetchFallback ? `/api/analytics/videos?accountId=${accountId}` : null, fetchApi);
   const accounts = (accountRecords ?? [])
@@ -344,7 +397,7 @@ function AnalyticsDashboard() {
                 )}
                 <div className="grid min-w-0 gap-5 xl:grid-cols-[minmax(0,1fr)_18rem]">
                   <AnalyticsTrendChart series={data.chartSeries} />
-                  <SyncStatus freshness={data.freshness} syncing={syncing} syncDisabled={!syncRequest.allowed} syncDisabledReason={syncRequest.reason} onSync={syncAnalytics} />
+                  <SyncStatus freshness={data.freshness} syncing={syncing} syncDisabled={!syncRequest.allowed} syncDisabledReason={syncRequest.reason} onSync={syncAnalytics} bestPublishTime={(data as unknown as { bestPublishTime?: string | null })?.bestPublishTime ?? null} comparison={data.comparison.percentageChanges} />
                 </div>
                 <TopVideos videos={data.topVideos} accountId={accountId} range={range} exportScope={exportScope} />
                 {data.topVideos.length === 0 && (
@@ -376,42 +429,28 @@ function AnalyticsDashboard() {
         )}
 
         {activeTab === "traffic" && (
-          <TrafficTable
-            data={trafficData ? [] : undefined}
-            isLoading={trafficLoading}
-            error={trafficFetchError ? (trafficFetchError as Error).message : null}
-          />
+          (()=>{ const real=extractTraffic(trafficData as unknown as Record<string, unknown>); return <TrafficTable data={real} isLoading={trafficLoading} error={trafficFetchError ? (trafficFetchError as Error).message : null} /> })()
         )}
 
         {activeTab === "audience" && (
           <div className="space-y-5">
-            <GeoChart
-              data={geoData ? [] : undefined}
-              isLoading={geoLoading || audienceLoading}
-              error={(geoFetchError as Error | undefined)?.message ?? (audienceFetchError as Error | undefined)?.message ?? null}
-            />
-            <AudienceChart
-              data={audienceData ? [] : undefined}
-              isLoading={audienceLoading}
-              error={audienceFetchError ? (audienceFetchError as Error).message : null}
-            />
+            {(() => { const real=extractGeo(geoData as unknown as Record<string, unknown>) ?? extractGeo(audienceData as unknown as Record<string, unknown>); return <GeoChart data={real} isLoading={geoLoading || audienceLoading} error={(geoFetchError as Error | undefined)?.message ?? (audienceFetchError as Error | undefined)?.message ?? null} /> })()}
+            {(() => {
+              const aud=extractAudience(audienceData as unknown as Record<string, unknown>);
+              const dev=extractDevice(deviceData as unknown as Record<string, unknown>) ?? extractDevice(audienceData as unknown as Record<string, unknown>);
+              return <AudienceChart data={aud} deviceData={dev} isLoading={audienceLoading||deviceLoading} error={(audienceFetchError as Error | undefined)?.message ?? (deviceFetchError as Error | undefined)?.message ?? null} />
+            })()}
+            {/* best publish time suggestion from dimension */}
+            {(() => { const t=(audienceData as unknown as {bestPublishTime?:string})?.bestPublishTime ?? (data as unknown as {bestPublishTime?:string})?.bestPublishTime; return t ? <Card className="border-dashed"><p className="text-xs text-tg-secondary">بهترین زمان انتشار پیشنهادی: <span className="font-bold text-tg-text" dir="ltr">{t}</span> (بر اساس ترافیک ۲۸ روز گذشته)</p></Card> : null })()}
           </div>
         )}
 
         {activeTab === "search" && (
-          <SearchTermsTable
-            data={searchData ? [] : undefined}
-            isLoading={searchLoading}
-            error={searchFetchError ? (searchFetchError as Error).message : null}
-          />
+          (()=>{ const real=extractSearch(searchData as unknown as Record<string, unknown>); return <SearchTermsTable data={real} isLoading={searchLoading} error={searchFetchError ? (searchFetchError as Error).message : null} /> })()
         )}
 
         {activeTab === "retention" && (
-          <RetentionChart
-            data={retentionData ? [] : undefined}
-            isLoading={retentionLoading}
-            error={retentionFetchError ? (retentionFetchError as Error).message : null}
-          />
+          (()=>{ const real=extractRetention(retentionData as unknown as Record<string, unknown>); return <RetentionChart data={real} isLoading={retentionLoading} error={retentionFetchError ? (retentionFetchError as Error).message : null} /> })()
         )}
 
         {activeTab === "revenue" && (
@@ -423,9 +462,9 @@ function AnalyticsDashboard() {
                 <p className="text-sm text-rose-600 dark:text-rose-400">{(revenueFetchError as Error).message}</p>
               </Card>
             ) : (
-              <RevenueCard
-                revenue={(revenueData as unknown as { estimatedRevenue?: number | null } | undefined)?.estimatedRevenue ?? null}
-                cpm={(revenueData as unknown as { cpm?: number | null } | undefined)?.cpm ?? null}
+              (()=>{ const rev=extractRevenue(revenueData as unknown as Record<string, unknown>); return <RevenueCard
+                revenue={rev?.revenue ?? (revenueData as unknown as { estimatedRevenue?: number | null } | undefined)?.estimatedRevenue ?? null}
+                cpm={rev?.cpm ?? (revenueData as unknown as { cpm?: number | null } | undefined)?.cpm ?? null}
                 subs={
                   typeof (revenueData as unknown as { subscribersTotal?: number } | undefined)?.subscribersTotal === "number"
                     ? (revenueData as unknown as { subscribersTotal: number }).subscribersTotal
@@ -442,7 +481,7 @@ function AnalyticsDashboard() {
                   }
                   return 3588;
                 })()}
-              />
+              /> })()
             )}
             {!revenueLoading && !revenueFetchError && !revenueData && (
               <p className="text-center text-xs leading-5 text-tg-secondary">

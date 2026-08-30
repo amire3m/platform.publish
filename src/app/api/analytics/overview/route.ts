@@ -178,12 +178,13 @@ export async function handleAnalyticsOverviewRequest(
   const range = parseAnalyticsRange(url.searchParams.get("range") ?? "90");
   if (!range) return jsonError("بازه آمار نامعتبر است.", 422, "INVALID_RANGE");
   const dimensionRaw = url.searchParams.get("dimension");
+  let dimension: string | undefined;
   if (dimensionRaw !== null) {
     const normalized = normalizeOverviewDimension(dimensionRaw);
     if (!ALLOWED_OVERVIEW_DIMENSIONS.has(dimensionRaw.toLowerCase().trim()) && !ALLOWED_OVERVIEW_DIMENSIONS.has(normalized)) {
       return jsonError("بعد آماری نامعتبر است.", 422, "INVALID_DIMENSION");
     }
-    // Dimension routing will be handled by tab-specific queries in future; currently validated for lazy sync parity.
+    dimension = normalized;
   }
   const accountId = url.searchParams.get("accountId") || undefined;
   const reportingAccountIds = await dependencies.listReportingAccountIds();
@@ -192,7 +193,7 @@ export async function handleAnalyticsOverviewRequest(
     return jsonError("این حساب در گزارش اصلی Emro YT قرار ندارد.", 403, "FORBIDDEN");
   }
   try {
-    const analytics = await dependencies.getOverview({ range, accountId, allowedAccountIds });
+    const analytics = await dependencies.getOverview({ range, accountId, allowedAccountIds, dimension } as never);
     const legacy = await dependencies.getLegacyDashboardFields(user, accountId, allowedAccountIds);
     const current = analytics.comparison.current;
     return jsonOk({

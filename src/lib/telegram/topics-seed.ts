@@ -13,6 +13,7 @@ export const FIXED_TOPICS: { key: string; label: string; purpose: string }[] = [
   { key: "reports", label: "📊 گزارش‌ها و آنالیز", purpose: "اسنپ‌شات‌های تحلیلی دوره‌ای" },
   { key: "errors", label: "❌ خطاهای انتشار", purpose: "خطاهای انتشار و مشکلات اتصال API" },
   { key: "logs", label: "🧾 لاگ فعالیت‌ها", purpose: "رویدادهای Audit تمام اقدامات حساس" },
+  { key: "live_alerts", label: "🔴 لایو", purpose: "پنل مدیریت و اعلان‌های استریم زنده" },
   { key: "chat", label: "💬 تالار گفتگو", purpose: "گفتگوی آزاد تیم (خارج از کنترل سیستم)" },
 ];
 

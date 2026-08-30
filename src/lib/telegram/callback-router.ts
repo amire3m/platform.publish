@@ -429,6 +429,31 @@ export async function routeCallback(
   fromTelegramId: string,
   botMessageId?: number,
 ): Promise<{ ok: boolean; message: string }> {
+  // Live conductor callbacks (live:menu, live:stop, live:sched_toggle:LSC-…)
+  if (action === "live") {
+    const { handleLiveCallback } = await import("@/lib/live/telegram-conductor");
+    const { LIVE_PANEL_EDIT_ERROR } = await import("@/lib/live/telegram-panel");
+    const { TelegramClient, TelegramNotConfiguredError } = await import("./client");
+    try {
+      const client = TelegramClient.fromEnv();
+      const result = await handleLiveCallback(`live:${contentId}`, fromTelegramId, botMessageId, {
+        client,
+        edit: async (messageId, view) => {
+          await client.editMessageText(messageId, view.text, {
+            parseMode: "HTML",
+            replyMarkup: { inline_keyboard: view.keyboard },
+          });
+        },
+      });
+      return result;
+    } catch (err) {
+      if (err instanceof TelegramNotConfiguredError) return { ok: false, message: err.message };
+      if ((err as Error).message === LIVE_PANEL_EDIT_ERROR) {
+        return { ok: false, message: "پنل قابل بروزرسانی نیست؛ دستور /live را دوباره بفرستید." };
+      }
+      throw err;
+    }
+  }
   if (!action || !contentId || !fromTelegramId) {
     return { ok: false, message: "درخواست نامعتبر است." };
   }

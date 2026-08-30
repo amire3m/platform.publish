@@ -147,6 +147,11 @@ export async function POST(req: Request) {
 
   const cq = (body as { callback_query?: { id: string; data?: string; from: { id: number | string }; message?: { message_id: number; chat: { id: number } } } })?.callback_query;
   if (!cq) {
+    // /live command + playlist reply handling for the live conductor
+    if (msg && msg.text) {
+      const handled = await handleLiveTextMessage(msg as never);
+      if (handled) return Response.json({ ok: true });
+    }
     return Response.json({ ok: true });
   }
 
@@ -177,7 +182,7 @@ export async function POST(req: Request) {
     const { TelegramClient } = await import("@/lib/telegram/client");
     const client = TelegramClient.fromEnv();
     await client.answerCallbackQuery(cq.id, result.message);
-    if (result.ok && cq.message?.message_id && !action.startsWith("link_")) {
+    if (result.ok && cq.message?.message_id && !action.startsWith("link_") && action !== "live") {
       await client.editMessageReplyMarkup(cq.message.message_id, { inline_keyboard: [] });
     }
   } catch (err) {
@@ -185,4 +190,61 @@ export async function POST(req: Request) {
   }
 
   return Response.json({ ok: true });
+}
+
+// ---------------------------------------------------------------------------
+// Live conductor text flows: /live panel command + playlist reply-to-start
+// ---------------------------------------------------------------------------
+type LiveTextMessage = {
+  message_id: number;
+  chat: { id: number };
+  from?: { id: number | string };
+  text: string;
+  message_thread_id?: number;
+};
+
+async function handleLiveTextMessage(msg: LiveTextMessage): Promise<boolean> {
+  const groupId = process.env.TELEGRAM_GROUP_ID;
+  if (!groupId || String(msg.chat?.id) !== String(groupId)) return false;
+  const text = String(msg.text).trim();
+  const { consumePendingStart, isPlaylistInput, normalizePlaylist } = await import("@/lib/live/telegram-conductor");
+
+  // 1. /live or لایو command → post the control panel in the current topic
+  if (/^(\/live|!live|پنل لایو|لایو)$/i.test(text)) {
+    try {
+      const { postLivePanel } = await import("@/lib/live/telegram-conductor");
+      await postLivePanel(msg.message_thread_id, msg.message_id);
+    } catch (err) {
+      console.error("[webhook] live panel post failed:", (err as Error).message);
+    }
+    return true;
+  }
+
+  // 2. Pending start: user replied with a playlist link to the panel prompt
+  const pending = consumePendingStart(String(msg.from?.id ?? ""));
+  if (!pending) return false;
+  const threadId = msg.message_thread_id;
+  const { TelegramClient } = await import("@/lib/telegram/client");
+  const client = TelegramClient.fromEnv();
+  const reply = async (html: string) => {
+    try {
+      await client.sendMessage(html, threadId, { parseMode: "HTML", replyToMessageId: msg.message_id });
+    } catch (err) {
+      if (String((err as Error).message).includes("thread not found")) {
+        await client.sendMessage(html, undefined, { parseMode: "HTML", replyToMessageId: msg.message_id });
+      } else throw err;
+    }
+  };
+  if (!isPlaylistInput(text)) {
+    await reply("⚠️ این یک لینک/شناسه پلی‌لیست معتبر نیست. دوباره دستور <code>/live</code> را بفرستید.");
+    return true;
+  }
+  try {
+    const { startLiveFromChannel } = await import("@/lib/live/start");
+    await startLiveFromChannel({ channelId: pending.channelId, playlistInput: normalizePlaylist(text) });
+    await reply("🔴 <b>لایو شروع شد!</b>\nوضعیت را با دستور <code>/live</code> دنبال کنید.");
+  } catch (err) {
+    await reply(`⚠️ شروع لایو ناموفق بود: ${String(err instanceof Error ? err.message : err)}`);
+  }
+  return true;
 }

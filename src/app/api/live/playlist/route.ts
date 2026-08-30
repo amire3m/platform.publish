@@ -1,29 +1,15 @@
-import { eq } from "drizzle-orm";
 import { db } from "@/db";
-import { liveChannels, liveSessions } from "@/db/schema";
+import { liveSessions } from "@/db/schema";
+import { eq } from "drizzle-orm";
 import { jsonError, jsonOk } from "@/lib/api-helpers";
-import { decryptSecret } from "@/lib/crypto";
 import { generateEntityId } from "@/lib/ids";
 import { requireLivePermission } from "@/lib/live/perm";
 import { getStreamer } from "@/lib/live/playlist-streamer";
 import { normalizePlaylistUrl } from "@/lib/live/yt-dlp";
+import { startLiveFromChannel, loadLiveOverlayConfig } from "@/lib/live/start";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
-
-const DEFAULT_RTMP = "rtmp://a.rtmp.youtube.com/live2";
-
-async function loadOverlayConfig(): Promise<{ logoPath: string; position: "top-left" | "top-right" | "bottom-left" | "bottom-right"; opacity: number } | null> {
-  const { appSettings } = await import("@/db/schema");
-  const [row] = await db.select().from(appSettings).where(eq(appSettings.id, 1)).limit(1);
-  const live = (row?.capabilityConfig as Record<string, unknown> | undefined)?.live as
-    | { logoPath?: string; position?: string; opacity?: number }
-    | undefined;
-  if (!live?.logoPath) return null;
-  const positions = ["top-left", "top-right", "bottom-left", "bottom-right"] as const;
-  const position = positions.includes(live.position as never) ? (live.position as (typeof positions)[number]) : "top-right";
-  return { logoPath: live.logoPath, position, opacity: Math.min(1, Math.max(0, live.opacity ?? 0.8)) };
-}
 
 export async function POST(req: Request) {
   const { response } = await requireLivePermission();
@@ -44,25 +30,31 @@ export async function POST(req: Request) {
   const quality = body.quality === "1080" ? "1080" : "720";
   if (!playlistInput) return jsonError("لینک یا شناسه پلی‌لیست الزامی است.", 422, "VALIDATION_ERROR");
 
-  // Resolve RTMP target: saved channel profile or legacy raw key.
-  let rtmpUrl = DEFAULT_RTMP;
-  let streamKey = "";
-  let channelRef: string | null = null;
+  // Channel-based start (shared with the Telegram conductor)
   if (body.channelRef) {
-    const [channel] = await db.select().from(liveChannels).where(eq(liveChannels.id, body.channelRef)).limit(1);
-    if (!channel || !channel.isActive) return jsonError("کانال انتخاب‌شده پیدا نشد یا غیرفعال است.", 422, "VALIDATION_ERROR");
-    rtmpUrl = channel.rtmpUrl;
-    streamKey = decryptSecret(channel.streamKeyEncrypted);
-    channelRef = channel.id;
-  } else {
-    rtmpUrl = (typeof body.rtmpUrl === "string" && body.rtmpUrl.trim()) || DEFAULT_RTMP;
-    streamKey = typeof body.streamKey === "string" ? body.streamKey.trim() : "";
-    if (!streamKey) return jsonError("کلید استریم یا کانال ذخیره‌شده الزامی است.", 422, "VALIDATION_ERROR");
+    try {
+      await startLiveFromChannel({
+        channelId: body.channelRef,
+        playlistInput,
+        quality,
+        loop: body.loop ?? true,
+        overlayEnabled: body.overlayEnabled === true,
+      });
+      return jsonOk(getStreamer().toPublic());
+    } catch (err) {
+      return jsonError(err instanceof Error ? err.message : "شروع لایو ناموفق بود.", 502, "LIVE_START_FAILED");
+    }
   }
+
+  // Legacy raw-key start
+  const DEFAULT_RTMP = "rtmp://a.rtmp.youtube.com/live2";
+  const rtmpUrl = (typeof body.rtmpUrl === "string" && body.rtmpUrl.trim()) || DEFAULT_RTMP;
+  const streamKey = typeof body.streamKey === "string" ? body.streamKey.trim() : "";
+  if (!streamKey) return jsonError("کلید استریم یا کانال ذخیره‌شده الزامی است.", 422, "VALIDATION_ERROR");
   if (!/^rtmps?:\/\//.test(rtmpUrl)) return jsonError("RTMP URL باید با rtmp:// شروع شود.", 422, "VALIDATION_ERROR");
 
   const overlayEnabled = body.overlayEnabled === true;
-  const overlay = overlayEnabled ? await loadOverlayConfig() : null;
+  const overlay = overlayEnabled ? await loadLiveOverlayConfig() : null;
   if (overlayEnabled && !overlay) {
     return jsonError("لوگو در تنظیمات پیکربندی نشده است.", 422, "VALIDATION_ERROR");
   }
@@ -70,7 +62,7 @@ export async function POST(req: Request) {
   const sessionId = generateEntityId("LSE");
   await db.insert(liveSessions).values({
     id: sessionId,
-    channelRef,
+    channelRef: null,
     playlistInput: normalizePlaylistUrl(playlistInput),
     quality,
     loop: body.loop ?? true,
@@ -92,7 +84,6 @@ export async function POST(req: Request) {
       sessionId,
       overlayEnabled,
       overlay,
-      channelRef: channelRef ?? undefined,
     });
     return jsonOk(streamer.toPublic());
   } catch (err) {

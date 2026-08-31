@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import useSWR from "swr";
-import { Plus, Trash2, RefreshCw } from "lucide-react";
+import { Plus, Trash2, RefreshCw, Cookie } from "lucide-react";
 import { Button, Card, Input, Select } from "@/components/ui";
 import { useToast } from "@/components/providers";
 import { parseJsonResponse } from "@/lib/client/http";
@@ -18,11 +18,48 @@ interface ChannelPublic {
 export default function ChannelsTab() {
   const { showToast } = useToast();
   const { data, mutate } = useSWR<ChannelPublic[]>("/api/live/channels", liveFetcher, { refreshInterval: 30000 });
+  const { data: cookieStatus, mutate: mutateCookies } = useSWR<{ configured: boolean; fileOk: boolean }>("/api/live/cookies", liveFetcher, { refreshInterval: 60000 });
   const [name, setName] = useState("");
   const [rtmpUrl, setRtmpUrl] = useState("rtmp://a.rtmp.youtube.com/live2");
   const [streamKey, setStreamKey] = useState("");
   const [provider, setProvider] = useState("youtube");
   const [busy, setBusy] = useState(false);
+  const [cookieText, setCookieText] = useState("");
+
+  async function saveCookies() {
+    setBusy(true);
+    try {
+      const res = await fetch("/api/live/cookies", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: cookieText }),
+      });
+      const resp = await parseJsonResponse<{ ok: boolean; error?: string }>(res);
+      if (!res.ok || !resp.ok) throw new Error(resp.error ?? "خطا");
+      showToast("کوکی‌ها نصب شد — استخراج با حساب شما انجام می‌شود.", "success");
+      setCookieText("");
+      await mutateCookies();
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : "خطا", "error");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function removeCookies() {
+    setBusy(true);
+    try {
+      const res = await fetch("/api/live/cookies", { method: "DELETE" });
+      const resp = await parseJsonResponse<{ ok: boolean; error?: string }>(res);
+      if (!res.ok || !resp.ok) throw new Error(resp.error ?? "خطا");
+      showToast("کوکی‌ها حذف شد.", "info");
+      await mutateCookies();
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : "خطا", "error");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function call(method: string, body?: Record<string, unknown>, query = "") {
     setBusy(true);
@@ -45,6 +82,33 @@ export default function ChannelsTab() {
 
   return (
     <div className="space-y-6" dir="rtl">
+      <Card className="space-y-3">
+        <h2 className="flex items-center gap-2 text-sm font-bold text-tg-text">
+          <Cookie className="h-4 w-4 text-amber-500" />
+          کوکی یوتیوب (ضد بات‌چک — پیشنهادی)
+          <span className={`rounded-full px-2 py-0.5 text-[10px] ${cookieStatus?.fileOk ? "bg-emerald-500/15 text-emerald-700" : "bg-tg-hover text-tg-secondary"}`}>
+            {cookieStatus?.fileOk ? "نصب است ✅" : "نصب نیست"}
+          </span>
+        </h2>
+        <p className="text-[11px] text-tg-secondary">
+          در مرورگرِ واردشده به یوتیوب، افزونه‌ای مثل «Get cookies.txt LOCALLY» را نصب کنید، در youtube.com خروجی بگیرید و محتوای فایل را اینجا بچسبانید. از آن پس استخراج‌ها با حساب شما انجام می‌شود و فلگ بات‌چک برنمی‌گردد.
+        </p>
+        <textarea
+          value={cookieText}
+          onChange={(e) => setCookieText(e.target.value)}
+          rows={4}
+          dir="ltr"
+          placeholder="# Netscape HTTP Cookie File …"
+          className="w-full rounded-lg border border-tg-border bg-tg-bg px-3 py-2 font-mono text-[11px] text-tg-text"
+        />
+        <div className="flex gap-2">
+          <Button onClick={saveCookies} disabled={busy || !cookieText.trim()} className="min-h-[38px]">نصب کوکی</Button>
+          {cookieStatus?.fileOk && (
+            <Button variant="danger" onClick={removeCookies} disabled={busy} className="min-h-[38px]">حذف</Button>
+          )}
+        </div>
+      </Card>
+
       <Card className="space-y-3">
         <h2 className="text-sm font-bold text-tg-text">کانال جدید</h2>
         <div className="grid gap-3 md:grid-cols-2">

@@ -3,6 +3,7 @@
 // reachable at http://127.0.0.1:4416 (docker container bgutil-pot) for YouTube
 // extraction from datacenter IPs.
 import { spawn } from "node:child_process";
+import { existsSync } from "node:fs";
 
 export interface PlaylistItem {
   videoId: string;
@@ -35,6 +36,23 @@ const OVERLAY_POS: Record<OverlayPosition, string> = {
 
 export function ytDlpPath(): string {
   return process.env.LIVE_YTDLP_PATH?.trim() || "yt-dlp";
+}
+
+/** Path to a Netscape cookies.txt exported from a signed-in YouTube browser session. */
+export function ytDlpCookiesPath(): string {
+  return process.env.LIVE_YTDLP_COOKIES?.trim() || "";
+}
+
+/** `--cookies` args when the cookies file is configured and readable. */
+export function cookiesArgs(): string[] {
+  const p = ytDlpCookiesPath();
+  if (!p) return [];
+  try {
+    if (existsSync(p)) return ["--cookies", p];
+  } catch {
+    // file unreadable → proceed without cookies
+  }
+  return [];
 }
 
 export function buildFormatSelector(quality: LiveQuality): string {
@@ -199,6 +217,7 @@ export function parsePlaylistLine(line: string): PlaylistItem | null {
 export async function fetchPlaylistItems(playlistInput: string, max = 200): Promise<PlaylistItem[]> {
   const target = normalizePlaylistUrl(playlistInput);
   const res = await runWithFallback([
+    ...cookiesArgs(),
     "--no-warnings", "--flat-playlist", "--quiet",
     "--print", "%(id)s\t%(title)s\t%(duration)s",
     "--playlist-items", `1:${max}`,
@@ -222,6 +241,7 @@ export async function fetchPlaylistItems(playlistInput: string, max = 200): Prom
 /** Get direct passthrough stream URLs for one video. */
 export async function fetchStreamUrls(videoId: string, quality: LiveQuality): Promise<StreamUrls> {
   const res = await runWithFallback([
+    ...cookiesArgs(),
     "--no-warnings", "--quiet",
     "-f", buildFormatSelector(quality),
     "--print", "urls",
@@ -276,6 +296,7 @@ export function extractVideoId(input: string): string | null {
 /** Fetch metadata for a single video (used by queue add during live playback). */
 export async function fetchVideoMeta(videoId: string): Promise<PlaylistItem> {
   const res = await runWithFallback([
+    ...cookiesArgs(),
     "--no-warnings", "--quiet",
     "--print", "%(id)s\t%(title)s\t%(duration)s",
     `https://www.youtube.com/watch?v=${videoId}`,

@@ -49,6 +49,42 @@ export function publicChannel(row: {
   };
 }
 
+/**
+ * Accept both Netscape cookies.txt content and a JSON cookie export
+ * (Cookie-Editor / EditThisCookie style: [{domain,name,value,path,secure,...}]).
+ * Returns the canonical Netscape text, or null when unrecognizable.
+ */
+export function normalizeCookieContent(content: string): string | null {
+  const s = content.trim();
+  if (!s) return null;
+  if (s.startsWith("[")) {
+    try {
+      const arr = JSON.parse(s) as Array<{
+        domain?: string; name?: string; value?: string; path?: string;
+        secure?: boolean; session?: boolean; expirationDate?: number;
+      }>;
+      if (!Array.isArray(arr) || arr.length === 0) return null;
+      const lines = ["# Netscape HTTP Cookie File"];
+      for (const c of arr) {
+        if (!c.domain || !c.name || c.value === undefined) return null;
+        const flag = c.domain.startsWith(".") ? "TRUE" : "FALSE";
+        const secure = c.secure ? "TRUE" : "FALSE";
+        const exp = c.session ? "0" : String(Math.floor(Number(c.expirationDate ?? 0)) || 0);
+        lines.push([c.domain, flag, c.path ?? "/", secure, exp, c.name, c.value].join("\t"));
+      }
+      return lines.join("\n");
+    } catch {
+      return null;
+    }
+  }
+  // Netscape: header or tab-separated data lines
+  const dataLines = s.split("\n").filter((l) => l.trim() && !l.startsWith("#"));
+  if (dataLines.length > 0 && dataLines.every((l) => l.split("\t").length >= 6)) {
+    return s;
+  }
+  return null;
+}
+
 export interface ScheduleInput {
   name: string;
   channelRef: string;

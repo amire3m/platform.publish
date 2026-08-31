@@ -1,5 +1,32 @@
 import { describe, expect, it } from "vitest";
-import { buildChannelCreate, publicChannel, validateScheduleInput } from "./shared";
+import { buildChannelCreate, normalizeCookieContent, publicChannel, validateScheduleInput } from "./shared";
+
+describe("cookie normalization", () => {
+  it("accepts JSON cookie exports and converts to Netscape", () => {
+    const json = JSON.stringify([
+      { domain: ".youtube.com", name: "SID", value: "abc", path: "/", secure: false, session: false, expirationDate: 1822649549.9 },
+      { domain: ".youtube.com", name: "SSID", value: "xyz", path: "/", secure: true, session: false, expirationDate: 1819740321 },
+      { domain: ".youtube.com", name: "wide", value: "0", path: "/", secure: false, session: true },
+    ]);
+    const out = normalizeCookieContent(json);
+    expect(out).toContain("# Netscape HTTP Cookie File");
+    expect(out).toContain(".youtube.com\tTRUE\t/\tFALSE\t1822649549\tSID\tabc");
+    expect(out).toContain(".youtube.com\tTRUE\t/\tTRUE\t1819740321\tSSID\txyz");
+    expect(out).toContain(".youtube.com\tTRUE\t/\tFALSE\t0\twide\t0");
+  });
+
+  it("passes through valid Netscape content", () => {
+    const netscape = "# Netscape HTTP Cookie File\n.youtube.com\tTRUE\t/\tTRUE\t123\tFOO\tbar";
+    expect(normalizeCookieContent(netscape)).toBe(netscape);
+  });
+
+  it("rejects junk", () => {
+    expect(normalizeCookieContent("")).toBeNull();
+    expect(normalizeCookieContent("random junk")).toBeNull();
+    expect(normalizeCookieContent("[]")).toBeNull();
+    expect(normalizeCookieContent('[{"name":"no-domain"}]')).toBeNull();
+  });
+});
 
 describe("live shared helpers", () => {
   it("builds channel create payload and rejects empty name/rtmp", () => {

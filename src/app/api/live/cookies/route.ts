@@ -4,20 +4,13 @@ import { db } from "@/db";
 import { credentials } from "@/db/schema";
 import { jsonError, jsonInternalError, jsonOk, requirePermission } from "@/lib/api-helpers";
 import { encryptSecret } from "@/lib/crypto";
+import { normalizeCookieContent } from "@/lib/live/shared";
 
 export const runtime = "nodejs";
 
 /** Server-side plaintext path (chmod 600) — set via LIVE_YTDLP_COOKIES in .env. */
 function cookiesPath(): string | null {
   return process.env.LIVE_YTDLP_COOKIES?.trim() || null;
-}
-
-function looksLikeNetscapeCookies(content: string): boolean {
-  const s = content.trim();
-  if (s.startsWith("# Netscape HTTP Cookie File") || s.startsWith("# HTTP Cookie File")) return true;
-  // Netscape lines: domain<TAB>flag<TAB>path<TAB>secure<TAB>expiry<TAB>name<TAB>value
-  const dataLines = s.split("\n").filter((l) => l.trim() && !l.startsWith("#"));
-  return dataLines.length > 0 && dataLines.every((l) => l.split("\t").length >= 6);
 }
 
 export async function GET() {
@@ -39,9 +32,9 @@ export async function POST(req: Request) {
   if (response) return response;
   try {
     const body = (await req.json().catch(() => null)) as { content?: string } | null;
-    const content = body?.content?.trim() ?? "";
-    if (!content || !looksLikeNetscapeCookies(content)) {
-      return jsonError("محتوا شبیه cookies.txt (فرمت Netscape) نیست.", 422, "VALIDATION_ERROR");
+    const content = normalizeCookieContent(body?.content ?? "");
+    if (!content) {
+      return jsonError("محتوا شبیه cookies.txt (Netscape) یا خروجی JSON کوکی نیست.", 422, "VALIDATION_ERROR");
     }
     const p = cookiesPath();
     if (!p) return jsonError("مسیر ذخیره کوکی روی سرور تنظیم نشده است (LIVE_YTDLP_COOKIES).", 500, "NOT_CONFIGURED");

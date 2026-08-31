@@ -101,6 +101,31 @@ interface RunResult {
   stderr: string;
 }
 
+/** Extra args when the default client hits YouTube's bot-check. */
+const TV_EMBEDDED_FALLBACK = ["--extractor-args", "youtube:player_client=tv_embedded"];
+
+/** Does this yt-dlp failure look like the datacenter-IP bot-check / auth wall? */
+export function shouldRetryWithFallback(stderr: string): boolean {
+  return /confirm you.?re not a bot|sign in to confirm|private video|members-only content|use --cookies/i.test(stderr);
+}
+
+/**
+ * Run yt-dlp once; on YouTube bot-check/auth walls retry with the tv_embedded
+ * player client (verified to return the same 136/137/140 DASH itags).
+ */
+async function runWithFallback(args: string[], timeoutMs?: number): Promise<RunResult> {
+  const first = await run(ytDlpPath(), args, timeoutMs);
+  if (first.code === 0 && first.stdout.trim()) return first;
+  if (!shouldRetryWithFallback(first.stderr)) return first;
+  const retry = await run(ytDlpPath(), [...args, ...TV_EMBEDDED_FALLBACK], timeoutMs);
+  if (retry.code === 0 && retry.stdout.trim()) return retry;
+  return retry;
+}
+
+function lastErrorLine(stderr: string): string {
+  return stderr.split("\n").filter(Boolean).slice(-1)[0] ?? "unknown";
+}
+
 function run(cmd: string, args: string[], timeoutMs = 180_000): Promise<RunResult> {
   return new Promise((resolve) => {
     let stdout = "";
@@ -173,14 +198,14 @@ export function parsePlaylistLine(line: string): PlaylistItem | null {
 /** Fetch playlist items in order via flat playlist (no per-video extraction). */
 export async function fetchPlaylistItems(playlistInput: string, max = 200): Promise<PlaylistItem[]> {
   const target = normalizePlaylistUrl(playlistInput);
-  const res = await run(ytDlpPath(), [
+  const res = await runWithFallback([
     "--no-warnings", "--flat-playlist", "--quiet",
     "--print", "%(id)s\t%(title)s\t%(duration)s",
     "--playlist-items", `1:${max}`,
     target,
   ]);
   if (res.code !== 0 || !res.stdout.trim()) {
-    throw new Error(`خواندن پلی‌لیست ناموفق بود: ${res.stderr.split("\n").filter(Boolean).slice(-1)[0] ?? "unknown"}`);
+    throw new Error(`خواندن پلی‌لیست ناموفق بود: ${lastErrorLine(res.stderr)}`);
   }
   const items: PlaylistItem[] = [];
   const seen = new Set<string>();
@@ -196,14 +221,14 @@ export async function fetchPlaylistItems(playlistInput: string, max = 200): Prom
 
 /** Get direct passthrough stream URLs for one video. */
 export async function fetchStreamUrls(videoId: string, quality: LiveQuality): Promise<StreamUrls> {
-  const res = await run(ytDlpPath(), [
+  const res = await runWithFallback([
     "--no-warnings", "--quiet",
     "-f", buildFormatSelector(quality),
     "--print", "urls",
     `https://www.youtube.com/watch?v=${videoId}`,
   ]);
   if (res.code !== 0 || !res.stdout.trim()) {
-    throw new Error(`استخراج استریم ${videoId} ناموفق بود: ${res.stderr.split("\n").filter(Boolean).slice(-1)[0] ?? "unknown"}`);
+    throw new Error(`استخراج استریم ${videoId} ناموفق بود: ${lastErrorLine(res.stderr)}`);
   }
   const lines = res.stdout.split("\n").map((l) => l.trim()).filter(Boolean);
   if (lines.length >= 2) return { videoUrl: lines[0], audioUrl: lines[1] };
@@ -250,7 +275,7 @@ export function extractVideoId(input: string): string | null {
 
 /** Fetch metadata for a single video (used by queue add during live playback). */
 export async function fetchVideoMeta(videoId: string): Promise<PlaylistItem> {
-  const res = await run(ytDlpPath(), [
+  const res = await runWithFallback([
     "--no-warnings", "--quiet",
     "--print", "%(id)s\t%(title)s\t%(duration)s",
     `https://www.youtube.com/watch?v=${videoId}`,
@@ -258,7 +283,7 @@ export async function fetchVideoMeta(videoId: string): Promise<PlaylistItem> {
   const line = res.stdout.split("\n").map((l) => l.trim()).find(Boolean);
   const item = line ? parsePlaylistLine(line) : null;
   if (res.code !== 0 || !item) {
-    throw new Error(`خواندن ویدیو ${videoId} ناموفق بود: ${res.stderr.split("\n").filter(Boolean).slice(-1)[0] ?? "unknown"}`);
+    throw new Error(`خواندن ویدیو ${videoId} ناموفق بود: ${lastErrorLine(res.stderr)}`);
   }
   return item;
 }

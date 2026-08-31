@@ -9,7 +9,18 @@ import {
   normalizePlaylistUrl,
   parseFfmpegTime,
   parsePlaylistLine,
+  shouldRetryWithFallback,
 } from "./yt-dlp";
+
+describe("yt-dlp bot-check fallback", () => {
+  it("retries on bot-check and auth walls only", () => {
+    expect(shouldRetryWithFallback("ERROR: [youtube] x: Sign in to confirm you’re not a bot. Use --cookies")).toBe(true);
+    expect(shouldRetryWithFallback("ERROR: [youtube] x: Private video. Sign in if you've been granted access")).toBe(true);
+    expect(shouldRetryWithFallback("ERROR: members-only content")).toBe(true);
+    expect(shouldRetryWithFallback("ERROR: Requested format is not available")).toBe(false);
+    expect(shouldRetryWithFallback("ERROR: The playlist does not exist.")).toBe(false);
+  });
+});
 
 describe("yt-dlp helpers", () => {
   it("builds passthrough format selectors", () => {

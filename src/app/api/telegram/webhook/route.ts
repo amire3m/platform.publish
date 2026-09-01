@@ -28,6 +28,10 @@ export async function POST(req: Request) {
     if (String(msg.chat?.id) !== String(groupId)) {
       return Response.json({ ok: true });
     }
+    // A pending "reply-to-link" session (armed from the panel) takes precedence
+    const targetFileIdRaw = replyTarget!.video?.file_id || replyTarget!.document?.file_id || "";
+    const handled = await tryHandlePendingReply(msg as never, replyTarget!.message_id, targetFileIdRaw || null);
+    if (handled) return Response.json({ ok: true });
     const targetId = String(replyTarget!.message_id);
     const targetFileId = replyTarget!.video?.file_id || replyTarget!.document?.file_id || "";
     try {
@@ -215,6 +219,70 @@ type LiveTextMessage = {
   text: string;
   message_thread_id?: number;
 };
+
+// ---------------------------------------------------------------------------
+// Pending "reply to link" (armed from the content room panel) — short TTL
+// ---------------------------------------------------------------------------
+async function tryHandlePendingReply(msg: { chat: { id: number }; from?: { id: number | string }; message_thread_id?: number; message_id: number }, targetMessageId: number, targetFileId: string | null): Promise<boolean> {
+  try {
+    const { consumePendingReply } = await import("@/lib/content-room/pending-link");
+    const pending = consumePendingReply(String(msg.from?.id ?? ""));
+    if (!pending) return false;
+    const groupId = process.env.TELEGRAM_GROUP_ID || "";
+    if (String(msg.chat?.id) !== String(groupId)) return false;
+
+    const { TelegramClient } = await import("@/lib/telegram/client");
+    const client = TelegramClient.fromEnv();
+    const reply = async (html: string) => {
+      try {
+        await client.sendMessage(html, msg.message_thread_id, { parseMode: "HTML", replyToMessageId: msg.message_id });
+      } catch {
+        await client.sendMessage(html, undefined, { parseMode: "HTML", replyToMessageId: msg.message_id }).catch(() => {});
+      }
+    };
+    const kindLabel = pending.kind === "video" ? "ویدیو کامل" : pending.kind === "cover" ? "کاور" : pending.kind === "highlight" ? "برش" : "ریلز";
+
+    try {
+      const { db } = await import("@/db");
+      const { contentParts } = await import("@/db/schema");
+      const { eq } = await import("drizzle-orm");
+      const [part] = await db.select().from(contentParts).where(eq(contentParts.id, pending.partId)).limit(1);
+      if (!part) {
+        await reply("⚠️ قسمت هدف دیگر موجود نیست؛ لینک انجام نشد.");
+        return true;
+      }
+      // Reply target lacked file_id → resolve via temp forward (self-hosted bot API)
+      let fileId = targetFileId && !targetFileId.startsWith("tg_msg_") ? targetFileId : null;
+      if (!fileId) {
+        const resolved = await client.resolveVideoByForward(String(msg.chat.id), targetMessageId);
+        fileId = resolved?.fileId ?? null;
+      }
+      const { linkPartMedia } = await import("@/lib/content-room/link");
+      await linkPartMedia({
+        partId: pending.partId,
+        kind: pending.kind,
+        messageId: String(targetMessageId),
+        fileId,
+        fileName: null,
+        actorUserId: pending.userId,
+        source: "telegram",
+      });
+      const base = (process.env.APP_BASE_URL || "").replace(/\/$/, "");
+      const productId = (part as unknown as { productId?: string }).productId ?? "";
+      const url = base && productId ? `${base}/content-room/${productId}` : "";
+      await reply(
+        `✅ <b>${kindLabel}</b> به <b>قسمت ${pending.partNumber}</b> لینک شد.${fileId ? "" : "\n<i>شناسه فایل مستقیم نبود؛ در صورت نیاز از پنل مجدد لینک کنید.</i>"}${url ? `\n🔗 <a href="${url}">مشاهده محصول در اتاق محتوا</a>` : ""}`,
+      );
+      return true;
+    } catch (err) {
+      await reply(`⚠️ لینک ناموفق بود: ${String((err as Error).message).slice(0, 120)}`);
+      return true;
+    }
+  } catch (err) {
+    console.error("[webhook] pending reply failed:", (err as Error).message);
+    return false;
+  }
+}
 
 async function handleLiveTextMessage(msg: LiveTextMessage): Promise<boolean> {
   const groupId = process.env.TELEGRAM_GROUP_ID;

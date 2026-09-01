@@ -77,12 +77,9 @@ describe("panel group media", () => {
     const filesTab = await screen.findByRole("button", { name: /فایل‌ها/ });
     filesTab.click();
 
-    await waitFor(() => expect(screen.getByText("ویدیوهای گروه")).toBeInTheDocument());
-    expect(screen.getAllByText("کامل").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("کاور").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("برش").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("ریلز").length).toBeGreaterThan(0);
-    expect(screen.getByText("فقط لینک‌نشده‌ها")).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText("افزودن فایل از تلگرام (بدون آپلود مجدد ۲ گیگ)")).toBeInTheDocument());
+    expect(screen.getAllByText("ویدیو کامل").length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/فایل را بکشید یا/).length).toBeGreaterThan(0);
 
     global.fetch = originalFetch;
   });

@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import useSWR from "swr";
 import { Pencil, UploadCloud, Film, Image as ImageIcon, Scissors, Smartphone, Hash, X, Play } from "lucide-react";
-import { Button, Card } from "@/components/ui";
+import { Button, Card, Input } from "@/components/ui";
 import { DedicatedPlayer } from "@/components/media/DedicatedPlayer";
 import { fetchContentRoomApi, ContentRoomApiError } from "@/lib/content-room/client";
 import { contentStatusPresentation } from "@/lib/content-room/presentation";
@@ -516,6 +516,93 @@ function PartUploadCard({
   const [groupOnlyUnlinked, setGroupOnlyUnlinked] = useState(true);
   const [previewItem, setPreviewItem] = useState<string | null>(null);
   const [linking, setLinking] = useState<string | null>(null);
+  // Two-mode attach state: paste link / await reply (with TTL countdown)
+  const [attachMode, setAttachMode] = useState<"idle" | "link" | "reply">("idle");
+  const [attachKind, setAttachKind] = useState<"video" | "cover" | "highlight" | "reel">("video");
+  const [tgLink, setTgLink] = useState("");
+  const [awaitTtl, setAwaitTtl] = useState(0);
+
+  function startAttach(kind: "video" | "cover" | "highlight" | "reel") {
+    setAttachKind(kind);
+    setAttachMode("link");
+    setTgLink("");
+  }
+
+  async function submitAttachLink() {
+    setLinking("attach");
+    onError(null);
+    try {
+      const res = await fetch(`/api/content-room/parts/${part.id}/attach`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ partId: part.id, kind: attachKind, mode: "link", telegramLink: tgLink.trim() }),
+      });
+      const body = await res.json();
+      if (!res.ok || !body.ok) throw new Error(body.error ?? "خطا در لینک");
+      onToast("فایل از تلگرام به این قسمت لینک شد.");
+      setTimeout(() => onToast(null), 3000);
+      setAttachMode("idle");
+      setTgLink("");
+      await mutateAssets();
+      await mutateGroupMedia();
+      await onRefresh();
+    } catch (e) {
+      onError(e instanceof Error ? e.message : "خطا در لینک");
+    } finally {
+      setLinking(null);
+    }
+  }
+
+  async function armAwaitReply() {
+    setLinking("arm");
+    onError(null);
+    try {
+      const res = await fetch(`/api/content-room/parts/${part.id}/attach`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ partId: part.id, kind: attachKind, mode: "await_reply" }),
+      });
+      const body = await res.json();
+      if (!res.ok || !body.ok) throw new Error(body.error ?? "خطا در شروع حالت ریپلای");
+      onToast(`حالت ریپلای فعال شد — ${Math.round((body.data?.ttlSeconds ?? 300) / 60)} دقیقه فرصت دارید.`);
+      setTimeout(() => onToast(null), 4000);
+      setAttachMode("reply");
+      setAwaitTtl(body.data?.ttlSeconds ?? 300);
+    } catch (e) {
+      onError(e instanceof Error ? e.message : "خطا");
+    } finally {
+      setLinking(null);
+    }
+  }
+
+  async function cancelAwaitReply() {
+    try {
+      await fetch(`/api/content-room/parts/${part.id}/attach`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ partId: part.id, kind: attachKind, mode: "cancel" }),
+      });
+    } catch {}
+    setAttachMode("idle");
+    onToast("حالت ریپلای لغو شد.");
+    setTimeout(() => onToast(null), 2000);
+  }
+
+  // TTL countdown tick
+  useEffect(() => {
+    if (attachMode !== "reply" || awaitTtl <= 0) return;
+    const t = setInterval(() => {
+      setAwaitTtl((v) => {
+        if (v <= 1) {
+          clearInterval(t);
+          setAttachMode("idle");
+          return 0;
+        }
+        return v - 1;
+      });
+    }, 1000);
+    return () => clearInterval(t);
+  }, [attachMode, awaitTtl > 0]);
 
   async function handleLinkGroupMedia(
     item: { messageId: string; fileId: string | null; fileName: string | null },
@@ -864,116 +951,124 @@ function PartUploadCard({
       </div>
 
       <div className="rounded-xl border border-tg-border bg-tg-surface/50 p-3">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <p className="text-xs font-bold text-tg-text">ویدیوهای گروه</p>
-            <p className="mt-0.5 text-[11px] text-tg-secondary">از تلگرام بفرستید؛ اینجا تامبنیل می‌بینید و با یک دکمه به این قسمت لینک می‌شود (بدون آپلود مجدد ۲ گیگ).</p>
-          </div>
-          <label className="flex shrink-0 items-center gap-1.5 text-[11px] text-tg-secondary">
-            <input type="checkbox" checked={groupOnlyUnlinked} onChange={(e) => setGroupOnlyUnlinked(e.target.checked)} className="h-3.5 w-3.5" />
-            فقط لینک‌نشده‌ها
-          </label>
-        </div>
+        <p className="text-xs font-bold text-tg-text">افزودن فایل از تلگرام (بدون آپلود مجدد ۲ گیگ)</p>
 
-        {(() => {
-          const visible = groupOnlyUnlinked ? groupItems.filter((m) => !m.linked) : groupItems;
-          if (groupItems.length === 0) {
-            return <p className="mt-2 text-xs text-tg-secondary">ویدیویی از گروه دریافت نشده است. فایل را در گروه بفرستید و «لینک» را ریپلای کنید یا از همین‌جا لینک کنید.</p>;
-          }
-          if (visible.length === 0) {
-            return (
-              <p className="mt-2 rounded-lg bg-emerald-500/10 px-3 py-2 text-xs text-emerald-700 dark:text-emerald-300">
-                همه ویدیوهای اخیر لینک شده‌اند ✓ — فیلتر «فقط لینک‌نشده‌ها» را بردارید تا همه را ببینید.
-              </p>
-            );
-          }
-          return (
-            <div className="mt-2 grid gap-2 sm:grid-cols-2">
-              {visible.map((m) => {
+        {/* Kind selector */}
+        {attachMode === "idle" ? (
+          <div className="mt-2 grid grid-cols-4 gap-1.5">
+            {([
+              { kind: "video" as const, label: "ویدیو کامل", cls: "hover:border-rose-500/50 hover:text-rose-600" },
+              { kind: "cover" as const, label: "کاور", cls: "hover:border-sky-500/50 hover:text-sky-600" },
+              { kind: "highlight" as const, label: "برش", cls: "hover:border-amber-500/50 hover:text-amber-600" },
+              { kind: "reel" as const, label: "ریلز", cls: "hover:border-violet-500/50 hover:text-violet-600" },
+            ]).map(({ kind, label, cls }) => (
+              <button
+                key={kind}
+                onClick={() => startAttach(kind)}
+                className={`min-h-[38px] rounded-lg border border-tg-border bg-tg-hover/40 text-xs font-medium text-tg-text transition-colors ${cls}`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        ) : (
+          <div className="mt-2 space-y-2">
+            {/* Mode: paste link */}
+            {attachMode === "link" && (
+              <div className="space-y-2 rounded-lg border border-tg-border p-2.5">
+                <p className="text-[11px] font-semibold text-tg-text">
+                  لینک پیام تلگرام را برای «{attachKind === "video" ? "ویدیو کامل" : attachKind === "cover" ? "کاور" : attachKind === "highlight" ? "برش" : "ریلز"}» وارد کنید:
+                </p>
+                <Input
+                  value={tgLink}
+                  onChange={(e) => setTgLink(e.target.value)}
+                  placeholder="https://t.me/c/2326782937/2577"
+                  dir="ltr"
+                  className="h-9 font-mono text-xs"
+                />
+                <div className="flex gap-1.5">
+                  <Button size="sm" onClick={submitAttachLink} disabled={linking === "attach" || !tgLink.trim()} className="min-h-[32px] flex-1 text-xs">
+                    {linking === "attach" ? "در حال لینک…" : "لینک کن"}
+                  </Button>
+                  <Button size="sm" variant="secondary" onClick={() => setAttachMode("idle")} className="min-h-[32px] text-xs">انصراف</Button>
+                </div>
+              </div>
+            )}
+
+            {/* Mode: await reply */}
+            {attachMode === "reply" && (
+              <div className="space-y-2 rounded-lg border border-amber-500/30 bg-amber-500/5 p-2.5">
+                <p className="text-[11px] font-semibold text-amber-700 dark:text-amber-300">
+                  ⏱ منتظر ریپلای شما — {Math.floor(awaitTtl / 60)}:{String(awaitTtl % 60).padStart(2, "0")} مانده
+                </p>
+                <p className="text-[11px] leading-relaxed text-tg-secondary">
+                  در گروه تلگرام، روی ویدیو <b>ریپلای</b> کنید و بنویسید <code className="rounded bg-tg-hover px-1">لینک</code> — همان ویدیو به‌عنوان «{attachKind === "video" ? "ویدیو کامل" : attachKind === "cover" ? "کاور" : attachKind === "highlight" ? "برش" : "ریلز"}» به قسمت {part.partNumber} لینک می‌شود.
+                </p>
+                <div className="h-1 w-full overflow-hidden rounded-full bg-tg-hover">
+                  <div className="h-full bg-amber-500 transition-all duration-1000" style={{ width: `${(awaitTtl / 300) * 100}%` }} />
+                </div>
+                <Button size="sm" variant="secondary" onClick={cancelAwaitReply} className="min-h-[30px] text-xs">لغو حالت ریپلای</Button>
+              </div>
+            )}
+
+            {/* Mode switch row (link ↔ reply) */}
+            {attachMode === "link" && (
+              <button onClick={armAwaitReply} disabled={linking === "arm"} className="w-full rounded-lg border border-dashed border-tg-border px-2 py-1.5 text-[11px] text-tg-secondary transition-colors hover:border-tg-accent/60 hover:text-tg-accent disabled:opacity-40">
+                یا <b>دکمه ریپلای</b> — در گروه ریپلای کنید و «لینک» بنویسید (اعتبار ۵ دقیقه)
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Recent group videos — quick visual reference (unchanged visuals, secondary now) */}
+        {groupItems.length > 0 && (
+          <details className="mt-2">
+            <summary className="cursor-pointer text-[11px] font-medium text-tg-secondary hover:text-tg-text">
+              ویدیوهای اخیر گروه ({groupOnlyUnlinked ? groupItems.filter((m) => !m.linked).length : groupItems.length})
+            </summary>
+            <div className="mt-2 space-y-1.5">
+              <label className="flex items-center gap-1.5 text-[10px] text-tg-secondary">
+                <input type="checkbox" checked={groupOnlyUnlinked} onChange={(e) => setGroupOnlyUnlinked(e.target.checked)} className="h-3 w-3" />
+                فقط لینک‌نشده‌ها
+              </label>
+              {(groupOnlyUnlinked ? groupItems.filter((m) => !m.linked) : groupItems).map((m) => {
                 const dur = m.durationSec ? `${Math.floor(m.durationSec / 60)}:${String(m.durationSec % 60).padStart(2, "0")}` : null;
                 return (
-                  <div
-                    key={m.messageId}
-                    className={`flex flex-col gap-2 rounded-xl border p-2 ${m.linked ? "border-emerald-500/25 bg-emerald-500/5" : "border-tg-border bg-tg-surface"}`}
-                  >
-                    {/* Thumbnail row */}
-                    <div className="flex gap-2">
-                      {m.thumbUrl ? (
-                        <button
-                          type="button"
-                          onClick={() => setPreviewItem(previewItem === m.messageId ? null : m.messageId)}
-                          className="relative h-16 w-28 shrink-0 overflow-hidden rounded-lg border border-tg-border bg-black"
-                          title="پیش‌نمایش"
-                        >
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img src={m.thumbUrl} alt={m.fileName ?? "ویدیوی گروه"} className="h-full w-full object-cover" />
-                          {dur && (
-                            <span className="absolute bottom-1 left-1 rounded bg-black/70 px-1 text-[9px] text-white" dir="ltr">{dur}</span>
-                          )}
-                          {m.playUrl && (
-                            <span className="absolute inset-0 flex items-center justify-center opacity-0 transition-opacity hover:opacity-100">
-                              <Play className="h-5 w-5 text-white drop-shadow" />
-                            </span>
-                          )}
-                        </button>
-                      ) : (
-                        <div className="flex h-16 w-28 shrink-0 items-center justify-center rounded-lg border border-tg-border bg-tg-hover">
-                          <Film className="h-5 w-5 text-tg-secondary" />
-                        </div>
-                      )}
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-xs font-semibold text-tg-text" title={m.fileName ?? undefined}>
-                          {m.fileName ?? (m.caption ? m.caption.slice(0, 30) : "ویدیوی گروه")}
-                        </p>
-                        <p className="mt-0.5 flex flex-wrap items-center gap-1 text-[10px] text-tg-secondary">
-                          {m.topicName && (
-                            <span className="inline-flex items-center gap-0.5 rounded-full bg-tg-accent/10 px-1.5 py-0.5 font-medium text-tg-accent">
-                              <Hash className="h-2.5 w-2.5" />
-                              {m.topicName}
-                            </span>
-                          )}
-                          {m.date && <span>{new Date(m.date).toLocaleDateString("fa-IR")}</span>}
-                          {m.telegramLink && (
-                            <a href={m.telegramLink} target="_blank" rel="noopener noreferrer" className="text-tg-accent hover:underline">در تلگرام ↗</a>
-                          )}
-                        </p>
-                        {m.linked && m.linkedTo && (
-                          <p className="mt-0.5 inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 dark:text-emerald-400">
-                            ✓ لینک شده {m.linkedTo.productTitle ? `— ${m.linkedTo.productTitle}` : ""}
-                          </p>
-                        )}
+                  <div key={m.messageId} className={`flex items-center gap-2 rounded-lg border p-1.5 ${m.linked ? "border-emerald-500/25 bg-emerald-500/5" : "border-tg-border bg-tg-surface"}`}>
+                    {m.thumbUrl ? (
+                      <button type="button" onClick={() => setPreviewItem(previewItem === m.messageId ? null : m.messageId)} className="relative h-12 w-20 shrink-0 overflow-hidden rounded-md border border-tg-border bg-black" title="پیش‌نمایش">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={m.thumbUrl} alt={m.fileName ?? "ویدیوی گروه"} className="h-full w-full object-cover" />
+                        {dur && <span className="absolute bottom-0.5 left-0.5 rounded bg-black/70 px-1 text-[8px] text-white" dir="ltr">{dur}</span>}
+                      </button>
+                    ) : (
+                      <div className="flex h-12 w-20 shrink-0 items-center justify-center rounded-md border border-tg-border bg-tg-hover">
+                        <Film className="h-4 w-4 text-tg-secondary" />
                       </div>
-                    </div>
-
-                    {/* Inline player toggle */}
-                    {previewItem === m.messageId && m.playUrl && (
-                      <DedicatedPlayer src={m.playUrl} title={m.fileName ?? undefined} className="aspect-video w-full" />
                     )}
-
-                    {/* Link actions */}
-                    <div className="grid grid-cols-4 gap-1">
-                      {([
-                        { kind: "video" as const, label: "کامل", cls: "hover:bg-rose-500/10 hover:text-rose-600" },
-                        { kind: "cover" as const, label: "کاور", cls: "hover:bg-sky-500/10 hover:text-sky-600" },
-                        { kind: "highlight" as const, label: "برش", cls: "hover:bg-amber-500/10 hover:text-amber-600" },
-                        { kind: "reel" as const, label: "ریلز", cls: "hover:bg-violet-500/10 hover:text-violet-600" },
-                      ]).map(({ kind, label, cls }) => (
-                        <button
-                          key={kind}
-                          onClick={() => handleLinkGroupMedia(m, kind)}
-                          disabled={linking === `${m.messageId}:${kind}` || (m.linked && m.fileId?.startsWith("tg_msg_"))}
-                          className={`min-h-[30px] rounded-lg border border-tg-border bg-tg-hover/40 text-[11px] font-medium text-tg-text transition-colors ${cls} disabled:opacity-40`}
-                        >
-                          {linking === `${m.messageId}:${kind}` ? "…" : label}
-                        </button>
-                      ))}
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-[11px] font-medium text-tg-text" title={m.fileName ?? undefined}>{m.fileName ?? (m.caption ? m.caption.slice(0, 30) : "ویدیوی گروه")}</p>
+                      <p className="flex items-center gap-1 text-[10px] text-tg-secondary">
+                        {m.topicName && <span className="rounded-full bg-tg-accent/10 px-1 font-medium text-tg-accent">{m.topicName}</span>}
+                        {m.linked && <span className="rounded-full bg-emerald-500/15 px-1 font-medium text-emerald-700">✓ لینک شده</span>}
+                        {m.telegramLink && <a href={m.telegramLink} target="_blank" rel="noopener noreferrer" className="text-tg-accent hover:underline">↗</a>}
+                      </p>
+                    </div>
+                    <div className="flex shrink-0 flex-col gap-0.5">
+                      <button onClick={() => handleLinkGroupMedia(m, attachKind)} disabled={linking === `${m.messageId}:${attachKind}`} className="rounded border border-tg-border px-1.5 py-0.5 text-[10px] text-tg-text hover:bg-tg-accent/10 disabled:opacity-40">
+                        لینک به قسمت
+                      </button>
                     </div>
                   </div>
                 );
               })}
+              {previewItem && (() => {
+                const item = groupItems.find((m) => m.messageId === previewItem);
+                return item?.playUrl ? <DedicatedPlayer src={item.playUrl} title={item.fileName ?? undefined} className="aspect-video w-full" /> : null;
+              })()}
             </div>
-          );
-        })()}
+          </details>
+        )}
       </div>
     </div>
   );

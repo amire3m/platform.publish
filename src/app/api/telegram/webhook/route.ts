@@ -12,7 +12,7 @@ export async function POST(req: Request) {
     return Response.json({ ok: true });
   }
 
-  const msg = (body as { message?: { message_id: number; chat: { id: number; type?: string }; from?: { id: number | string; first_name?: string; last_name?: string; username?: string }; video?: { file_id: string; file_unique_id: string }; document?: { file_id: string; file_unique_id: string; mime_type?: string; file_name?: string }; caption?: string; text?: string; date?: number; message_thread_id?: number; reply_to_message?: { message_id: number; video?: { file_id: string }; document?: { file_id: string; mime_type?: string; file_name?: string }; caption?: string; from?: { id: number | string } } } })?.message;
+  const msg = (body as { message?: { message_id: number; chat: { id: number; type?: string }; from?: { id: number | string; first_name?: string; last_name?: string; username?: string }; video?: { file_id: string; file_unique_id: string; duration?: number; thumbnail?: { file_id: string }; file_name?: string }; document?: { file_id: string; file_unique_id: string; mime_type?: string; file_name?: string; thumbnail?: { file_id: string } }; caption?: string; text?: string; date?: number; message_thread_id?: number; reply_to_message?: { message_id: number; video?: { file_id: string }; document?: { file_id: string; mime_type?: string; file_name?: string }; caption?: string; from?: { id: number | string } } } })?.message;
   const hasVideo = !!(msg?.video || (msg?.document && String(msg.document?.mime_type || "").startsWith("video/")));
   const replyTarget = msg?.reply_to_message;
   const hasVideoInReply = !!(replyTarget?.video || (replyTarget?.document && String(replyTarget?.document?.mime_type || "").startsWith("video/")));
@@ -139,7 +139,15 @@ export async function POST(req: Request) {
           entityId: messageIdStr,
           action: "group_video_replied",
           before: null,
-          after: { messageId: msg.message_id, chatId: msg.chat.id, fileId: msg.video?.file_id || msg.document?.file_id, messageThreadId: msg.message_thread_id ?? null } as unknown as Record<string, unknown>,
+          after: {
+            messageId: msg.message_id,
+            chatId: msg.chat.id,
+            fileId: msg.video?.file_id || msg.document?.file_id,
+            messageThreadId: msg.message_thread_id ?? null,
+            thumbFileId: msg.video?.thumbnail?.file_id || msg.document?.thumbnail?.file_id || null,
+            durationSec: msg.video?.duration ?? null,
+            fileName: msg.video?.file_name || msg.document?.file_name || null,
+          } as unknown as Record<string, unknown>,
           actorUserId: null as unknown as string,
           source: "telegram_webhook",
         });

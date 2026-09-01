@@ -77,11 +77,12 @@ describe("panel group media", () => {
     const filesTab = await screen.findByRole("button", { name: /فایل‌ها/ });
     filesTab.click();
 
-    await waitFor(() => expect(screen.getByText("ویدیوهای اخیر گروه")).toBeInTheDocument());
-    expect(screen.getByText("لینک به عنوان برش")).toBeInTheDocument();
-    expect(screen.getByText("لینک به عنوان ریلز")).toBeInTheDocument();
-    expect(screen.getByText("لینک به عنوان ویدئو")).toBeInTheDocument();
-    expect(screen.getByText("لینک به عنوان کاور")).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText("ویدیوهای گروه")).toBeInTheDocument());
+    expect(screen.getAllByText("کامل").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("کاور").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("برش").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("ریلز").length).toBeGreaterThan(0);
+    expect(screen.getByText("فقط لینک‌نشده‌ها")).toBeInTheDocument();
 
     global.fetch = originalFetch;
   });

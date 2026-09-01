@@ -59,6 +59,54 @@ const KIND_PLATFORM_MAP: Record<string, (typeof PUBLICATION_PLATFORMS)[number]> 
   cover: "instagram",
 };
 
+/** Which part file belongs to which deliverable kind. */
+function resolveDeliverableFileRef(
+  kind: string,
+  part: { fileRef: string | null; highlightFileRef: string | null; reelFileRef: string | null; coverFileRef: string | null },
+): string | null {
+  switch (kind) {
+    case "youtube_full":
+      return part.fileRef;
+    case "highlight":
+      return part.highlightFileRef;
+    case "reel":
+      return part.reelFileRef;
+    case "cover":
+      return part.coverFileRef;
+    default:
+      return null;
+  }
+}
+
+/** Latest highlight/reel assets per part (may be null when DB unavailable, e.g. unit tests). */
+async function loadPartAssets(
+  partIds: string[],
+): Promise<Record<string, Array<{ kind: string; fileRef: string; createdAt: Date }>>> {
+  if (partIds.length === 0) return {};
+  try {
+    const { db } = await import("@/db");
+    const { contentPartAssets } = await import("@/db/schema");
+    const { inArray, asc } = await import("drizzle-orm");
+    const rows = (await db
+      .select()
+      .from(contentPartAssets)
+      .where(inArray(contentPartAssets.partId, partIds))
+      .orderBy(asc(contentPartAssets.createdAt))) as unknown as Array<{
+      partId: string;
+      kind: string;
+      fileRef: string;
+      createdAt: Date;
+    }>;
+    const out: Record<string, Array<{ kind: string; fileRef: string; createdAt: Date }>> = {};
+    for (const r of rows) {
+      (out[r.partId] ??= []).push({ kind: r.kind, fileRef: r.fileRef, createdAt: r.createdAt });
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
 export function createContentRoomService(options: {
   contentPort: ContentRoomDatabasePort;
   workflowPort: WorkflowDatabasePort;
@@ -146,9 +194,22 @@ export function createContentRoomService(options: {
       // Ensure parts are sorted
       const sortedParts = [...effectiveParts].sort((a, b) => a.partNumber - b.partNumber);
 
+      // Latest highlight/reel assets per part (stored in content_part_assets)
+      const assetsByPart = await loadPartAssets(sortedParts.map((p) => p.id));
+      const latestAsset = (partId: string, kind: "highlight" | "reel"): string | null => {
+        const rows = (assetsByPart[partId] ?? []).filter((a) => a.kind === kind);
+        return rows.length > 0 ? rows[rows.length - 1].fileRef : null;
+      };
+
       let sortOrder = 0;
       for (const part of sortedParts) {
         for (const kindDef of DELIVERABLE_KINDS) {
+          const fileRef = resolveDeliverableFileRef(kindDef.kind, {
+            fileRef: part.fileRef,
+            highlightFileRef: latestAsset(part.id, "highlight") ?? part.highlightFileRef ?? null,
+            reelFileRef: latestAsset(part.id, "reel") ?? part.reelFileRef ?? null,
+            coverFileRef: part.coverFileRef,
+          });
           const deliverableId = generateEntityId("WDL");
           const deliverable: WorkflowDeliverableRecord = {
             id: deliverableId,
@@ -161,6 +222,7 @@ export function createContentRoomService(options: {
             dueAt: null,
             notes: null,
             contentId: null,
+            fileRef,
             archivedAt: null,
             version: 1,
             createdBy: command.actorUserId,

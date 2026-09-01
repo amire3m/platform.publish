@@ -211,6 +211,15 @@ export function ContentRoomDetail({ product, onRefresh }: Props) {
           </div>
         )}
 
+        {!sendResult && product.sentProgram && (
+          <div role="status" className="flex flex-wrap items-center gap-2 rounded-lg border border-sky-500/20 bg-sky-500/10 px-3 py-2 text-sm text-sky-700 dark:text-sky-300">
+            <span>این محصول قبلاً به اتاق انتشار ارسال شده است.</span>
+            <Link href={`/workflow/${product.sentProgram.id}`} className="font-semibold text-tg-accent hover:underline">
+              مشاهده برنامه در اتاق انتشار
+            </Link>
+          </div>
+        )}
+
         <div className="flex flex-wrap gap-2">
           <Button
             onClick={handleSend}

@@ -59,8 +59,25 @@ export async function handleProductRequest(
     try {
       const product = await deps.repository.getProduct(id);
       if (!product) return jsonError("محصول یافت نشد.", 404, "NOT_FOUND");
+      // Latest program this product was sent to (publishing room linkage)
+      let sentProgram: { id: string; createdAt: string } | null = null;
+      try {
+        const { db } = await import("@/db");
+        const { workflowPrograms } = await import("@/db/schema");
+        const { desc, eq } = await import("drizzle-orm");
+        const [row] = await db
+          .select({ id: workflowPrograms.id, createdAt: workflowPrograms.createdAt })
+          .from(workflowPrograms)
+          .where(eq(workflowPrograms.sourceRef, id))
+          .orderBy(desc(workflowPrograms.createdAt))
+          .limit(1);
+        if (row) sentProgram = { id: row.id, createdAt: row.createdAt.toISOString() };
+      } catch {
+        // linkage lookup is best-effort
+      }
       return jsonOk({
         ...product,
+        sentProgram,
         parts: (product.parts ?? []).map((part) => ({
           ...part,
           playbackUrl: buildTelegramMediaUrl(part.fileRef),

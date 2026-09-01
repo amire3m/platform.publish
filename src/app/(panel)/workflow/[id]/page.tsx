@@ -3,7 +3,7 @@
 import { use, useCallback, useMemo, useState } from "react";
 import useSWR from "swr";
 import Link from "next/link";
-import { ArrowRight, Link2, Link2Off, Calendar, AlertTriangle, User, Play, ExternalLink } from "lucide-react";
+import { ArrowRight, Link2, Link2Off, Calendar, AlertTriangle, User, Play, ExternalLink, Package, FileVideo } from "lucide-react";
 import { Button, Card, EmptyState, ErrorState, Modal, Skeleton } from "@/components/ui";
 import { fetchWorkflowApi, WorkflowApiError } from "@/lib/workflow/client";
 import { formatJalaliDateOnly, formatJalaliDateTime } from "@/lib/date/jalali";
@@ -66,6 +66,9 @@ interface DeliverableDetail {
   allowedActions?: string[];
   publications?: PublicationDetail[];
   connectedContent?: { id: string; title?: string } | null;
+  /** Attached media from content room (raw token; playable via fileUrl). */
+  fileRef?: string | null;
+  fileUrl?: string | null;
 }
 
 interface ProgramDetail {
@@ -82,6 +85,9 @@ interface ProgramDetail {
   createdAt?: string | Date | null;
   updatedAt?: string | Date | null;
   archivedAt?: string | Date | null;
+  /** Provenance: content_room programs carry a link back to their source product. */
+  source?: string | null;
+  sourceRef?: string | null;
   deliverables?: DeliverableDetail[];
 }
 
@@ -492,6 +498,15 @@ export default function WorkflowProgramDetailPage({ params }: { params: Promise<
                   نیازمند توجه
                 </span>
               )}
+              {program.source === "content_room" && program.sourceRef && (
+                <Link
+                  href={`/content-room/${program.sourceRef}`}
+                  className="inline-flex items-center gap-1.5 rounded-full bg-sky-500/10 px-2.5 py-1 font-medium text-sky-700 hover:underline dark:text-sky-400"
+                >
+                  <Package className="h-3.5 w-3.5" />
+                  منبع: اتاق محتوا
+                </Link>
+              )}
             </div>
             {program.notes && <p className="mt-3 text-sm leading-relaxed text-tg-text/80">{program.notes}</p>}
           </div>
@@ -579,6 +594,22 @@ export default function WorkflowProgramDetailPage({ params }: { params: Promise<
                       </span>
                     </div>
                   </div>
+
+                  {/* Attached media file (from content room) */}
+                  {d.fileUrl && (
+                    <div className="flex items-center gap-2 rounded-lg bg-sky-500/5 px-3 py-2 text-xs">
+                      <FileVideo className="h-4 w-4 shrink-0 text-sky-600 dark:text-sky-400" />
+                      <span className="text-tg-secondary">فایل پیوست‌شده از اتاق محتوا:</span>
+                      <a
+                        href={d.fileUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="truncate font-medium text-tg-accent hover:underline"
+                      >
+                        پخش / دانلود
+                      </a>
+                    </div>
+                  )}
 
                   {/* Production quick actions */}
                   <div className="rounded-lg border border-tg-border bg-tg-hover/20 p-3">

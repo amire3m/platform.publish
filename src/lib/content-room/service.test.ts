@@ -152,4 +152,28 @@ describe("content room sendToPublication service", () => {
     expect(workflowPort.programs).toHaveLength(1);
     expect(workflowPort.deliverables).toHaveLength(8);
   });
+
+  it("maps part files onto deliverables by kind", async () => {
+    const contentPort = new InMemoryContentRoomPort();
+    const contentRepo = createContentRoomRepository(contentPort);
+    const workflowPort = new InMemoryWorkflowPort();
+    const service = createContentRoomService({ contentPort, workflowPort });
+
+    const product = await createReadyProduct(contentPort, contentRepo, 1);
+    // set part files directly on the in-memory port
+    const part = contentPort.parts.find((p) => p.productId === product.id)!;
+    part.fileRef = "tg_raw_file_1";
+    part.coverFileRef = "tg_cover_file_1";
+    part.highlightFileRef = "tg_highlight_file_1";
+    part.reelFileRef = "tg_reel_file_1";
+
+    await advanceToReady(contentPort, contentRepo, product.id);
+    const result = await service.sendToPublication({ productId: product.id, expectedVersion: 7, actorUserId: "u1" });
+
+    const byKind = Object.fromEntries(result.deliverables.map((d) => [d.kind, d.fileRef]));
+    expect(byKind.youtube_full).toBe("tg_raw_file_1");
+    expect(byKind.cover).toBe("tg_cover_file_1");
+    expect(byKind.highlight).toBe("tg_highlight_file_1");
+    expect(byKind.reel).toBe("tg_reel_file_1");
+  });
 });

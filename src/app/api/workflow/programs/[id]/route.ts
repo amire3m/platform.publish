@@ -34,7 +34,16 @@ export async function handleProgramRequest(
     try {
       const program = await deps.repository.getProgram(id);
       if (!program) return jsonError("برنامه یافت نشد.", 404, "NOT_FOUND");
-      return jsonOk(program);
+      // Fresh signed playback URLs for deliverable files attached from content room (JWT expires in 15m)
+      const { buildTelegramMediaUrl } = await import("@/lib/media/telegram-url");
+      const withFileUrls = {
+        ...program,
+        deliverables: (program as unknown as { deliverables?: Array<Record<string, unknown>> }).deliverables?.map((d) => ({
+          ...d,
+          fileUrl: d.fileRef ? buildTelegramMediaUrl(d.fileRef as string) : null,
+        })),
+      };
+      return jsonOk(withFileUrls);
     } catch (error) {
       const mapped = mapRepositoryError(error);
       if (mapped) return mapped;

@@ -295,6 +295,8 @@ export const workflowDeliverables = pgTable(
     dueAt: timestamp("due_at", { withTimezone: true }),
     notes: text("notes"),
     contentId: text("content_id").references(() => content.id),
+    /** Telegram media token of the actual file for this deliverable (from content_parts). */
+    fileRef: text("file_ref"),
     archivedAt: timestamp("archived_at", { withTimezone: true }),
     version: integer("version").notNull().default(1),
     createdBy: text("created_by").references(() => users.id, {

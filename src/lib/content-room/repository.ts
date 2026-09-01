@@ -479,7 +479,7 @@ export class InMemoryContentRoomPort implements ContentRoomDatabasePort {
 // ---------------------------------------------------------------------------
 // Drizzle port
 // ---------------------------------------------------------------------------
-function createDrizzleContentRoomPort(): ContentRoomDatabasePort {
+export function createDrizzleContentRoomPort(): ContentRoomDatabasePort {
   const getDb = async () => {
     const { db } = await import("@/db");
     return db;

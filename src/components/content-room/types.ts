@@ -60,6 +60,8 @@ export interface ContentPart {
 
 export interface ContentRoomProductDetail extends ContentRoomProductSummary {
   parts: ContentPart[];
+  /** Latest publishing-room program this product was sent to (null = not sent yet). */
+  sentProgram?: { id: string; createdAt: string } | null;
 }
 
 export interface ContentRoomFilters {

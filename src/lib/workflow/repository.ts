@@ -53,6 +53,8 @@ export interface WorkflowDeliverableRecord {
   dueAt: Date | null;
   notes: string | null;
   contentId: string | null;
+  /** Telegram media token / playable URL of the actual file (set when created from content_room). */
+  fileRef: string | null;
   archivedAt: Date | null;
   version: number;
   createdBy: string | null;
@@ -544,7 +546,7 @@ function serializeRecord(record: unknown): unknown {
 // ---------------------------------------------------------------------------
 // Drizzle port
 // ---------------------------------------------------------------------------
-function createDrizzleWorkflowPort(): WorkflowDatabasePort {
+export function createDrizzleWorkflowPort(): WorkflowDatabasePort {
   // lazy helper to avoid importing db when DATABASE_URL missing in tests
   const getDb = async () => {
     const { db } = await import("@/db");
@@ -869,6 +871,7 @@ function mapDeliverableRow(row: Record<string, unknown>): WorkflowDeliverableRec
     dueAt: (row.dueAt as Date | null) ?? (row.due_at as Date | null) ?? null,
     notes: (row.notes as string | null) ?? null,
     contentId: (row.contentId as string | null) ?? (row.content_id as string | null) ?? null,
+    fileRef: (row.fileRef as string | null) ?? (row.file_ref as string | null) ?? null,
     archivedAt: (row.archivedAt as Date | null) ?? (row.archived_at as Date | null) ?? null,
     version: row.version as number,
     createdBy: (row.createdBy as string | null) ?? (row.created_by as string | null) ?? null,
@@ -966,6 +969,7 @@ function toDeliverableInsert(d: WorkflowDeliverableRecord): Record<string, unkno
     dueAt: d.dueAt,
     notes: d.notes,
     contentId: d.contentId,
+    fileRef: d.fileRef,
     archivedAt: d.archivedAt,
     version: d.version,
     createdBy: d.createdBy,
@@ -983,6 +987,7 @@ function toDeliverablePatch(patch: Partial<WorkflowDeliverableRecord>, expectedV
   if (patch.dueAt !== undefined) out.dueAt = patch.dueAt;
   if (patch.notes !== undefined) out.notes = patch.notes;
   if (patch.contentId !== undefined) out.contentId = patch.contentId;
+  if (patch.fileRef !== undefined) out.file_ref = patch.fileRef;
   if (patch.archivedAt !== undefined) out.archivedAt = patch.archivedAt;
   out.version = expectedVersion + 1;
   out.updatedAt = patch.updatedAt ?? new Date();
@@ -1230,6 +1235,7 @@ export function createWorkflowRepository(port?: WorkflowDatabasePort): WorkflowR
         dueAt: toDate(command.dueAt),
         notes: command.notes ?? null,
         contentId: null,
+        fileRef: null,
         archivedAt: null,
         version: 1,
         createdBy: command.actorUserId,
@@ -1647,6 +1653,7 @@ export function createWorkflowRepository(port?: WorkflowDatabasePort): WorkflowR
           dueAt: calculateDueAt(baseDueAt, item.dueOffsetMinutes),
           notes: null,
           contentId: null,
+          fileRef: null,
           archivedAt: null,
           version: 1,
           createdBy: command.actorUserId,

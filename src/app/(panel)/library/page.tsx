@@ -63,16 +63,16 @@ function FilePreview({ item }: { item: FileItem }) {
   const [failed, setFailed] = useState(false);
   if (item.type === "cover") {
     return (
-      <div className="w-40 overflow-hidden rounded-lg border border-tg-border bg-black">
+      <div className="w-52 overflow-hidden rounded-lg border border-tg-border bg-black">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={item.playbackUrl} alt={item.filename} className="max-h-32 w-full object-contain" onError={() => setFailed(true)} />
+        <img src={item.playbackUrl} alt={item.filename} className="max-h-40 w-full object-contain" onError={() => setFailed(true)} />
       </div>
     );
   }
   return (
-    <div className="w-56 overflow-hidden rounded-lg border border-tg-border bg-black">
+    <div className="w-96 max-w-full overflow-hidden rounded-lg border border-tg-border bg-black">
       {failed ? (
-        <div className="flex h-28 flex-col items-center justify-center gap-1 p-3 text-white">
+        <div className="flex h-36 flex-col items-center justify-center gap-1 p-3 text-white">
           <p className="text-[11px]">پخش مستقیم برای این فایل ممکن نشد.</p>
           {item.telegramLink && (
             <a href={item.telegramLink} target="_blank" rel="noopener noreferrer" className="rounded bg-tg-accent px-2 py-0.5 text-[11px]">مشاهده در تلگرام</a>

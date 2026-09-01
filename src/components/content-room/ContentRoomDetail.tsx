@@ -3,7 +3,7 @@
 import { useState, useRef } from "react";
 import Link from "next/link";
 import useSWR from "swr";
-import { Pencil } from "lucide-react";
+import { Pencil, UploadCloud, Film, Image as ImageIcon, Scissors, Smartphone, Hash, X } from "lucide-react";
 import { Button, Card } from "@/components/ui";
 import { DedicatedPlayer } from "@/components/media/DedicatedPlayer";
 import { fetchContentRoomApi, ContentRoomApiError } from "@/lib/content-room/client";
@@ -281,6 +281,150 @@ export function ContentRoomDetail({ product, onRefresh }: Props) {
   );
 }
 
+// ---------------------------------------------------------------------------
+// Beautiful drop-zone upload card
+// ---------------------------------------------------------------------------
+function formatBytes(bytes: number): string {
+  if (bytes >= 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} گیگابایت`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} مگابایت`;
+}
+
+function UploadZone({
+  icon: Icon,
+  title,
+  hint,
+  accept,
+  file,
+  onSelect,
+  onClear,
+  onUpload,
+  actionLabel,
+  accentBg,
+  accentText,
+  accentBorder,
+  isUploading,
+  progress,
+  loaded,
+  total,
+  speed,
+  onCancel,
+  children,
+}: {
+  icon: typeof Film;
+  title: string;
+  hint: string;
+  accept: string;
+  file: File | null;
+  onSelect: (f: File | null) => void;
+  onClear: () => void;
+  onUpload: () => void;
+  actionLabel: string;
+  accentBg: string;
+  accentText: string;
+  accentBorder: string;
+  isUploading: boolean;
+  progress: number;
+  loaded: number;
+  total: number;
+  speed: number;
+  onCancel: () => void;
+  children?: React.ReactNode;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [dragOver, setDragOver] = useState(false);
+
+  function pick(f: File | null) {
+    onSelect(f);
+  }
+
+  return (
+    <div className={`flex flex-col gap-2 rounded-xl border p-3 transition-colors ${accentBorder} ${dragOver ? "bg-tg-accent/5" : "bg-transparent"}`}>
+      <div className="flex items-center gap-2">
+        <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${accentBg} ${accentText}`}>
+          <Icon className="h-4 w-4" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="text-xs font-bold text-tg-text">{title}</p>
+          <p className="truncate text-[11px] text-tg-secondary" title={hint}>{hint}</p>
+        </div>
+      </div>
+
+      {/* Drop zone / file chip */}
+      {!file ? (
+        <button
+          type="button"
+          onClick={() => inputRef.current?.click()}
+          onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={(e) => {
+            e.preventDefault();
+            setDragOver(false);
+            const f = e.dataTransfer.files?.[0] ?? null;
+            if (f) pick(f);
+          }}
+          className={`flex min-h-[72px] w-full flex-col items-center justify-center gap-1 rounded-lg border border-dashed px-3 py-3 text-center transition-colors ${
+            dragOver ? "border-tg-accent bg-tg-accent/10" : "border-tg-border bg-tg-hover/30 hover:border-tg-accent/60 hover:bg-tg-hover/50"
+          }`}
+        >
+          <UploadCloud className="h-5 w-5 text-tg-secondary" />
+          <span className="text-xs text-tg-secondary">فایل را بکشید یا <span className="font-semibold text-tg-accent">انتخاب کنید</span></span>
+        </button>
+      ) : (
+        <div className={`flex items-center justify-between gap-2 rounded-lg px-2.5 py-2 ${accentBg}`}>
+          <div className="flex min-w-0 items-center gap-2">
+            <Icon className={`h-4 w-4 shrink-0 ${accentText}`} />
+            <div className="min-w-0">
+              <p className="truncate text-xs font-medium text-tg-text" title={file.name}>{file.name}</p>
+              <p className="text-[10px] text-tg-secondary">{formatBytes(file.size)}</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => { onClear(); if (inputRef.current) inputRef.current.value = ""; }}
+            disabled={isUploading}
+            aria-label="حذف فایل انتخاب‌شده"
+            className="shrink-0 rounded p-1 text-tg-secondary hover:bg-tg-hover hover:text-tg-text disabled:opacity-40"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )}
+
+      <input
+        ref={inputRef}
+        type="file"
+        accept={accept}
+        onChange={(e) => pick(e.target.files?.[0] ?? null)}
+        className="hidden"
+      />
+
+      {isUploading && (
+        <div className="space-y-1">
+          <div className="flex items-center justify-between text-[11px] text-tg-secondary">
+            <span>{formatBytes(loaded)} / {formatBytes(total)}</span>
+            <span>{speed > 0 ? `${(speed / (1024 * 1024)).toFixed(2)} MB/s` : `${progress}٪`}</span>
+            <button onClick={onCancel} className="text-rose-600 hover:underline">لغو</button>
+          </div>
+          <div className="h-1.5 w-full overflow-hidden rounded-full bg-tg-hover">
+            <div className={`h-full ${accentBg.replace("text-", "bg-").split(" ")[0]} transition-all duration-150`} style={{ width: `${progress}%` }} />
+          </div>
+        </div>
+      )}
+
+      <Button
+        size="sm"
+        onClick={onUpload}
+        disabled={!file || (isUploading || false)}
+        className="min-h-[36px] w-full text-xs"
+      >
+        {isUploading ? `در حال آپلود… ${progress}٪` : actionLabel}
+      </Button>
+
+      {children}
+    </div>
+  );
+}
+
 function PartUploadCard({
   part,
   onRefresh,
@@ -319,10 +463,6 @@ function PartUploadCard({
   const [coverPreviewUrl, setCoverPreviewUrl] = useState<string | null>(null);
   const [highlightPreviewUrl, setHighlightPreviewUrl] = useState<string | null>(null);
   const [reelPreviewUrl, setReelPreviewUrl] = useState<string | null>(null);
-  const videoInputRef = useRef<HTMLInputElement>(null);
-  const coverInputRef = useRef<HTMLInputElement>(null);
-  const highlightInputRef = useRef<HTMLInputElement>(null);
-  const reelInputRef = useRef<HTMLInputElement>(null);
 
   const hasVideo = Boolean(part.fileRef);
   const hasCover = Boolean(part.coverFileRef);
@@ -342,7 +482,7 @@ function PartUploadCard({
 
   const { data: groupMediaData } = useSWR<{
     ok: boolean;
-    data: { items: Array<{ messageId: string; fileId: string | null; fileName: string | null; mime: string | null; date: string | null; caption: string | null }> };
+    data: { items: Array<{ messageId: string; fileId: string | null; fileName: string | null; mime: string | null; date: string | null; caption: string | null; topicName?: string | null }> };
   }>(
     "/api/telegram/group-media",
     async (url: string) => {
@@ -374,7 +514,7 @@ function PartUploadCard({
       const body = await res.json().catch(() => ({}));
       if (!res.ok || !(body as { ok?: boolean }).ok) throw new Error((body as { error?: string }).error ?? `خطا در لینک (${res.status})`);
       const label = kind === "video" ? "ویدئو" : kind === "cover" ? "کاور" : kind === "highlight" ? "برش" : "ریلز";
-      onToast(`ویدیو ${item.messageId} به عنوان ${label} لینک شد.`);
+      onToast(`«${item.fileName ?? "ویدیوی گروه"}» به عنوان ${label} لینک شد.`);
       setTimeout(() => onToast(null), 3000);
       await mutateAssets();
       await onRefresh();
@@ -382,50 +522,6 @@ function PartUploadCard({
       onError(e instanceof Error ? e.message : "خطا در لینک");
     } finally {
       setLinking(null);
-    }
-  }
-
-  function handleVideoSelect(e: React.ChangeEvent<HTMLInputElement>) {
-    const f = e.target.files?.[0] ?? null;
-    setVideoFile(f);
-    if (f) {
-      const url = URL.createObjectURL(f);
-      setPreviewUrl(url);
-    } else {
-      setPreviewUrl(null);
-    }
-  }
-
-  function handleCoverSelect(e: React.ChangeEvent<HTMLInputElement>) {
-    const f = e.target.files?.[0] ?? null;
-    setCoverFile(f);
-    if (f) {
-      const url = URL.createObjectURL(f);
-      setCoverPreviewUrl(url);
-    } else {
-      setCoverPreviewUrl(null);
-    }
-  }
-
-  function handleHighlightSelect(e: React.ChangeEvent<HTMLInputElement>) {
-    const f = e.target.files?.[0] ?? null;
-    setHighlightFile(f);
-    if (f) {
-      const url = URL.createObjectURL(f);
-      setHighlightPreviewUrl(url);
-    } else {
-      setHighlightPreviewUrl(null);
-    }
-  }
-
-  function handleReelSelect(e: React.ChangeEvent<HTMLInputElement>) {
-    const f = e.target.files?.[0] ?? null;
-    setReelFile(f);
-    if (f) {
-      const url = URL.createObjectURL(f);
-      setReelPreviewUrl(url);
-    } else {
-      setReelPreviewUrl(null);
     }
   }
 
@@ -501,19 +597,15 @@ function PartUploadCard({
       if (type === "video") {
         setVideoFile(null);
         setPreviewUrl(null);
-        if (videoInputRef.current) videoInputRef.current.value = "";
       } else if (type === "cover") {
         setCoverFile(null);
         setCoverPreviewUrl(null);
-        if (coverInputRef.current) coverInputRef.current.value = "";
       } else if (type === "highlight") {
         setHighlightFile(null);
         setHighlightPreviewUrl(null);
-        if (highlightInputRef.current) highlightInputRef.current.value = "";
       } else {
         setReelFile(null);
         setReelPreviewUrl(null);
-        if (reelInputRef.current) reelInputRef.current.value = "";
       }
       await onRefresh();
       if (type === "highlight" || type === "reel") await mutateAssets();
@@ -624,72 +716,81 @@ function PartUploadCard({
         </div>
       )}
 
-      <div className="space-y-2 border-t border-tg-border pt-2">
-        <div className="flex flex-col gap-2">
-          <label className="text-xs font-medium text-tg-secondary">ویدئوی خام (حداکثر ۲ گیگابایت، با فرمت mp4، mov، avi، webm یا mkv)</label>
-          <input
-            ref={videoInputRef}
-            type="file"
-            accept="video/mp4,video/quicktime,video/x-msvideo,video/avi,video/webm,video/x-matroska,video/*"
-            onChange={handleVideoSelect}
-            className="w-full text-xs file:mr-2 file:rounded file:border-0 file:bg-tg-accent file:px-3 file:py-1 file:text-xs file:text-tg-accent-fg"
-          />
-          <Button
-            size="sm"
-            onClick={() => upload("video")}
-            disabled={!videoFile || uploading !== null}
-            className="w-full min-h-[36px] text-xs"
-          >
-            {uploading === "video" ? `در حال آپلود ویدئو... ${uploadProgress}%` : hasVideo ? "جایگزینی ویدئو" : "آپلود ویدئو"}
-          </Button>
-          {uploading === "video" && (
-            <>
-              <div className="flex items-center justify-between text-[11px] text-tg-secondary">
-                <span>{(uploadLoaded / (1024 * 1024)).toFixed(1)} / {(uploadTotal / (1024 * 1024)).toFixed(1)} مگابایت</span>
-                <span>{uploadSpeed > 0 ? `${(uploadSpeed / (1024 * 1024)).toFixed(2)} MB/s` : ""}</span>
-                <button onClick={handleCancel} className="text-rose-600 hover:underline">لغو</button>
-              </div>
-              <div className="h-1.5 w-full overflow-hidden rounded-full bg-tg-hover">
-                <div className="h-full bg-tg-accent transition-all duration-150" style={{ width: `${uploadProgress}%` }} />
-              </div>
-            </>
-          )}
-        </div>
+      <div className="space-y-3 border-t border-tg-border pt-3">
+        <UploadZone
+          icon={Film}
+          title="ویدئوی خام"
+          hint="حداکثر ۲ گیگابایت — mp4، mov، avi، webm، mkv"
+          accept="video/mp4,video/quicktime,video/x-msvideo,video/avi,video/webm,video/x-matroska,video/*"
+          file={videoFile}
+          onSelect={(f) => { setVideoFile(f); setPreviewUrl(f ? URL.createObjectURL(f) : null); }}
+          onClear={() => { setVideoFile(null); setPreviewUrl(null); }}
+          onUpload={() => upload("video")}
+          actionLabel={hasVideo ? "جایگزینی ویدئو" : "آپلود ویدئو"}
+          accentBg="bg-rose-500/10 text-rose-600"
+          accentText="text-rose-600 dark:text-rose-400"
+          accentBorder="border-rose-500/20"
+          isUploading={uploading === "video"}
+          progress={uploadProgress}
+          loaded={uploadLoaded}
+          total={uploadTotal}
+          speed={uploadSpeed}
+          onCancel={handleCancel}
+        />
+        {previewUrl && (
+          <div className="space-y-1">
+            <p className="text-xs font-medium text-tg-secondary">پیش‌نمایش ویدئوی انتخاب‌شده:</p>
+            <DedicatedPlayer src={previewUrl} title={videoFile?.name} className="aspect-video w-full" />
+          </div>
+        )}
 
-        <div className="flex flex-col gap-2">
-          <label className="text-xs font-medium text-tg-secondary">کاور (حداکثر ۱۰ مگابایت، با فرمت jpeg یا png)</label>
-          <input
-            ref={coverInputRef}
-            type="file"
-            accept="image/jpeg,image/png,image/jpg,image/webp"
-            onChange={handleCoverSelect}
-            className="w-full text-xs file:mr-2 file:rounded file:border-0 file:bg-tg-accent file:px-3 file:py-1 file:text-xs file:text-tg-accent-fg"
-          />
-          <Button
-            size="sm"
-            variant="secondary"
-            onClick={() => upload("cover")}
-            disabled={!coverFile || uploading !== null}
-            className="w-full min-h-[36px] text-xs"
-          >
-            {uploading === "cover" ? `در حال آپلود کاور... ${uploadProgress}%` : hasCover ? "جایگزینی کاور" : "آپلود کاور"}
-          </Button>
-          {uploading === "cover" && (
-            <>
-              <div className="flex items-center justify-between text-[11px] text-tg-secondary">
-                <span>{(uploadLoaded / (1024 * 1024)).toFixed(1)} / {(uploadTotal / (1024 * 1024)).toFixed(1)} مگابایت</span>
-                <span>{uploadSpeed > 0 ? `${(uploadSpeed / (1024 * 1024)).toFixed(2)} MB/s` : ""}</span>
-                <button onClick={handleCancel} className="text-rose-600 hover:underline">لغو</button>
-              </div>
-              <div className="h-1.5 w-full overflow-hidden rounded-full bg-tg-hover">
-                <div className="h-full bg-sky-500 transition-all duration-150" style={{ width: `${uploadProgress}%` }} />
-              </div>
-            </>
-          )}
-        </div>
+        <UploadZone
+          icon={ImageIcon}
+          title="کاور"
+          hint="حداکثر ۱۰ مگابایت — jpeg، png، webp"
+          accept="image/jpeg,image/png,image/jpg,image/webp"
+          file={coverFile}
+          onSelect={(f) => { setCoverFile(f); setCoverPreviewUrl(f ? URL.createObjectURL(f) : null); }}
+          onClear={() => { setCoverFile(null); setCoverPreviewUrl(null); }}
+          onUpload={() => upload("cover")}
+          actionLabel={hasCover ? "جایگزینی کاور" : "آپلود کاور"}
+          accentBg="bg-sky-500/10 text-sky-600"
+          accentText="text-sky-600 dark:text-sky-400"
+          accentBorder="border-sky-500/20"
+          isUploading={uploading === "cover"}
+          progress={uploadProgress}
+          loaded={uploadLoaded}
+          total={uploadTotal}
+          speed={uploadSpeed}
+          onCancel={handleCancel}
+        />
+        {coverPreviewUrl && !part.coverFileRef && (
+          <div className="space-y-1">
+            <p className="text-xs font-medium text-tg-secondary">پیش‌نمایش کاور:</p>
+            <img src={coverPreviewUrl} alt={`پیش‌نمایش کاور ${part.partNumber}`} className="h-28 w-full rounded object-cover" />
+          </div>
+        )}
 
-        <div className="flex flex-col gap-2 rounded-lg border border-amber-500/20 bg-amber-500/5 p-2">
-          <label className="text-xs font-medium text-tg-secondary">برش‌ها (چند برش کوتاه برای هر قسمت — هر کدام حداکثر ۲ گیگابایت)</label>
+        <UploadZone
+          icon={Scissors}
+          title="برش‌ها"
+          hint="چند برش کوتاه برای هر قسمت — هر کدام حداکثر ۲ گیگابایت"
+          accept="video/mp4,video/quicktime,video/webm,video/*"
+          file={highlightFile}
+          onSelect={(f) => { setHighlightFile(f); setHighlightPreviewUrl(f ? URL.createObjectURL(f) : null); }}
+          onClear={() => { setHighlightFile(null); setHighlightPreviewUrl(null); }}
+          onUpload={() => upload("highlight")}
+          actionLabel="افزودن برش"
+          accentBg="bg-amber-500/10 text-amber-600"
+          accentText="text-amber-600 dark:text-amber-400"
+          accentBorder="border-amber-500/20"
+          isUploading={uploading === "highlight"}
+          progress={uploadProgress}
+          loaded={uploadLoaded}
+          total={uploadTotal}
+          speed={uploadSpeed}
+          onCancel={handleCancel}
+        >
           {highlights.length > 0 && (
             <div className="space-y-1">
               {highlights.map((a) => (
@@ -701,35 +802,31 @@ function PartUploadCard({
               <p className="text-[11px] text-emerald-600">{highlights.length} برش ثبت شده</p>
             </div>
           )}
-          <input
-            ref={highlightInputRef}
-            type="file"
-            accept="video/mp4,video/quicktime,video/webm,video/*"
-            onChange={handleHighlightSelect}
-            className="w-full text-xs file:mr-2 file:rounded file:border-0 file:bg-amber-500 file:px-3 file:py-1 file:text-xs file:text-white"
-          />
-          {highlightPreviewUrl && (
-            <DedicatedPlayer src={highlightPreviewUrl} title={highlightFile?.name} className="aspect-video w-full" />
-          )}
-          <Button size="sm" variant="secondary" onClick={() => upload("highlight")} disabled={!highlightFile || uploading !== null} className="w-full min-h-[36px] text-xs">
-            {uploading === "highlight" ? `در حال آپلود برش... ${uploadProgress}%` : "افزودن برش"}
-          </Button>
-          {uploading === "highlight" && (
-            <>
-              <div className="flex items-center justify-between text-[11px] text-tg-secondary">
-                <span>{(uploadLoaded / (1024 * 1024)).toFixed(1)} / {(uploadTotal / (1024 * 1024)).toFixed(1)} مگابایت</span>
-                <span>{uploadSpeed > 0 ? `${(uploadSpeed / (1024 * 1024)).toFixed(2)} MB/s` : ""}</span>
-                <button onClick={handleCancel} className="text-rose-600 hover:underline">لغو</button>
-              </div>
-              <div className="h-1.5 w-full overflow-hidden rounded-full bg-tg-hover">
-                <div className="h-full bg-amber-500 transition-all duration-150" style={{ width: `${uploadProgress}%` }} />
-              </div>
-            </>
-          )}
-        </div>
+        </UploadZone>
+        {highlightPreviewUrl && (
+          <DedicatedPlayer src={highlightPreviewUrl} title={highlightFile?.name} className="aspect-video w-full" />
+        )}
 
-        <div className="flex flex-col gap-2 rounded-lg border border-violet-500/20 bg-violet-500/5 p-2">
-          <label className="text-xs font-medium text-tg-secondary">ریلزها (چند ریلز برای هر قسمت — هر کدام حداکثر ۲ گیگابایت)</label>
+        <UploadZone
+          icon={Smartphone}
+          title="ریلزها"
+          hint="چند ریلز برای هر قسمت — هر کدام حداکثر ۲ گیگابایت"
+          accept="video/mp4,video/quicktime,video/webm,video/*"
+          file={reelFile}
+          onSelect={(f) => { setReelFile(f); setReelPreviewUrl(f ? URL.createObjectURL(f) : null); }}
+          onClear={() => { setReelFile(null); setReelPreviewUrl(null); }}
+          onUpload={() => upload("reel")}
+          actionLabel="افزودن ریلز"
+          accentBg="bg-violet-500/10 text-violet-600"
+          accentText="text-violet-600 dark:text-violet-400"
+          accentBorder="border-violet-500/20"
+          isUploading={uploading === "reel"}
+          progress={uploadProgress}
+          loaded={uploadLoaded}
+          total={uploadTotal}
+          speed={uploadSpeed}
+          onCancel={handleCancel}
+        >
           {reels.length > 0 && (
             <div className="space-y-1">
               {reels.map((a) => (
@@ -741,32 +838,10 @@ function PartUploadCard({
               <p className="text-[11px] text-emerald-600">{reels.length} ریلز ثبت شده</p>
             </div>
           )}
-          <input
-            ref={reelInputRef}
-            type="file"
-            accept="video/mp4,video/quicktime,video/webm,video/*"
-            onChange={handleReelSelect}
-            className="w-full text-xs file:mr-2 file:rounded file:border-0 file:bg-violet-500 file:px-3 file:py-1 file:text-xs file:text-white"
-          />
-          {reelPreviewUrl && (
-            <DedicatedPlayer src={reelPreviewUrl} title={reelFile?.name} className="aspect-video w-full" />
-          )}
-          <Button size="sm" variant="secondary" onClick={() => upload("reel")} disabled={!reelFile || uploading !== null} className="w-full min-h-[36px] text-xs">
-            {uploading === "reel" ? `در حال آپلود ریلز... ${uploadProgress}%` : "افزودن ریلز"}
-          </Button>
-          {uploading === "reel" && (
-            <>
-              <div className="flex items-center justify-between text-[11px] text-tg-secondary">
-                <span>{(uploadLoaded / (1024 * 1024)).toFixed(1)} / {(uploadTotal / (1024 * 1024)).toFixed(1)} مگابایت</span>
-                <span>{uploadSpeed > 0 ? `${(uploadSpeed / (1024 * 1024)).toFixed(2)} MB/s` : ""}</span>
-                <button onClick={handleCancel} className="text-rose-600 hover:underline">لغو</button>
-              </div>
-              <div className="h-1.5 w-full overflow-hidden rounded-full bg-tg-hover">
-                <div className="h-full bg-violet-500 transition-all duration-150" style={{ width: `${uploadProgress}%` }} />
-              </div>
-            </>
-          )}
-        </div>
+        </UploadZone>
+        {reelPreviewUrl && (
+          <DedicatedPlayer src={reelPreviewUrl} title={reelFile?.name} className="aspect-video w-full" />
+        )}
       </div>
 
       <div className="rounded-lg border border-tg-border bg-tg-surface/50 p-2">
@@ -782,12 +857,21 @@ function PartUploadCard({
                 className="flex flex-col gap-2 rounded-md border border-tg-border bg-tg-surface px-2 py-2 sm:flex-row sm:items-center sm:justify-between"
               >
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-xs font-medium text-tg-text" title={m.fileName ?? `ویدیو ${m.messageId}`}>
-                    {m.fileName ?? `ویدیو ${m.messageId}`}
+                  <p className="truncate text-xs font-medium text-tg-text" title={m.fileName ?? undefined}>
+                    {m.fileName ?? "ویدیوی گروه"}
                   </p>
                   <p className="text-[11px] text-tg-secondary">
-                    پیام {m.messageId}
-                    {m.caption ? ` · ${m.caption.slice(0, 40)}` : ""}
+                    {m.topicName ? (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-tg-accent/10 px-2 py-0.5 font-medium text-tg-accent">
+                        <Hash className="h-3 w-3" />
+                        {m.topicName}
+                      </span>
+                    ) : m.date ? (
+                      new Date(m.date).toLocaleString("fa-IR", { dateStyle: "short", timeStyle: "short" })
+                    ) : m.caption ? (
+                      m.caption.slice(0, 40)
+                    ) : null}
+                    {m.topicName && m.caption ? <span className="mr-2">{m.caption.slice(0, 40)}</span> : ""}
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-1">

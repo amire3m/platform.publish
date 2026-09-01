@@ -13,6 +13,8 @@ export interface GroupMediaItem {
   mime: string | null;
   date: string | null;
   caption: string | null;
+  /** Telegram forum topic name this message was posted in (null = main chat). */
+  topicName: string | null;
 }
 
 export interface GroupMediaDependencies {
@@ -65,6 +67,7 @@ function toGroupMediaItemFromAsset(row: {
     mime: null,
     date: row.createdAt ? new Date(row.createdAt as string | Date).toISOString() : null,
     caption: null,
+    topicName: null,
   };
 }
 
@@ -72,9 +75,10 @@ function toGroupMediaItemFromEvent(row: {
   entityId: string;
   after: unknown;
   createdAt: Date | string | null;
+  topicName?: string | null;
 }): GroupMediaItem | null {
   const after = (row.after ?? {}) as Record<string, unknown>;
-  // group_video_replied stores { messageId, fileId } ; linked_from_telegram stores { messageId, fileId, fileName }
+  // group_video_replied stores { messageId, fileId, messageThreadId } ; linked_from_telegram stores { messageId, fileId, fileName }
   const messageIdRaw = (after.messageId ?? after.message_id ?? row.entityId) as unknown;
   const fileIdRaw = (after.fileId ?? after.file_id ?? after.fileRef ?? null) as unknown;
   const fileNameRaw = (after.fileName ?? after.file_name ?? null) as unknown;
@@ -87,6 +91,7 @@ function toGroupMediaItemFromEvent(row: {
     mime: (after.mime as string | undefined) ?? null,
     date: row.createdAt ? new Date(row.createdAt as string | Date).toISOString() : null,
     caption: captionRaw != null ? String(captionRaw) : null,
+    topicName: row.topicName ?? null,
   };
 }
 
@@ -163,6 +168,44 @@ export async function handleGroupMediaRequest(
             }),
           )
           .filter((x): x is GroupMediaItem => x !== null);
+
+        // Resolve forum topic names for the messages (map thread id → topic label)
+        const threadIds = [
+          ...new Set(
+            fetched
+              .map((r) => (r as Record<string, unknown>).after as Record<string, unknown> | undefined)
+              .map((after) => after?.messageThreadId ?? after?.message_thread_id)
+              .filter((t): t is number => typeof t === "number"),
+          ),
+        ];
+        if (threadIds.length > 0) {
+          try {
+            const { telegramTopics } = await import("@/db/schema");
+            const { inArray: inArr } = await import("drizzle-orm");
+            const topicRows = (await (deps.db as unknown as {
+              select: () => { from: (t: unknown) => { where: (c: unknown) => Promise<Array<Record<string, unknown>>> } };
+            })
+              .select()
+              .from(telegramTopics as unknown as never)
+              .where(
+                inArr((telegramTopics as unknown as { messageThreadId: unknown }).messageThreadId as never, threadIds as never),
+              )) as Array<{ messageThreadId: number; label: string }>;
+            const threadToLabel = new Map<number, string>();
+            for (const t of topicRows) threadToLabel.set(t.messageThreadId, t.label);
+            eventItems = eventItems.map((item) => {
+              const row = fetched.find((r) => {
+                const after = (r as Record<string, unknown>).after as Record<string, unknown> | undefined;
+                return after && String(after.messageId ?? "") === item.messageId;
+              });
+              const threadId = (row as Record<string, unknown> | undefined)?.after
+                ? (((row as Record<string, unknown>).after as Record<string, unknown>).messageThreadId as number | undefined)
+                : undefined;
+              return threadId ? { ...item, topicName: threadToLabel.get(threadId) ?? null } : item;
+            });
+          } catch {
+            // topic resolution is best-effort
+          }
+        }
       } catch {
         eventItems = [];
       }

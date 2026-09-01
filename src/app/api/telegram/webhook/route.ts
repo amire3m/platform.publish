@@ -17,6 +17,11 @@ export async function POST(req: Request) {
   const replyTarget = msg?.reply_to_message;
   const hasVideoInReply = !!(replyTarget?.video || (replyTarget?.document && String(replyTarget?.document?.mime_type || "").startsWith("video/")));
   const isLinkCommand = (t?: string) => !!t && /(لینک|link|\/link)/i.test(t);
+  const isLiveCommand = (t?: string) => !!t && /^(\/live|!live|پنل لایو|لایو)$/i.test(t.trim());
+  // /live → the live conductor panel lives in its own topic (2540); don't touch group video flow
+  if (msg && isLiveCommand(msg.text)) {
+    return Response.json({ ok: true });
+  }
   // old file via reply: user replies "لینک" to an old video
   if (msg && hasVideoInReply && isLinkCommand(msg.text)) {
     const groupId = process.env.TELEGRAM_GROUP_ID;
@@ -134,7 +139,7 @@ export async function POST(req: Request) {
           entityId: messageIdStr,
           action: "group_video_replied",
           before: null,
-          after: { messageId: msg.message_id, chatId: msg.chat.id, fileId: msg.video?.file_id || msg.document?.file_id } as unknown as Record<string, unknown>,
+          after: { messageId: msg.message_id, chatId: msg.chat.id, fileId: msg.video?.file_id || msg.document?.file_id, messageThreadId: msg.message_thread_id ?? null } as unknown as Record<string, unknown>,
           actorUserId: null as unknown as string,
           source: "telegram_webhook",
         });

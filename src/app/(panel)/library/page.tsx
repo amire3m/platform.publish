@@ -63,19 +63,19 @@ function FilePreview({ item }: { item: FileItem }) {
   const [failed, setFailed] = useState(false);
   if (item.type === "cover") {
     return (
-      <div className="overflow-hidden rounded-lg border border-tg-border bg-black">
+      <div className="w-40 overflow-hidden rounded-lg border border-tg-border bg-black">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={item.playbackUrl} alt={item.filename} className="max-h-56 w-full object-contain" onError={() => setFailed(true)} />
+        <img src={item.playbackUrl} alt={item.filename} className="max-h-32 w-full object-contain" onError={() => setFailed(true)} />
       </div>
     );
   }
   return (
-    <div className="overflow-hidden rounded-lg border border-tg-border bg-black">
+    <div className="w-56 overflow-hidden rounded-lg border border-tg-border bg-black">
       {failed ? (
-        <div className="flex h-44 flex-col items-center justify-center gap-2 p-4 text-white">
-          <p className="text-xs">پخش مستقیم برای این فایل ممکن نشد.</p>
+        <div className="flex h-28 flex-col items-center justify-center gap-1 p-3 text-white">
+          <p className="text-[11px]">پخش مستقیم برای این فایل ممکن نشد.</p>
           {item.telegramLink && (
-            <a href={item.telegramLink} target="_blank" rel="noopener noreferrer" className="rounded bg-tg-accent px-3 py-1 text-xs">مشاهده در تلگرام</a>
+            <a href={item.telegramLink} target="_blank" rel="noopener noreferrer" className="rounded bg-tg-accent px-2 py-0.5 text-[11px]">مشاهده در تلگرام</a>
           )}
         </div>
       ) : (
@@ -120,7 +120,7 @@ function PartSection({ part }: { part: PartNode }) {
         <span className="mr-auto rounded-full bg-tg-hover px-2 py-0.5 text-[10px] text-tg-secondary">{count} فایل</span>
       </button>
       {open && (
-        <div className="space-y-1.5 border-t border-tg-border p-2">
+        <div className="grid gap-1.5 border-t border-tg-border p-2 sm:grid-cols-2">
           {part.fullVideo && <FileRow item={part.fullVideo} />}
           {part.highlights.map((h) => <FileRow key={h.id} item={h} />)}
           {part.reels.map((r) => <FileRow key={r.id} item={r} />)}

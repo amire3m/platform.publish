@@ -285,6 +285,28 @@ export class TelegramClient {
     });
   }
 
+  /**
+   * Resolve a playable file for a group message whose video file_id was never
+   * captured (e.g. albums/older messages). Forwards the message to the group,
+   * grabs the forwarded video's file_id, deletes the temp forward, and returns
+   * both. The file_id stays valid afterwards (files live on the bot-API server).
+   */
+  async resolveVideoByForward(chatId: string, messageId: number): Promise<{ fileId: string; fileSize?: number; mime?: string } | null> {
+    const resp = await callApi<{ message_id: number; video?: { file_id: string; file_size?: number; mime_type?: string }; document?: { file_id: string; file_size?: number; mime_type?: string } }>(
+      this.cfg.botToken,
+      "forwardMessage",
+      { chat_id: this.cfg.groupId, from_chat_id: chatId, message_id: messageId },
+    );
+    try {
+      await callApi(this.cfg.botToken, "deleteMessage", { chat_id: this.cfg.groupId, message_id: resp.message_id });
+    } catch {
+      // temp message cleanup is best-effort
+    }
+    const media = resp.video ?? resp.document;
+    if (!media?.file_id) return null;
+    return { fileId: media.file_id, fileSize: media.file_size, mime: media.mime_type };
+  }
+
   private normalizeFilePath(filePath: string): string {
     if (!filePath) return filePath;
     if (filePath.startsWith("/")) {

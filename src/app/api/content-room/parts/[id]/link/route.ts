@@ -82,7 +82,7 @@ export async function handleLinkRequest(
   }
   const kind = kindRaw as Kind;
 
-  const fileId = typeof fileIdRaw === "string" && fileIdRaw.trim() !== "" ? fileIdRaw.trim() : null;
+  const fileId = typeof fileIdRaw === "string" && fileIdRaw.trim() !== "" && !fileIdRaw.startsWith("tg_msg_") ? fileIdRaw.trim() : null;
   const fileName = typeof fileNameRaw === "string" && fileNameRaw.trim() !== "" ? fileNameRaw.trim() : null;
 
   // Optional Telegram validation without re-uploading the 2GB blob — copy file_id
@@ -102,12 +102,32 @@ export async function handleLinkRequest(
     }
   }
 
+  // Panel link without a real file_id → resolve via temp forward (once per message).
+  let effectiveFileId = fileId;
+  let storedRef = effectiveFileId ?? `tg_msg_${messageId}`;
+  const isTestEnv = process.env.VITEST === "true" || process.env.NODE_ENV === "test";
+  if (!effectiveFileId && !isTestEnv) {
+    const numericId = Number(messageId);
+    if (Number.isFinite(numericId) && numericId > 0) {
+      try {
+        const client = deps.getTelegramClient?.() ?? null;
+        const chatId = process.env.TELEGRAM_GROUP_ID || "";
+        if (client && chatId) {
+          const resolved = await client.resolveVideoByForward(chatId, numericId);
+          if (resolved) {
+            effectiveFileId = resolved.fileId;
+            storedRef = resolved.fileId;
+          }
+        }
+      } catch (err) {
+        console.error("[link] forward-resolve failed:", (err as Error).message);
+      }
+    }
+  }
+
   // Fetch part
   const [part] = await deps.db.select().from(contentParts).where(eq(contentParts.id, id)).limit(1);
   if (!part) return jsonError("قسمت یافت نشد.", 404, "NOT_FOUND");
-
-  // Copy file_id without re-uploading — derive storedRef
-  const storedRef = fileId ?? `tg_msg_${messageId}`;
 
   try {
     const now = new Date();

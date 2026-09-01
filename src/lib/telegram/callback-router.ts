@@ -276,7 +276,7 @@ async function handleLinkPickKind(contentId: string, actorUserId: string, actorT
         .where(and(eq(workflowEvents.entityType, "telegram_group_message"), eq(workflowEvents.entityId, messageId), eq(workflowEvents.action, "group_video_replied")))
         .limit(1);
       const after = ev?.after as Record<string, unknown> | null;
-      if (after && typeof after.fileId === "string" && after.fileId) {
+      if (after && typeof after.fileId === "string" && after.fileId && !after.fileId.startsWith("tg_msg_")) {
         fileId = after.fileId as string;
         storedRef = fileId;
       } else if (after && typeof after.file_id === "string" && (after as Record<string, unknown>).file_id) {
@@ -284,6 +284,41 @@ async function handleLinkPickKind(contentId: string, actorUserId: string, actorT
         storedRef = fileId;
       }
     } catch {}
+
+    // No real file_id captured for this message → resolve it now via a temp forward
+    // (self-hosted bot API keeps the file, so the file_id stays playable afterwards).
+    const isTestEnv = typeof process !== "undefined" && (process.env.VITEST === "true" || process.env.NODE_ENV === "test");
+    if (!fileId && !isTestEnv) {
+      const numericId = Number(messageId);
+      if (Number.isFinite(numericId) && numericId > 0) {
+        try {
+          const client = await getTelegramClientSafe();
+          const chatId = process.env.TELEGRAM_GROUP_ID || "";
+          if (client && chatId) {
+            const resolved = await client.resolveVideoByForward(chatId, numericId);
+            if (resolved) {
+              fileId = resolved.fileId;
+              storedRef = resolved.fileId;
+              // Persist for future renders so forward happens once per message
+              try {
+                const [existingEv] = await db
+                  .select()
+                  .from(workflowEvents)
+                  .where(and(eq(workflowEvents.entityType, "telegram_group_message"), eq(workflowEvents.entityId, messageId), eq(workflowEvents.action, "group_video_replied")))
+                  .limit(1);
+                const prevAfter = (existingEv?.after as Record<string, unknown> | null) ?? {};
+                await db
+                  .update(workflowEvents)
+                  .set({ after: { ...prevAfter, fileId: resolved.fileId, file_size: resolved.fileSize ?? null, mime: resolved.mime ?? null } } as never)
+                  .where(and(eq(workflowEvents.entityType, "telegram_group_message"), eq(workflowEvents.entityId, messageId), eq(workflowEvents.action, "group_video_replied")));
+              } catch {}
+            }
+          }
+        } catch (err) {
+          console.error("[callback-router] forward-resolve failed:", (err as Error).message);
+        }
+      }
+    }
 
     // also try to validate via TelegramClient.getFile if fileId exists; ignore errors
     if (fileId) {

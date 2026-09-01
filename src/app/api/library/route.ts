@@ -1,8 +1,9 @@
-import { desc, eq, sql } from "drizzle-orm";
+import { desc } from "drizzle-orm";
 import { db } from "@/db";
 import { contentParts, contentProducts, contentPartAssets, workflowEvents } from "@/db/schema";
 import { jsonError, jsonOk } from "@/lib/api-helpers";
 import { getCurrentUser } from "@/lib/auth";
+import { getChannelLabelFa } from "@/lib/channels";
 import jwt from "jsonwebtoken";
 
 export const dynamic = "force-dynamic";
@@ -17,76 +18,136 @@ function buildUrl(token: string) {
   return base ? `${base}/api/media/telegram/${token}` : `/api/media/telegram/${token}`;
 }
 
-export async function GET(req: Request) {
+function isRealFileId(v: string | null | undefined): boolean {
+  return !!v && !v.startsWith("tg_msg_") && !v.startsWith("sample_");
+}
+
+export interface LibraryFileItem {
+  id: string;
+  filename: string;
+  /** full_video | highlight | reel | cover */
+  type: string;
+  playbackUrl: string;
+  createdAt: string;
+  telegramLink?: string;
+  partId?: string;
+}
+
+export interface LibraryPartNode {
+  partId: string;
+  partNumber: number;
+  fullVideo: LibraryFileItem | null;
+  highlights: LibraryFileItem[];
+  reels: LibraryFileItem[];
+  cover: LibraryFileItem | null;
+}
+
+export interface LibraryProductNode {
+  productId: string;
+  title: string;
+  status: string;
+  /** Files directly under the product when it has no parts. */
+  files: LibraryFileItem[];
+  parts: LibraryPartNode[];
+}
+
+export interface LibraryChannelNode {
+  channel: string;
+  label: string;
+  products: LibraryProductNode[];
+}
+
+export interface LibraryTreeResponse {
+  channels: LibraryChannelNode[];
+  /** Unlinked recent group videos (no channel/product home). */
+  group: Array<LibraryFileItem & { messageId: string }>;
+}
+
+export async function GET() {
   const user = await getCurrentUser();
   if (!user) return jsonError("ابتدا وارد حساب کاربری خود شوید.", 401, "UNAUTHENTICATED");
   const allowedChannels = (user as unknown as { allowedChannels?: string[] }).allowedChannels ?? [];
   const role = (user as unknown as { role?: string }).role ?? "viewer";
   const isPrivileged = ["owner", "manager", "admin"].includes(role) || allowedChannels.length === 0;
 
-  const url = new URL(req.url);
-  const q = url.searchParams.get("q")?.toLowerCase().trim() ?? "";
-  const typeFilter = url.searchParams.get("type") ?? "";
-  const channelFilter = url.searchParams.get("channel") ?? "";
-
-  // fetch products with channel filter and permission
-  const products = await db.select().from(contentProducts).orderBy(desc(contentProducts.createdAt)).limit(200);
+  const products = await db.select().from(contentProducts).orderBy(desc(contentProducts.updatedAt)).limit(300);
   const filteredProducts = products.filter((p) => {
     const ch = (p as unknown as { channel: string }).channel;
-    if (channelFilter && ch !== channelFilter) return false;
     if (!isPrivileged && allowedChannels.length > 0 && !allowedChannels.includes(ch)) return false;
-    if (q && !(p as unknown as { title: string }).title?.toLowerCase().includes(q)) return false;
     return true;
   });
-  const productIds = new Set(filteredProducts.map((p) => (p as unknown as { id: string }).id));
   const productById = new Map(filteredProducts.map((p) => [(p as unknown as { id: string }).id, p] as const));
 
-  const partRows = await db.select().from(contentParts).orderBy(desc(contentParts.createdAt)).limit(500);
-  const filteredParts = partRows.filter((part) => {
-    const pid = (part as unknown as { productId: string }).productId;
-    return productIds.has(pid);
-  });
+  const partRows = await db.select().from(contentParts).orderBy(contentParts.partNumber).limit(2000);
+  const filteredParts = partRows.filter((part) => productById.has((part as unknown as { productId: string }).productId));
 
   const partIds = filteredParts.map((p) => (p as unknown as { id: string }).id);
-  let assetRows: typeof contentPartAssets.$inferSelect[] = [];
-  if (partIds.length > 0) {
-    const { inArray } = await import("drizzle-orm");
-    assetRows = await db.select().from(contentPartAssets).where(inArray(contentPartAssets.partId, partIds)).limit(500);
-  }
+  const assetRows =
+    partIds.length > 0
+      ? await db.select().from(contentPartAssets).where((await import("drizzle-orm")).inArray(contentPartAssets.partId, partIds)).limit(2000)
+      : [];
 
-  const items: Array<Record<string, unknown>> = [];
+  const fileOf = (id: string, filename: string, type: string, ref: string, mime: string, createdAt: Date, partId?: string): LibraryFileItem => ({
+    id,
+    filename,
+    type,
+    playbackUrl: buildUrl(buildToken(ref, mime)),
+    createdAt: createdAt.toISOString(),
+    partId,
+  });
+
+  // Build per-part file buckets
+  const partsByProduct = new Map<string, LibraryPartNode[]>();
   for (const part of filteredParts) {
-    const prod = productById.get((part as unknown as { productId: string }).productId) as unknown as { channel: string; title: string } | undefined;
-    const channel = prod?.channel ?? "";
+    const p = part as unknown as { id: string; partNumber: number; productId: string; fileRef: string | null; coverFileRef: string | null; createdAt: Date };
+    const prod = productById.get(p.productId) as unknown as { title: string; channel: string } | undefined;
     const baseTitle = prod?.title ?? "";
-    const p = part as unknown as { id: string; partNumber: number; fileRef: string | null; coverFileRef: string | null; createdAt: Date };
-    const isRealFileId = (v: string | null) => !!v && !v.startsWith("tg_msg_") && !v.startsWith("sample_");
-    if (isRealFileId(p.fileRef) && (!typeFilter || typeFilter === "video")) {
-      const token = buildToken(p.fileRef!, "video/mp4");
-      items.push({ id: `${p.id}-video`, filename: `${baseTitle} - قسمت ${p.partNumber} - ویدئو`, type: "video", channel, channelLabel: channel, size: 0, createdAt: p.createdAt, playbackUrl: buildUrl(token), source: "part", partId: p.id });
+    const node: LibraryPartNode = {
+      partId: p.id,
+      partNumber: p.partNumber,
+      fullVideo: isRealFileId(p.fileRef) ? fileOf(`${p.id}-full`, `${baseTitle} - قسمت ${p.partNumber} - ویدیو کامل`, "full_video", p.fileRef!, "video/mp4", p.createdAt, p.id) : null,
+      highlights: [],
+      reels: [],
+      cover: isRealFileId(p.coverFileRef) ? fileOf(`${p.id}-cover`, `${baseTitle} - قسمت ${p.partNumber} - کاور`, "cover", p.coverFileRef!, "image/jpeg", p.createdAt, p.id) : null,
+    };
+    for (const asset of assetRows as unknown as Array<{ id: string; partId: string; kind: string; fileRef: string; fileName: string | null; createdAt: Date }>) {
+      if (asset.partId !== p.id || !isRealFileId(asset.fileRef)) continue;
+      const type = asset.kind === "highlight" ? "highlight" : "reel";
+      const item = fileOf(asset.id, asset.fileName ?? `${baseTitle} - قسمت ${p.partNumber} - ${type === "highlight" ? "برش" : "ریلز"}`, type, asset.fileRef, "video/mp4", asset.createdAt, p.id);
+      if (type === "highlight") node.highlights.push(item);
+      else node.reels.push(item);
     }
-    if (isRealFileId(p.coverFileRef) && (!typeFilter || typeFilter === "cover")) {
-      const token = buildToken(p.coverFileRef!, "image/jpeg");
-      items.push({ id: `${p.id}-cover`, filename: `${baseTitle} - قسمت ${p.partNumber} - کاور`, type: "cover", channel, size: 0, createdAt: p.createdAt, playbackUrl: buildUrl(token), source: "part", partId: p.id });
-    }
-  }
-  for (const asset of assetRows) {
-    const a = asset as unknown as { id: string; partId: string; kind: string; fileRef: string; fileName: string | null; createdAt: Date };
-    if (!a.fileRef || a.fileRef.startsWith("tg_msg_") || a.fileRef.startsWith("sample_")) continue;
-    const part = filteredParts.find((p) => (p as unknown as { id: string }).id === a.partId) as unknown as { partNumber: number } | undefined;
-    const prod = part ? productById.get((filteredParts.find((p)=> (p as unknown as {id:string}).id===a.partId) as unknown as {productId:string})?.productId) as unknown as { channel: string; title: string } | undefined : undefined;
-    const channel = prod?.channel ?? "";
-    const type = a.kind === "highlight" ? "برش" : "ریلز";
-    if (typeFilter && typeFilter !== a.kind && typeFilter !== type) continue;
-    if (q && !((a.fileName ?? "").toLowerCase().includes(q) || type.includes(q))) continue;
-    const token = buildToken(a.fileRef, "video/mp4");
-    const partNum = part?.partNumber ?? "";
-    const baseTitle = prod?.title ?? "";
-    items.push({ id: a.id, filename: a.fileName ?? `${baseTitle} - قسمت ${partNum} - ${type}`, type, kind: a.kind, channel, size: 0, createdAt: a.createdAt, playbackUrl: buildUrl(token), source: "asset", partId: a.partId, fileRef: a.fileRef });
+    const list = partsByProduct.get(p.productId) ?? [];
+    list.push(node);
+    partsByProduct.set(p.productId, list);
   }
 
-  // also include recent group videos not yet linked (so library never empty)
+  // Group by channel
+  const channelMap = new Map<string, LibraryChannelNode>();
+  for (const prod of filteredProducts) {
+    const pr = prod as unknown as { id: string; title: string; channel: string; status: string };
+    let ch = channelMap.get(pr.channel);
+    if (!ch) {
+      ch = { channel: pr.channel, label: getChannelLabelFa(pr.channel), products: [] };
+      channelMap.set(pr.channel, ch);
+    }
+    const parts = partsByProduct.get(pr.id) ?? [];
+    ch.products.push({
+      productId: pr.id,
+      title: pr.title,
+      status: pr.status,
+      // products without parts keep their files directly (currently none, kept for forward-compat)
+      files: [],
+      parts: parts.sort((a, b) => a.partNumber - b.partNumber),
+    });
+  }
+
+  const channels = [...channelMap.values()];
+
+  // Unlinked recent group videos (no channel/product home) — root level "group"
+  const group: Array<LibraryFileItem & { messageId: string }> = [];
   try {
+    const { eq } = await import("drizzle-orm");
     const recentGroup = await db
       .select()
       .from(workflowEvents)
@@ -95,33 +156,22 @@ export async function GET(req: Request) {
       .limit(20);
     const groupId = process.env.TELEGRAM_GROUP_ID || "-1002326782937";
     const chatIdForLink = groupId.replace("-100", "");
-    for (const ev of recentGroup) {
-      const after = (ev as unknown as { after: Record<string, unknown> }).after ?? {};
+    for (const ev of recentGroup as unknown as Array<{ after: Record<string, unknown>; createdAt: Date; entityId: string }>) {
+      const after = ev.after ?? {};
       const fileId = (after.fileId as string) || (after.file_id as string) || "";
-      if (!fileId || fileId.startsWith("tg_msg_") || fileId.startsWith("sample_")) continue;
-      const messageId = String((ev as unknown as { entityId: string }).entityId ?? after.messageId ?? "");
-      if (typeFilter && typeFilter !== "video") continue;
-      if (q && !messageId.includes(q)) continue;
-      // avoid duplicate if already linked as asset (same fileId)
-      if (items.some((it) => (it as Record<string, unknown>).fileRef === fileId)) continue;
-      const token = buildToken(fileId, "video/mp4");
-      const telegramLink = `https://t.me/c/${chatIdForLink}/${messageId}`;
-      items.push({
+      if (!isRealFileId(fileId)) continue;
+      const messageId = String(ev.entityId ?? after.messageId ?? "");
+      group.push({
         id: `group-${messageId}`,
         filename: `ویدیوی گروه — پیام ${messageId}`,
-        type: "video",
-        channel: "",
-        size: 0,
-        createdAt: (ev as unknown as { createdAt: Date }).createdAt,
-        playbackUrl: buildUrl(token),
-        telegramLink,
-        source: "group",
+        type: "full_video",
+        playbackUrl: buildUrl(buildToken(fileId, "video/mp4")),
+        createdAt: ev.createdAt.toISOString(),
+        telegramLink: `https://t.me/c/${chatIdForLink}/${messageId}`,
         messageId,
-        fileRef: fileId,
       });
     }
   } catch {}
 
-  items.sort((a, b) => new Date(b.createdAt as string).getTime() - new Date(a.createdAt as string).getTime());
-  return jsonOk({ items: items.slice(0, 100) });
+  return jsonOk({ channels, group } satisfies LibraryTreeResponse);
 }

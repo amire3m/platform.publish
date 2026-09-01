@@ -27,7 +27,7 @@ function escapeHtml(s: string): string {
 
 function kindLabel(kind: string): string {
   switch (kind) {
-    case "video": return "ویدئوی خام";
+    case "video": return "ویدیو کامل";
     case "cover": return "کاور";
     case "highlight": return "برش";
     case "reel": return "ریلز";
@@ -191,7 +191,7 @@ async function handleLinkPickPart(contentId: string, botMessageId?: number): Pro
   const kb = {
     inline_keyboard: [
       [
-        { text: "🎬 ویدئوی خام", callback_data: `link_pick_kind:${messageId}:${partId}:video` },
+        { text: "🎬 ویدیو کامل", callback_data: `link_pick_kind:${messageId}:${partId}:video` },
         { text: "🖼️ کاور", callback_data: `link_pick_kind:${messageId}:${partId}:cover` },
       ],
       [

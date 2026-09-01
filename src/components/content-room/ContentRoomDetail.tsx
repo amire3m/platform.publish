@@ -513,7 +513,7 @@ function PartUploadCard({
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok || !(body as { ok?: boolean }).ok) throw new Error((body as { error?: string }).error ?? `خطا در لینک (${res.status})`);
-      const label = kind === "video" ? "ویدئو" : kind === "cover" ? "کاور" : kind === "highlight" ? "برش" : "ریلز";
+      const label = kind === "video" ? "ویدیو کامل" : kind === "cover" ? "کاور" : kind === "highlight" ? "برش" : "ریلز";
       onToast(`«${item.fileName ?? "ویدیوی گروه"}» به عنوان ${label} لینک شد.`);
       setTimeout(() => onToast(null), 3000);
       await mutateAssets();
@@ -591,7 +591,7 @@ function PartUploadCard({
         throw new Error(body.error ?? "خطا در آپلود");
       }
       const successMsg =
-        type === "video" ? `ویدئو قسمت ${part.partNumber} با موفقیت آپلود شد.` : type === "cover" ? `کاور قسمت ${part.partNumber} با موفقیت آپلود شد.` : type === "highlight" ? `برش قسمت ${part.partNumber} با موفقیت آپلود شد.` : `ریلز قسمت ${part.partNumber} با موفقیت آپلود شد.`;
+        type === "video" ? `ویدیو کامل قسمت ${part.partNumber} با موفقیت آپلود شد.` : type === "cover" ? `کاور قسمت ${part.partNumber} با موفقیت آپلود شد.` : type === "highlight" ? `برش قسمت ${part.partNumber} با موفقیت آپلود شد.` : `ریلز قسمت ${part.partNumber} با موفقیت آپلود شد.`;
       onToast(successMsg);
       setTimeout(() => onToast(null), 3000);
       if (type === "video") {
@@ -663,7 +663,7 @@ function PartUploadCard({
                 : "bg-slate-500/10 text-slate-500"
             }`}
           >
-            {hasVideo ? "ویدئو ✓" : "بدون ویدئو"}
+            {hasVideo ? "ویدیو کامل ✓" : "بدون ویدیو"}
           </span>
           <span
             className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
@@ -684,7 +684,7 @@ function PartUploadCard({
       </div>
 
       {part.playbackUrl && (
-        <DedicatedPlayer src={part.playbackUrl} poster={part.coverUrl ?? undefined} title={`قسمت ${part.partNumber} — ویدئوی خام`} className="aspect-video w-full" />
+        <DedicatedPlayer src={part.playbackUrl} poster={part.coverUrl ?? undefined} title={`قسمت ${part.partNumber} — ویدیو کامل`} className="aspect-video w-full" />
       )}
       {part.coverFileRef && (
         <div className="space-y-1">
@@ -719,14 +719,14 @@ function PartUploadCard({
       <div className="space-y-3 border-t border-tg-border pt-3">
         <UploadZone
           icon={Film}
-          title="ویدئوی خام"
+          title="ویدیو کامل"
           hint="حداکثر ۲ گیگابایت — mp4، mov، avi، webm، mkv"
           accept="video/mp4,video/quicktime,video/x-msvideo,video/avi,video/webm,video/x-matroska,video/*"
           file={videoFile}
           onSelect={(f) => { setVideoFile(f); setPreviewUrl(f ? URL.createObjectURL(f) : null); }}
           onClear={() => { setVideoFile(null); setPreviewUrl(null); }}
           onUpload={() => upload("video")}
-          actionLabel={hasVideo ? "جایگزینی ویدئو" : "آپلود ویدئو"}
+          actionLabel={hasVideo ? "جایگزینی ویدیو کامل" : "آپلود ویدیو کامل"}
           accentBg="bg-rose-500/10 text-rose-600"
           accentText="text-rose-600 dark:text-rose-400"
           accentBorder="border-rose-500/20"

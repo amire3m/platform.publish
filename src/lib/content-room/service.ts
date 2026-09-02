@@ -1,6 +1,7 @@
 import { generateEntityId } from "@/lib/ids";
 import type { ContentRoomDatabasePort } from "./repository";
 import { ContentRoomRepositoryError } from "./repository";
+import { REQUIRED_FOR_SEND } from "./activities";
 import type {
   WorkflowDatabasePort,
   WorkflowDeliverableRecord,
@@ -30,6 +31,13 @@ export interface SendToPublicationCommand {
   productId: string;
   expectedVersion: number;
   actorUserId: string;
+  /**
+   * Optional selective send: publish only these parts (must all be active,
+   * not previously published, and have every required activity checked).
+   * Omitted/empty → all sendable parts (previous behavior, requires the
+   * whole product to be ready_to_send).
+   */
+  partIds?: string[];
 }
 
 export interface SendToPublicationResult {
@@ -122,9 +130,8 @@ export function createContentRoomService(options: {
       if (product.version !== command.expectedVersion) {
         throw new ContentRoomServiceError("VERSION_CONFLICT", "نسخه قدیمی است.");
       }
-      if (product.status !== "ready_to_send") {
-        throw new ContentRoomServiceError("INVALID_TRANSITION", "محصول باید در وضعیت آماده ارسال باشد.");
-      }
+      // Whole-product send requires ready_to_send; partial (selected-part) send
+      // skips this gate — checked below in the branch on command.partIds.
 
       const parts = await contentPort.listPartsForProduct(command.productId);
       // Filter to sendable parts: isActive && !previously_published
@@ -150,7 +157,31 @@ export function createContentRoomService(options: {
           "هیچ قسمت قابل ارسالی وجود ندارد. همه قسمت‌های فعال قبلاً منتشر شده‌اند.",
         );
       }
-      const effectiveParts = sendable;
+
+      const isPartialSend = Array.isArray(command.partIds) && command.partIds.length > 0;
+      let effectiveParts: typeof sendable;
+      if (isPartialSend) {
+        // Selective send: only the requested parts, regardless of overall product status —
+        // but each requested part must have its OWN checklist fully complete.
+        const requested = new Set(command.partIds!);
+        const picked = sendable.filter((p) => {
+          if (!requested.has(p.id)) return false;
+          const acts = (p as unknown as { activities?: Record<string, boolean> }).activities ?? {};
+          return REQUIRED_FOR_SEND.every((a) => !!acts[a]);
+        });
+        if (picked.length === 0) {
+          throw new ContentRoomServiceError(
+            "INVALID_TRANSITION",
+            "قسمت انتخاب‌شده آماده انتشار نیست — همه فعالیت‌های چک‌لیست آن باید کامل شود.",
+          );
+        }
+        effectiveParts = picked;
+      } else {
+        if (product.status !== "ready_to_send") {
+          throw new ContentRoomServiceError("INVALID_TRANSITION", "محصول باید در وضعیت آماده ارسال باشد.");
+        }
+        effectiveParts = sendable;
+      }
 
       const now = new Date();
       // Create workflow program

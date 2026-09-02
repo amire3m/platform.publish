@@ -1,6 +1,8 @@
 import { z } from "zod";
 
 export const PART_ACTIVITIES = [
+  "raw_done",
+  "editing_full_done",
   "editing_youtube",
   "copyright_fix",
   "highlight_done",

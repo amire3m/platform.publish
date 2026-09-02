@@ -25,6 +25,7 @@ export function ContentRoomDetail({ product, onRefresh }: Props) {
   const [actionError, setActionError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [sendLoading, setSendLoading] = useState(false);
+  const [sendPartId, setSendPartId] = useState<string | null>(null);
   const [sendResult, setSendResult] = useState<{ programId: string } | null>(null);
   const [editOpen, setEditOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<"checklist" | "files" | "group">("checklist");
@@ -97,10 +98,40 @@ export function ContentRoomDetail({ product, onRefresh }: Props) {
         setActionError("اطلاعات توسط کاربر دیگری تغییر کرده است");
         await onRefresh();
       } else {
-        setActionError(e instanceof ContentRoomApiError ? e.message : e instanceof Error ? e.message : "خطا در ارسال به انتشار");
+        setActionError(e instanceof Error ? e.message : e instanceof Error ? e.message : "خطا در ارسال به انتشار");
       }
     } finally {
       setSendLoading(false);
+    }
+  }
+
+  /** Publish a single part right now (selective send) — requires that part's checklist to be complete. */
+  async function handleSendPart(partId: string, partNumber: number) {
+    setSendPartId(partId);
+    setActionError(null);
+    try {
+      const data = await fetchContentRoomApi<{ programId: string }>(
+        `/api/content-room/products/${product.id}/send`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ expectedVersion: product.version, partIds: [partId] }),
+        },
+      );
+      setSendResult({ programId: data.programId });
+      setToast(`قسمت ${partNumber} به اتاق انتشار ارسال شد.`);
+      setTimeout(() => setToast(null), 4000);
+      await onRefresh();
+    } catch (e) {
+      const isConflict = e instanceof ContentRoomApiError && e.status === 409;
+      if (isConflict) {
+        setActionError("اطلاعات توسط کاربر دیگری تغییر کرده است");
+        await onRefresh();
+      } else {
+        setActionError(e instanceof Error ? e.message : "خطا در ارسال قسمت");
+      }
+    } finally {
+      setSendPartId(null);
     }
   }
 
@@ -251,7 +282,7 @@ export function ContentRoomDetail({ product, onRefresh }: Props) {
       {activeTab === "checklist" && (
         <Card className="space-y-3">
           <h2 className="text-sm font-bold text-tg-text">چک‌لیست فعالیت‌ها (هر قسمت مستقل)</h2>
-          <PartActivitiesGrid parts={product.parts as never} onToggle={handleToggle} />
+          <PartActivitiesGrid parts={product.parts as never} onToggle={handleToggle} onSendPart={handleSendPart} />
         </Card>
       )}
 

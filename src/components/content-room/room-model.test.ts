@@ -91,6 +91,8 @@ describe("progressFromActivities", () => {
         {
           isActive: true,
           activities: {
+            raw_done: true,
+            editing_full_done: true,
             editing_youtube: true,
             copyright_fix: true,
             highlight_done: true,
@@ -111,24 +113,24 @@ describe("progressFromActivities", () => {
       parts: [
         {
           isActive: true,
-          activities: { editing_youtube: true, copyright_fix: false, highlight_done: false, reel_done: false, cover_ready: false, previously_published: false },
+          activities: { raw_done: true, editing_full_done: true, editing_youtube: true, copyright_fix: false, highlight_done: false, reel_done: false, cover_ready: false, previously_published: false },
         },
         {
           isActive: true,
-          activities: { editing_youtube: true, copyright_fix: true, highlight_done: true, reel_done: false, cover_ready: false, previously_published: false },
+          activities: { raw_done: true, editing_full_done: true, editing_youtube: true, copyright_fix: true, highlight_done: true, reel_done: false, cover_ready: false, previously_published: false },
         },
       ],
     } as never;
-    // 4 completed out of 10 (2 parts *5)
-    expect(progressFromActivities(detail)).toBe(0.4);
-    expect(getProductProgressFromActivities(detail).percent).toBe(40);
+    // 8 completed out of 14 (2 parts *7)
+    expect(progressFromActivities(detail)).toBeCloseTo(8 / 14, 5);
+    expect(getProductProgressFromActivities(detail).percent).toBe(57);
   });
 
   it("excludes inactive and previously_published parts", () => {
     const detail = {
       parts: [
-        { isActive: false, activities: { editing_youtube: true, copyright_fix: true, highlight_done: true, reel_done: true, cover_ready: true, previously_published: false } },
-        { isActive: true, activities: { editing_youtube: false, copyright_fix: false, highlight_done: false, reel_done: false, cover_ready: false, previously_published: true } },
+        { isActive: false, activities: { raw_done: true, editing_full_done: true, editing_youtube: true, copyright_fix: true, highlight_done: true, reel_done: true, cover_ready: true, previously_published: false } },
+        { isActive: true, activities: { raw_done: false, editing_full_done: false, editing_youtube: false, copyright_fix: false, highlight_done: false, reel_done: false, cover_ready: false, previously_published: true } },
       ],
     } as never;
     expect(progressFromActivities(detail)).toBe(1);

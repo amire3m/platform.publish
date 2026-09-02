@@ -1,4 +1,6 @@
 export const PART_ACTIVITIES = [
+  "raw_done",
+  "editing_full_done",
   "editing_youtube",
   "copyright_fix",
   "highlight_done",
@@ -10,6 +12,8 @@ export const PART_ACTIVITIES = [
 export type PartActivity = (typeof PART_ACTIVITIES)[number];
 
 export const REQUIRED_FOR_SEND: PartActivity[] = [
+  "raw_done",
+  "editing_full_done",
   "editing_youtube",
   "copyright_fix",
   "highlight_done",
@@ -28,4 +32,13 @@ export function deriveProductStatusFromParts(
     return "ready_to_send";
   }
   return "imported";
+}
+
+/**
+ * Per-part publish readiness: a single part is publishable when all required
+ * activities (except the previously_published marker) are checked for THAT part.
+ */
+export function isPartReadyForSend(activities: Record<string, boolean> | null | undefined): boolean {
+  const a = activities ?? {};
+  return REQUIRED_FOR_SEND.every((k) => !!a[k]);
 }

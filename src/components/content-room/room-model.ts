@@ -16,15 +16,19 @@ export const PRODUCT_TYPE_LABELS: Record<string, string> = {
 };
 
 export const ACTIVITY_LABELS: Record<string, string> = {
+  raw_done: "خام",
+  editing_full_done: "تدوین کامل",
   editing_youtube: "تدوین یوتیوب",
   copyright_fix: "رفع کپی‌رایت",
-  highlight_done: "هایلایت",
+  highlight_done: "برش",
   reel_done: "ریلز",
   cover_ready: "کاور",
   previously_published: "قبلاً منتشر شده",
 };
 
 export const REQUIRED_FOR_SEND: readonly string[] = [
+  "raw_done",
+  "editing_full_done",
   "editing_youtube",
   "copyright_fix",
   "highlight_done",

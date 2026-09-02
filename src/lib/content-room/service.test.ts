@@ -176,4 +176,52 @@ describe("content room sendToPublication service", () => {
     expect(byKind.highlight).toBe("tg_highlight_file_1");
     expect(byKind.reel).toBe("tg_reel_file_1");
   });
+
+  it("selective send publishes only the requested part even when the product is not fully ready", async () => {
+    const contentPort = new InMemoryContentRoomPort();
+    const contentRepo = createContentRoomRepository(contentPort);
+    const workflowPort = new InMemoryWorkflowPort();
+    const service = createContentRoomService({ contentPort, workflowPort });
+
+    const product = await createReadyProduct(contentPort, contentRepo, 2);
+    // Product is still "imported" — NOT ready_to_send. Complete part 1's checklist only.
+    const part1 = contentPort.parts.filter((p) => p.productId === product.id).sort((a, b) => a.partNumber - b.partNumber)[0];
+    let version = 1;
+    for (const activity of ["raw_done", "editing_full_done", "editing_youtube", "copyright_fix", "highlight_done", "reel_done", "cover_ready"]) {
+      await contentRepo.togglePartActivity({ partId: part1.id, activity, isDone: true, expectedProductVersion: version, actorUserId: "u1" });
+      version += 1;
+    }
+    const current = await contentPort.getProduct(product.id);
+    const nextExpected = current?.version ?? version;
+
+    const result = await service.sendToPublication({
+      productId: product.id,
+      expectedVersion: nextExpected,
+      actorUserId: "u1",
+      partIds: [part1.id],
+    });
+
+    // program with exactly 4 deliverables — all for part 1
+    expect(result.program.source).toBe("content_room");
+    expect(result.deliverables).toHaveLength(4);
+    expect(result.deliverables.every((d) => d.name.includes("قسمت 1"))).toBe(true);
+    expect(result.publications).toHaveLength(4);
+    // both parts active & not previously published → nothing skipped
+    expect(result.skippedPreviouslyPublished).toBe(0);
+  });
+
+  it("selective send rejects parts that are not individually ready", async () => {
+    const contentPort = new InMemoryContentRoomPort();
+    const contentRepo = createContentRoomRepository(contentPort);
+    const workflowPort = new InMemoryWorkflowPort();
+    const service = createContentRoomService({ contentPort, workflowPort });
+
+    const product = await createReadyProduct(contentPort, contentRepo, 2);
+    const part1 = contentPort.parts.filter((p) => p.productId === product.id).sort((a, b) => a.partNumber - b.partNumber)[0];
+    // no activities checked at all
+    await expect(
+      service.sendToPublication({ productId: product.id, expectedVersion: 1, actorUserId: "u1", partIds: [part1.id] }),
+    ).rejects.toMatchObject({ code: "INVALID_TRANSITION" });
+    expect(workflowPort.programs).toHaveLength(0);
+  });
 });

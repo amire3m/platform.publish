@@ -44,6 +44,8 @@ function mapServiceError(error: unknown): Response | null {
 
 const sendSchema = z.object({
   expectedVersion: z.number().int().positive(),
+  /** Optional selective send: publish only these parts (each must be individually ready). */
+  partIds: z.array(z.string().min(1)).max(500).optional(),
 });
 
 export async function handleSendRequest(
@@ -72,6 +74,7 @@ export async function handleSendRequest(
       productId: id,
       expectedVersion: parsed.data.expectedVersion,
       actorUserId: (user as unknown as { id?: string }).id ?? "unknown",
+      partIds: parsed.data.partIds,
     });
     return jsonOk({
       programId: result.program.id,

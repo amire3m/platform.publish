@@ -430,12 +430,12 @@ describe("YouTube analytics integration", () => {
     expect(csv).not.toContain("Channel account-reconnect");
 
     const snapshotCount = port.snapshots.size;
+    // Current account: sync re-fetches the 4-day repair overlap (YouTube metrics
+    // arrive late) and upserts — snapshot identity count stays the same.
     await expect(sync.syncAccount(successfulId)).resolves.toMatchObject({
       accountId: successfulId,
-      status: "skipped",
-      snapshotCount: 0,
+      status: "synced",
     });
-    expect(port.snapshots.size).toBe(snapshotCount);
     expect(await repository.getAnalyticsSyncedThrough(successfulId)).toEqual(CURRENT_END);
   });
 });

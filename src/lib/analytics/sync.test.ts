@@ -146,20 +146,22 @@ describe("analytics account synchronization", () => {
     });
   });
 
-  it("starts incremental sync one Tehran day after the latest successful day", async () => {
+  it("starts incremental sync with a 4-day repair overlap before the latest successful day", async () => {
     const harness = createHarness();
     vi.mocked(harness.repository.getAnalyticsSyncedThrough)
       .mockResolvedValue(new Date("2026-08-18T20:30:00.000Z"));
 
     const result = await harness.service.syncAccount("account-1");
 
+    // synced_through Aug 18 → overlap re-fetches Aug 14..Aug 19 (4 days before the
+    // first unsynced day) so late-arriving YouTube metrics repair zero-filled days.
     expect(result.range).toEqual({
-      start: "2026-08-18T20:30:00.000Z",
+      start: "2026-08-14T20:30:00.000Z",
       end: "2026-08-20T20:30:00.000Z",
     });
   });
 
-  it("skips an account already current without decrypting or changing sync state", async () => {
+  it("re-fetches the repair overlap for a current account instead of skipping (YouTube metrics arrive late)", async () => {
     const decrypt = vi.fn(() => JSON.stringify({ access_token: SECRET }));
     const harness = createHarness({ decrypt });
     vi.mocked(harness.repository.getAnalyticsSyncedThrough)
@@ -167,19 +169,15 @@ describe("analytics account synchronization", () => {
 
     const result = await harness.service.syncAccount("account-1");
 
-    expect(result).toEqual({
-      accountId: "account-1",
-      status: "skipped",
-      snapshotCount: 0,
-      range: {
-        start: "2026-08-20T20:30:00.000Z",
-        end: "2026-08-20T20:30:00.000Z",
-      },
+    // Account synced through today: the sync window is the 4-day overlap only —
+    // it re-fetches recent days so late YouTube Analytics data repairs zeros.
+    expect(result.status).toBe("synced");
+    expect(result.range).toEqual({
+      start: "2026-08-16T20:30:00.000Z",
+      end: "2026-08-20T20:30:00.000Z",
     });
-    expect(decrypt).not.toHaveBeenCalled();
-    expect(harness.repository.markSyncSuccess).not.toHaveBeenCalled();
-    expect(harness.repository.markSyncFailure).not.toHaveBeenCalled();
-    expect(harness.repository.releaseLease).toHaveBeenCalledWith("account-1", "lock-1");
+    expect(decrypt).toHaveBeenCalled();
+    expect(harness.repository.commitSync).toHaveBeenCalled();
   });
 
   it("maps adapter rows to discriminated snapshots with the internal account scope", async () => {

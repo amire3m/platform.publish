@@ -14,6 +14,14 @@ import { decryptSecret } from "@/lib/crypto";
 const TIMEZONE = "Asia/Tehran";
 const INITIAL_SYNC_DAYS = 90;
 const RETRY_DELAYS_MS = [500, 1500] as const;
+/**
+ * YouTube Analytics publishes day metrics with a 24-72h lag. Each incremental
+ * sync previously fetched exactly ONE day (yesterday) and zero-filled whatever
+ * the API hadn't published yet — permanently storing zeros. Re-fetching the
+ * last few days on every sync lets the upsert in commitSync repair those days
+ * with real data as soon as YouTube publishes it.
+ */
+const REPAIR_OVERLAP_DAYS = 4;
 
 const FAILURE_MESSAGES = {
   RECONNECT_REQUIRED: "اتصال حساب منقضی شده است؛ حساب را دوباره متصل کنید.",
@@ -454,9 +462,14 @@ export function createAnalyticsSyncService(deps: AnalyticsSyncDependencies): {
 
       const end = DateTime.fromJSDate(now, { zone: TIMEZONE }).startOf("day");
       const syncedThrough = await deps.repository.getAnalyticsSyncedThrough(accountId);
-      const start = syncedThrough
+      const firstUnsynced = syncedThrough
         ? DateTime.fromJSDate(syncedThrough, { zone: TIMEZONE }).startOf("day")
         : end.minus({ days: INITIAL_SYNC_DAYS });
+      // Overlap the last few already-synced days so late-arriving YouTube
+      // metrics overwrite the zero-fill from previous runs (upsert in commitSync).
+      const start = syncedThrough
+        ? firstUnsynced.minus({ days: REPAIR_OVERLAP_DAYS })
+        : firstUnsynced;
       range = {
         start: start.toJSDate().toISOString(),
         end: end.toJSDate().toISOString(),

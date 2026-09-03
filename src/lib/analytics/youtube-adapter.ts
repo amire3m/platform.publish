@@ -289,9 +289,10 @@ function mapDailyMetric(
   return {
     date: parseAnalyticsDay(requiredString(row, "day", rowIndex), timezone, rowIndex),
     views: requiredNumber(row, "views", rowIndex),
-    likes: requiredNumber(row, "likes", rowIndex),
-    comments: requiredNumber(row, "comments", rowIndex),
-    shares: requiredNumber(row, "shares", rowIndex),
+    // Engagement metrics are absent from dimension-scoped reports (DIMENSION_METRICS):
+    likes: optionalNumber(row, "likes") ?? 0,
+    comments: optionalNumber(row, "comments") ?? 0,
+    shares: optionalNumber(row, "shares") ?? 0,
     watchTimeMinutes: requiredNumber(row, "estimatedMinutesWatched", rowIndex),
     averageViewDurationSeconds: requiredNumber(row, "averageViewDuration", rowIndex),
   };

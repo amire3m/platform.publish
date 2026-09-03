@@ -757,12 +757,14 @@ describe("lazy dimension sync", () => {
     expect(committed.length).toBe(2); // only core
   });
 
-  it("propagates dimension fetch failure as sync failure", async () => {
+  it("degrades gracefully: a failed dimension is skipped without failing the sync", async () => {
     const adapter = createDimensionAdapter();
     vi.mocked(adapter.fetchGeoDaily!).mockRejectedValue(new YouTubeAnalyticsApiError("quota_exhausted"));
     const harness = createHarness({ createAdapter: () => adapter });
     const result = await harness.service.syncAccount("account-1", { dimensions: ["geo"] } as any);
-    expect(result).toMatchObject({ status: "failed", code: "QUOTA_EXHAUSTED" });
+    // Core account metrics still sync; the failing dimension contributes no rows.
+    expect(result).toMatchObject({ status: "synced" });
+    expect(result.snapshotCount).toBeGreaterThan(0);
   });
 
   it("syncAccounts propagates dimensions to each account", async () => {

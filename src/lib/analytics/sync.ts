@@ -506,41 +506,53 @@ export function createAnalyticsSyncService(deps: AnalyticsSyncDependencies): {
         const task: Promise<AnalyticsSnapshotInput[]> = fetchWithRetry(
           () => (fetcher as (inp: typeof input) => Promise<unknown[]>).call(adapter, input),
           deps.sleep,
-        ).then((rows) => {
-          const typedRows = rows as unknown[];
-          switch (fetcherKey) {
-            case "fetchGeoDaily":
-              return (typedRows as Awaited<ReturnType<NonNullable<YouTubeAnalyticsAdapter["fetchGeoDaily"]>>>).map((row) =>
-                mapGeoSnapshot(row, accountId, now),
-              );
-            case "fetchAgeGenderDaily":
-              return (typedRows as Awaited<ReturnType<NonNullable<YouTubeAnalyticsAdapter["fetchAgeGenderDaily"]>>>).map((row) =>
-                mapAgeGenderSnapshot(row, accountId, now),
-              );
-            case "fetchDeviceDaily":
-              return (typedRows as Awaited<ReturnType<NonNullable<YouTubeAnalyticsAdapter["fetchDeviceDaily"]>>>).map((row) =>
-                mapDeviceSnapshot(row, accountId, now),
-              );
-            case "fetchTrafficDaily":
-              return (typedRows as Awaited<ReturnType<NonNullable<YouTubeAnalyticsAdapter["fetchTrafficDaily"]>>>).map((row) =>
-                mapTrafficSnapshot(row, accountId, now),
-              );
-            case "fetchSearchDaily":
-              return (typedRows as Awaited<ReturnType<NonNullable<YouTubeAnalyticsAdapter["fetchSearchDaily"]>>>).map((row) =>
-                mapSearchSnapshot(row, accountId, now),
-              );
-            case "fetchRetentionDaily":
-              return (typedRows as Awaited<ReturnType<NonNullable<YouTubeAnalyticsAdapter["fetchRetentionDaily"]>>>).map((row) =>
-                mapRetentionSnapshot(row, accountId, now),
-              );
-            case "fetchRevenueDaily":
-              return (typedRows as Awaited<ReturnType<NonNullable<YouTubeAnalyticsAdapter["fetchRevenueDaily"]>>>).map((row) =>
-                mapRevenueSnapshot(row, accountId, now),
-              );
-            default:
-              return [];
-          }
-        });
+        )
+          .then((rows) => {
+            const typedRows = rows as unknown[];
+            switch (fetcherKey) {
+              case "fetchGeoDaily":
+                return (typedRows as Awaited<ReturnType<NonNullable<YouTubeAnalyticsAdapter["fetchGeoDaily"]>>>).map((row) =>
+                  mapGeoSnapshot(row, accountId, now),
+                );
+              case "fetchAgeGenderDaily":
+                return (typedRows as Awaited<ReturnType<NonNullable<YouTubeAnalyticsAdapter["fetchAgeGenderDaily"]>>>).map((row) =>
+                  mapAgeGenderSnapshot(row, accountId, now),
+                );
+              case "fetchDeviceDaily":
+                return (typedRows as Awaited<ReturnType<NonNullable<YouTubeAnalyticsAdapter["fetchDeviceDaily"]>>>).map((row) =>
+                  mapDeviceSnapshot(row, accountId, now),
+                );
+              case "fetchTrafficDaily":
+                return (typedRows as Awaited<ReturnType<NonNullable<YouTubeAnalyticsAdapter["fetchTrafficDaily"]>>>).map((row) =>
+                  mapTrafficSnapshot(row, accountId, now),
+                );
+              case "fetchSearchDaily":
+                return (typedRows as Awaited<ReturnType<NonNullable<YouTubeAnalyticsAdapter["fetchSearchDaily"]>>>).map((row) =>
+                  mapSearchSnapshot(row, accountId, now),
+                );
+              case "fetchRetentionDaily":
+                return (typedRows as Awaited<ReturnType<NonNullable<YouTubeAnalyticsAdapter["fetchRetentionDaily"]>>>).map((row) =>
+                  mapRetentionSnapshot(row, accountId, now),
+                );
+              case "fetchRevenueDaily":
+                return (typedRows as Awaited<ReturnType<NonNullable<YouTubeAnalyticsAdapter["fetchRevenueDaily"]>>>).map((row) =>
+                  mapRevenueSnapshot(row, accountId, now),
+                );
+              default:
+                return [];
+            }
+          })
+          .catch((error: unknown) => {
+            // Dimension reports are individually optional: small/new channels get
+            // "unsupported query" 400s for audience/geo/search/retention reports.
+            // A single failed dimension must never fail the whole sync (which would
+            // roll back core metrics and the cursor) — skip it and keep the rest.
+            if (error instanceof YouTubeAnalyticsApiError && error.classification === "unsupported_query") {
+              return [] as AnalyticsSnapshotInput[];
+            }
+            console.error(`[analytics] dimension ${fetcherKey} failed for ${accountId}:`, error instanceof Error ? error.message : error);
+            return [] as AnalyticsSnapshotInput[];
+          });
         dimensionSnapshotTasks.push(task);
       }
 

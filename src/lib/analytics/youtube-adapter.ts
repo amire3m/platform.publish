@@ -725,9 +725,12 @@ export function createYouTubeAnalyticsAdapter(tokens: Credentials): YouTubeAnaly
             metrics: "audienceWatchRatio",
             filters: `video==${videoId}`,
           }));
-          const rows = ((responseRows(resp.data) ?? []) as unknown) as Readonly<Record<string, unknown>>[];
-          if (rows.length === 0) continue;
-          const ratios = rows.map((r) => optionalNumber(r, "audienceWatchRatio") ?? 0);
+          const ratios = mapAnalyticsRows(
+            responseHeaders(resp.data),
+            responseRows(resp.data),
+            (row) => optionalNumber(row, "audienceWatchRatio") ?? 0,
+          );
+          if (ratios.length === 0) continue;
           const averageRatio = ratios.reduce((a, b) => a + b, 0) / ratios.length;
           results.push({
             date: rangeEnd,

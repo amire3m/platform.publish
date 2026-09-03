@@ -33,6 +33,12 @@ const CONTENT_METRICS = [
 const REVENUE_METRICS = ["estimatedRevenue", "cpm", "adImpressions"].join(",");
 const METRICS = CORE_METRICS;
 const CONTENT_PAGE_SIZE = 200;
+/**
+ * Dimension-scoped reports (day,country / day,trafficSource / day,video …) only
+ * accept engagement-lite metric sets for most channels — engagement metrics
+ * (likes/comments/shares) yield "query is not supported" there.
+ */
+const DIMENSION_METRICS = ["views", "estimatedMinutesWatched", "averageViewDuration"].join(",");
 
 export type RowMapper<T> = (
   row: Readonly<Record<string, unknown>>,
@@ -597,7 +603,7 @@ export function createYouTubeAnalyticsAdapter(tokens: Credentials): YouTubeAnaly
       const response = await callGoogleApi(() => analytics.reports.query({
         ids: "channel==MINE",
         dimensions: "day,country",
-        metrics: METRICS,
+        metrics: DIMENSION_METRICS,
         ...dateRange,
       }));
       return mapAnalyticsRows(responseHeaders(response.data), responseRows(response.data), (row, rowIndex) => ({
@@ -612,7 +618,7 @@ export function createYouTubeAnalyticsAdapter(tokens: Credentials): YouTubeAnaly
       const response = await callGoogleApi(() => analytics.reports.query({
         ids: "channel==MINE",
         dimensions: "day,ageGroup,gender",
-        metrics: METRICS,
+        metrics: DIMENSION_METRICS,
         ...dateRange,
       }));
       return mapAnalyticsRows(responseHeaders(response.data), responseRows(response.data), (row, rowIndex) => ({
@@ -628,7 +634,7 @@ export function createYouTubeAnalyticsAdapter(tokens: Credentials): YouTubeAnaly
       const response = await callGoogleApi(() => analytics.reports.query({
         ids: "channel==MINE",
         dimensions: "day,deviceType",
-        metrics: METRICS,
+        metrics: DIMENSION_METRICS,
         ...dateRange,
       }));
       return mapAnalyticsRows(responseHeaders(response.data), responseRows(response.data), (row, rowIndex) => ({
@@ -643,7 +649,7 @@ export function createYouTubeAnalyticsAdapter(tokens: Credentials): YouTubeAnaly
       const response = await callGoogleApi(() => analytics.reports.query({
         ids: "channel==MINE",
         dimensions: "day,insightTrafficSourceType",
-        metrics: METRICS,
+        metrics: DIMENSION_METRICS,
         ...dateRange,
       }));
       return mapAnalyticsRows(responseHeaders(response.data), responseRows(response.data), (row, rowIndex) => ({
@@ -658,7 +664,7 @@ export function createYouTubeAnalyticsAdapter(tokens: Credentials): YouTubeAnaly
       const response = await callGoogleApi(() => analytics.reports.query({
         ids: "channel==MINE",
         dimensions: "day,insightTrafficSourceDetail",
-        metrics: METRICS,
+        metrics: DIMENSION_METRICS,
         filters: "insightTrafficSourceType==YT_SEARCH",
         ...dateRange,
       }));
@@ -676,7 +682,7 @@ export function createYouTubeAnalyticsAdapter(tokens: Credentials): YouTubeAnaly
       const response = await callGoogleApi(() => analytics.reports.query({
         ids: "channel==MINE",
         dimensions: "day,video",
-        metrics: CONTENT_METRICS,
+        metrics: DIMENSION_METRICS,
         ...dateRange,
       }));
       return mapAnalyticsRows(responseHeaders(response.data), responseRows(response.data), (row, rowIndex) => ({

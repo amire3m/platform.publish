@@ -14,7 +14,7 @@ export interface AnalyticsSchedulerDependencies {
   listSyncableAccountIds(): Promise<string[]>;
   syncAccounts(
     ids: readonly string[],
-    options?: { now?: Date },
+    options?: { now?: Date; dimensions?: string[] },
   ): Promise<AccountSyncResult[]>;
 }
 
@@ -29,7 +29,12 @@ export function createAnalyticsScheduler(deps: AnalyticsSchedulerDependencies): 
       }
 
       const accountIds = await deps.listSyncableAccountIds();
-      const results = await deps.syncAccounts(accountIds, { now });
+      // Dimension syncs (geo/audience/device/traffic/search/retention/revenue) power the
+      // Traffic, Audience, Search, and Retention tabs — run them with every daily sync.
+      const results = await deps.syncAccounts(accountIds, {
+        now,
+        dimensions: ["geo", "audience", "device", "traffic", "search", "retention", "revenue"],
+      });
       return { ran: true, results };
     },
   };

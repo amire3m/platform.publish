@@ -45,7 +45,7 @@ describe("createAnalyticsScheduler", () => {
     expect(deps.listSyncableAccountIds).toHaveBeenCalledTimes(1);
     expect(deps.syncAccounts).toHaveBeenCalledWith(
       ["account-1", "account-2"],
-      { now },
+      { now: expect.any(Date), dimensions: ["geo", "audience", "device", "traffic", "search", "retention", "revenue"] },
     );
   });
 
@@ -93,7 +93,7 @@ describe("createAnalyticsScheduler", () => {
       results: [],
     });
 
-    expect(deps.syncAccounts).toHaveBeenCalledWith([], { now: expect.any(Date) });
+    expect(deps.syncAccounts).toHaveBeenCalledWith([], { now: expect.any(Date), dimensions: ["geo", "audience", "device", "traffic", "search", "retention", "revenue"] });
   });
 
   it("uses historical Tehran offsets across the 2022 DST transition", async () => {

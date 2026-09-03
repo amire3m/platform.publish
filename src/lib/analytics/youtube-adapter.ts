@@ -616,14 +616,34 @@ export function createYouTubeAnalyticsAdapter(tokens: Credentials): YouTubeAnaly
     async fetchAgeGenderDaily(input) {
       const channel = await fetchChannel();
       const dateRange = toGoogleDateRange(input);
+      // YouTube rejects `day,ageGroup,gender` combinations outright ("query is not
+      // supported"), but the aggregate (no day) form works. Fetch one row per
+      // (ageGroup,gender) bucket covering the whole range, stamped with the range end.
       const response = await callGoogleApi(() => analytics.reports.query({
         ids: "channel==MINE",
-        dimensions: "day,ageGroup,gender",
-        metrics: DIMENSION_METRICS,
+        dimensions: "ageGroup,gender",
+        metrics: "views",
         ...dateRange,
       }));
+      const endDay = DateTime.fromJSDate(input.endDate, { zone: input.timezone }).startOf("day").toJSDate();
       return mapAnalyticsRows(responseHeaders(response.data), responseRows(response.data), (row, rowIndex) => ({
-        ...mapDimensionBase(row, rowIndex, input.timezone, channel, input.accountId),
+        accountId: input.accountId,
+        channelId: channel.channelId,
+        channelTitle: channel.channelTitle,
+        date: endDay,
+        views: requiredNumber(row, "views", rowIndex),
+        likes: 0,
+        comments: 0,
+        shares: 0,
+        watchTimeMinutes: 0,
+        averageViewDurationSeconds: 0,
+        impressions: null,
+        averageViewPercentage: null,
+        estimatedRevenue: null,
+        cpm: null,
+        adImpressions: null,
+        subscribersGained: 0,
+        subscribersLost: 0,
         ageGroup: requiredString(row, "ageGroup", rowIndex),
         gender: requiredString(row, "gender", rowIndex),
       }));
@@ -679,17 +699,61 @@ export function createYouTubeAnalyticsAdapter(tokens: Credentials): YouTubeAnaly
 
     async fetchRetentionDaily(input) {
       const channel = await fetchChannel();
-      const dateRange = toGoogleDateRange(input);
-      const response = await callGoogleApi(() => analytics.reports.query({
-        ids: "channel==MINE",
-        dimensions: "day,video",
-        metrics: DIMENSION_METRICS,
-        ...dateRange,
-      }));
-      return mapAnalyticsRows(responseHeaders(response.data), responseRows(response.data), (row, rowIndex) => ({
-        ...mapDimensionBase(row, rowIndex, input.timezone, channel, input.accountId),
-        videoId: requiredString(row, "video", rowIndex),
-      }));
+      // True audience-retention curve: `day,video` reports are unsupported for most
+      // channels, but `elapsedVideoTimeRatio + audienceWatchRatio` filtered per video
+      // works. Fetch the top N uploads and return each video's average watch ratio.
+      const yt = google.youtube({ version: "v3", auth });
+      const uploads = await callGoogleApi(async (): Promise<string[]> => {
+        const ch = (await yt.channels.list({ part: ["contentDetails"], mine: true })).data;
+        const playlist = ch.items?.[0]?.contentDetails?.relatedPlaylists?.uploads;
+        if (!playlist) return [];
+        const items = (await yt.playlistItems.list({ part: ["contentDetails"], playlistId: playlist, maxResults: 20 })).data;
+        return (items.items ?? [])
+          .map((it) => it.contentDetails?.videoId ?? "")
+          .filter((v) => typeof v === "string" && v.length > 0);
+      });
+      const results: RetentionDailyMetric[] = [];
+      const rangeEnd = DateTime.fromJSDate(input.endDate, { zone: input.timezone }).startOf("day").toJSDate();
+      const endDateStr = toGoogleDateRange(input).endDate as string;
+      for (const videoId of uploads) {
+        try {
+          const resp = await callGoogleApi(() => analytics.reports.query({
+            ids: "channel==MINE",
+            startDate: "2006-01-01",
+            endDate: endDateStr,
+            dimensions: "elapsedVideoTimeRatio",
+            metrics: "audienceWatchRatio",
+            filters: `video==${videoId}`,
+          }));
+          const rows = ((responseRows(resp.data) ?? []) as unknown) as Readonly<Record<string, unknown>>[];
+          if (rows.length === 0) continue;
+          const ratios = rows.map((r) => optionalNumber(r, "audienceWatchRatio") ?? 0);
+          const averageRatio = ratios.reduce((a, b) => a + b, 0) / ratios.length;
+          results.push({
+            date: rangeEnd,
+            views: 0,
+            likes: 0,
+            comments: 0,
+            shares: 0,
+            watchTimeMinutes: 0,
+            averageViewDurationSeconds: 0,
+            accountId: input.accountId,
+            channelId: channel.channelId,
+            channelTitle: channel.channelTitle,
+            videoId,
+            averageViewPercentage: Math.round(averageRatio * 100),
+            impressions: null,
+            estimatedRevenue: null,
+            cpm: null,
+            adImpressions: null,
+            subscribersGained: 0,
+            subscribersLost: 0,
+          });
+        } catch {
+          // unsupported for this video — skip it
+        }
+      }
+      return results;
     },
 
     async fetchRevenueDaily(input) {

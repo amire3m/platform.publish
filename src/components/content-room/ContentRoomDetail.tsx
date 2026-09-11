@@ -11,14 +11,29 @@ import { contentStatusPresentation } from "@/lib/content-room/presentation";
 import type { ContentStatus } from "@/lib/content-room/presentation";
 import type { ContentRoomProductDetail } from "./types";
 import { channelLabelFa, productTypeLabelFa, getProductProgressFromActivities, getNextActionFromActivities } from "./room-model";
-import { DELIVERABLE_KIND_TO_PLATFORM, getChannelAccounts, getChannelConfig } from "@/lib/channels";
-import { platformLabelFa } from "@/lib/presentation-fa";
+import { getChannelAccounts } from "@/lib/channels";
 import { PartActivitiesGrid } from "./PartActivitiesGrid";
 import { EditProductDialog } from "./EditProductDialog";
 
 interface Props {
   product: ContentRoomProductDetail;
   onRefresh: () => Promise<void> | void;
+}
+
+function DestinationStatus({ label, connected, settingsHref, optional }: { label: string; connected: boolean; settingsHref: string; optional?: boolean }) {
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <span aria-hidden="true" className={`size-2 shrink-0 rounded-full ${connected ? "bg-emerald-500" : optional ? "bg-slate-400" : "bg-amber-500"}`} />
+      <span className="text-tg-text">{label}</span>
+      {connected ? (
+        <span className="text-tg-secondary">متصل</span>
+      ) : (
+        <Link href={settingsHref} className="text-tg-accent hover:underline">
+          اتصال{optional ? " (اختیاری)" : ""}
+        </Link>
+      )}
+    </span>
+  );
 }
 
 export function ContentRoomDetail({ product, onRefresh }: Props) {
@@ -36,7 +51,6 @@ export function ContentRoomDetail({ product, onRefresh }: Props) {
   const nextAction = getNextActionFromActivities(product as never);
 
   const isReadyToSend = product.status === "ready_to_send";
-  const channelConfig = getChannelConfig(product.channel);
   const channelAccounts = getChannelAccounts(product.channel);
   const { data: channelsData } = useSWR<{ channels: Array<{ id: string; labelFa: string; youtubeAccountId: string | null; instagramAccountId: string | null; telegramTopicId: string | null; linked?: { youtube: boolean; instagram: boolean; telegram: boolean } }> }>(
     "/api/channels",
@@ -177,47 +191,12 @@ export function ContentRoomDetail({ product, onRefresh }: Props) {
             </div>
             {product.notes && <p className="mt-3 text-sm leading-relaxed text-tg-text/80">{product.notes}</p>}
             <div className="mt-4 rounded-lg border border-tg-border bg-tg-surface p-3">
-              <p className="text-xs font-semibold text-tg-secondary">حساب‌های مقصد برای کانال «{channelConfig?.labelFa ?? channelLabelFa(product.channel)}»</p>
-              <div className="mt-2 grid gap-2 sm:grid-cols-3">
-                <div className="rounded-md bg-tg-hover/30 px-2.5 py-2">
-                  <p className="text-[11px] font-semibold text-tg-secondary">یوتیوب</p>
-                  <p className="mt-1 truncate font-mono text-xs text-tg-text" title={ytId ?? ""}>
-                    {ytId ? ytId.slice(0, 24) : "تنظیم نشده"}
-                  </p>
-                  <p className="mt-1 text-[11px] text-tg-secondary">
-                    یوتیوب کامل + هایلایت ← {platformLabelFa(DELIVERABLE_KIND_TO_PLATFORM["youtube_full"])}، {platformLabelFa(DELIVERABLE_KIND_TO_PLATFORM["highlight"])}
-                  </p>
-                  <span className={`mt-1 inline-block rounded-full px-2 py-0.5 text-[11px] ${ytId ? "bg-emerald-500/15 text-emerald-700" : "bg-amber-500/15 text-amber-700"}`}>
-                    {ytId ? "متصل" : "بدون حساب متصل"}
-                  </span>
-                </div>
-                <div className="rounded-md bg-tg-hover/30 px-2.5 py-2">
-                  <p className="text-[11px] font-semibold text-tg-secondary">اینستاگرام</p>
-                  <p className="mt-1 truncate font-mono text-xs text-tg-text" title={igId ?? ""}>
-                    {igId ? igId.slice(0, 24) : "تنظیم نشده"}
-                  </p>
-                  <p className="mt-1 text-[11px] text-tg-secondary">ریلز + کاور ← {platformLabelFa(DELIVERABLE_KIND_TO_PLATFORM["reel"])}، {platformLabelFa(DELIVERABLE_KIND_TO_PLATFORM["cover"])}</p>
-                  <span className={`mt-1 inline-block rounded-full px-2 py-0.5 text-[11px] ${igId ? "bg-emerald-500/15 text-emerald-700" : "bg-amber-500/15 text-amber-700"}`}>
-                    {igId ? "متصل" : "بدون حساب متصل"}
-                  </span>
-                </div>
-                <div className="rounded-md bg-tg-hover/30 px-2.5 py-2">
-                  <p className="text-[11px] font-semibold text-tg-secondary">تلگرام</p>
-                  <p className="mt-1 truncate font-mono text-xs text-tg-text" title={tgId ?? ""}>
-                    {tgId ? tgId : "تنظیم نشده"}
-                  </p>
-                  <span
-                    className={`mt-1 inline-block rounded-full px-2 py-0.5 text-[11px] ${
-                      tgId
-                        ? "bg-emerald-500/15 text-emerald-700"
-                        : "bg-slate-500/10 text-slate-500"
-                    }`}
-                  >
-                    {tgId ? "متصل" : "اختیاری"}
-                  </span>
-                </div>
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs">
+                <span className="font-semibold text-tg-secondary">حساب‌های مقصد</span>
+                <DestinationStatus label="یوتیوب" connected={!!ytId} settingsHref="/settings/youtube" />
+                <DestinationStatus label="اینستاگرام" connected={!!igId} settingsHref="/settings/instagram" />
+                <DestinationStatus label="تلگرام" connected={!!tgId} settingsHref="/settings/telegram" optional />
               </div>
-              <p className="mt-2 text-[11px] text-tg-secondary">با ارسال برای انتشار، برای هر خروجی یک مقصد انتشار در پلتفرم انتخاب‌شده ایجاد می‌شود. اگر حسابی متصل نباشد، مقصد بدون حساب باقی می‌ماند.</p>
             </div>
           </div>
         </div>

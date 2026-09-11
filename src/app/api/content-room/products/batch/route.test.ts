@@ -80,13 +80,13 @@ describe("POST /api/content-room/products/batch", () => {
     expect(body.error).toBeDefined();
   });
 
-  it("creates batch successfully (201)", async () => {
+  it("creates batch successfully (201) inside the standard data envelope", async () => {
     const deps = makeDeps();
     const res = await handleBatchRequest(req({ products: [{ title: "A", productType: "teaser", channel: "tamashin", partsCount: 2 }, { title: "B", productType: "music_video", channel: "shock", partsCount: 1 }] }), deps);
     expect(res.status).toBe(201);
     const body = await res.json();
     expect(body.ok).toBe(true);
-    expect(body.products).toHaveLength(2);
+    expect(body.data.products).toHaveLength(2);
     expect(deps.repository.createProductsBatch).toHaveBeenCalledWith(expect.arrayContaining([expect.objectContaining({ title: "A", actorUserId: "u1" })]));
   });
 

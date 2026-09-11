@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { jsonError, jsonInternalError, requirePermission } from "@/lib/api-helpers";
+import { jsonError, jsonInternalError, jsonOk, requirePermission } from "@/lib/api-helpers";
 import { batchCreateSchema } from "@/lib/content-room/validation";
 import { contentRoomRepository, type ContentRoomRepository } from "@/lib/content-room/repository";
 
@@ -56,7 +56,7 @@ export async function handleBatchRequest(
     const created = await deps.repository.createProductsBatch(
       parsed.data.products.map((p) => ({ ...p, actorUserId } as never)),
     );
-    return NextResponse.json({ ok: true, products: created }, { status: 201 });
+    return jsonOk({ products: created }, 201);
   } catch (error) {
     const mapped = mapRepositoryError(error);
     if (mapped) return mapped;

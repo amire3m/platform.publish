@@ -263,4 +263,15 @@ describe("content room repository", () => {
     await expect(repo.deleteProduct({ id: created.id, expectedVersion: 999, actorUserId: "u1" })).rejects.toMatchObject({ code: "VERSION_CONFLICT" });
     expect(await repo.getProduct(created.id)).not.toBeNull();
   });
+
+  it("sorts newest first by default and oldest on demand", async () => {
+    const port = new InMemoryContentRoomPort();
+    const repo = createContentRoomRepository(port);
+    const a = await repo.createProduct({ title: "A", productType: "serial", channel: "tamashin", partsCount: 1, actorUserId: "u1" });
+    const b = await repo.createProduct({ title: "B", productType: "serial", channel: "tamashin", partsCount: 1, actorUserId: "u1" });
+    port.products.find((p) => p.id === a.id)!.createdAt = new Date("2026-01-01T00:00:00.000Z");
+    port.products.find((p) => p.id === b.id)!.createdAt = new Date("2026-02-01T00:00:00.000Z");
+    expect((await repo.listProducts({})).map((p) => p.id)).toEqual([b.id, a.id]);
+    expect((await repo.listProducts({ sort: "oldest" })).map((p) => p.id)).toEqual([a.id, b.id]);
+  });
 });

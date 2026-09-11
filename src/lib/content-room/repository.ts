@@ -512,7 +512,7 @@ export function createDrizzleContentRoomPort(): ContentRoomDatabasePort {
     async listProducts(filters) {
       const db = await getDb();
       const { contentProducts } = await import("@/db/schema");
-      const { eq, and, sql, isNull, gte, lte } = await import("drizzle-orm");
+      const { eq, and, sql, isNull, gte, lte, desc, asc } = await import("drizzle-orm");
       const conditions: unknown[] = [];
       if (!filters?.includeArchived) {
         conditions.push(isNull(contentProducts.archivedAt));
@@ -532,12 +532,14 @@ export function createDrizzleContentRoomPort(): ContentRoomDatabasePort {
         const d = new Date(filters.dateTo as string);
         if (!Number.isNaN(d.getTime())) conditions.push(lte(contentProducts.createdAt, d));
       }
+      const order = filters?.sort === "oldest" ? asc(contentProducts.createdAt) : desc(contentProducts.createdAt);
       const rows = conditions.length
         ? await db
             .select()
             .from(contentProducts)
             .where(and(...(conditions as never[])))
-        : await db.select().from(contentProducts);
+            .orderBy(order)
+        : await db.select().from(contentProducts).orderBy(order);
       return rows.map(mapProductRow);
     },
 

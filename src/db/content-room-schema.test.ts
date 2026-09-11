@@ -8,6 +8,7 @@ import { dirname, resolve } from "node:path";
 import { contentPartActivities, contentParts, contentProducts } from "./schema";
 import { PART_ACTIVITIES } from "@/lib/content-room/activities";
 import { PART_ACTIVITIES as VALIDATION_PART_ACTIVITIES } from "@/lib/content-room/validation";
+import { CONTENT_STATUS_ORDER } from "@/lib/content-room/presentation";
 
 describe("content room schema batch activities", () => {
   it("exposes isActive and activities table", () => {
@@ -117,6 +118,24 @@ describe("content_part_activities check constraint drift guard", () => {
       }
     }
     const missing = (PART_ACTIVITIES as readonly string[]).filter((a) => !allowed.has(a));
+    expect(missing).toEqual([]);
+  });
+
+  it("migration SQL permits every product status the code can derive (else toggle fails on real DB)", () => {
+    const dir = resolve(dirname(fileURLToPath(import.meta.url)), "../../drizzle");
+    const files = readdirSync(dir).filter((f) => f.endsWith(".sql")).sort();
+    const allowed = new Set<string>();
+    for (const f of files) {
+      const sql = readFileSync(resolve(dir, f), "utf8");
+      const re = /CHECK\s*\([^)]*status[^)]*IN\s*\(([^)]+)\)/gi;
+      let m: RegExpExecArray | null;
+      while ((m = re.exec(sql)) !== null) {
+        for (const v of m[1].split(",")) {
+          allowed.add(v.trim().replace(/^'|'$/g, ""));
+        }
+      }
+    }
+    const missing = Object.keys(CONTENT_STATUS_ORDER).filter((s) => !allowed.has(s));
     expect(missing).toEqual([]);
   });
 });

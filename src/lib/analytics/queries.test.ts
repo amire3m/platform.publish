@@ -83,6 +83,40 @@ function contentRow(
   };
 }
 
+function retentionRow(
+  accountId: string,
+  videoId: string,
+  daysBeforeEnd: number,
+  overrides: Partial<Extract<AnalyticsSnapshotRecord, { scopeType: "retention" }>> = {},
+): Extract<AnalyticsSnapshotRecord, { scopeType: "retention" }> {
+  const dateUtc = new Date(CURRENT_END.getTime() - daysBeforeEnd * DAY);
+  return {
+    id: `${accountId}-retention-${videoId}-${daysBeforeEnd}`,
+    platform: "youtube",
+    accountId,
+    scopeType: "retention",
+    scopeId: videoId,
+    dateJalali: "1405/05/30",
+    dateUtc,
+    fetchedAt: new Date("2026-08-21T08:00:00.000Z"),
+    views: 0,
+    likes: 0,
+    comments: 0,
+    shares: 0,
+    watchTimeMinutes: 0,
+    averageViewDurationSeconds: 0,
+    impressions: null,
+    ctr: null,
+    estimatedRevenue: null,
+    cpm: null,
+    channelId: `channel-${accountId}`,
+    channelTitle: `Channel ${accountId}`,
+    videoId,
+    averageViewPercentage: null,
+    ...overrides,
+  };
+}
+
 function repository(
   rows: readonly AnalyticsSnapshotRecord[],
   statuses: readonly AnalyticsAccountStatus[] = [],
@@ -476,5 +510,22 @@ describe("analytics query service", () => {
       now: NOW,
     });
     expect(result).toEqual({ subs: 0, watchHours: 0, subsProgress: 0, hoursProgress: 0, remainingSubs: 1000, remainingHours: 4000, isEligible: false });
+  });
+
+  it("excludes synthetic revenue rows from retention dimension data", async () => {
+    const repo = repository([
+      retentionRow("a", "vid1", 1, { averageViewPercentage: 58 }),
+      retentionRow("a", "revenue", 1, { averageViewPercentage: null, estimatedRevenue: 12.5 }),
+    ]);
+
+    const result = await createAnalyticsQueryService(repo).getOverview({
+      range: 30,
+      allowedAccountIds: ["a"],
+      now: NOW,
+      dimension: "retention",
+    });
+
+    const retentionData = (result as unknown as { retentionData: { videoId: string }[] }).retentionData;
+    expect(retentionData.map((row) => row.videoId)).toEqual(["vid1"]);
   });
 });

@@ -197,6 +197,11 @@ export interface ContentRoomDatabasePort {
     archivedAt: Date | null,
     event: ContentRoomEventRecord,
   ): Promise<ContentProductRecord>;
+  transactDeleteProduct?(
+    id: string,
+    expectedVersion: number,
+    event: ContentRoomEventRecord,
+  ): Promise<{ id: string }>;
   getPart?(id: string): Promise<ContentPartRecord | null>;
   transactUpdatePartFile?(
     partId: string,
@@ -377,6 +382,24 @@ export class InMemoryContentRoomPort implements ContentRoomDatabasePort {
     this.events.push(event);
     event.after = { ...updated } as unknown as Record<string, unknown>;
     return updated;
+  }
+
+  async transactDeleteProduct(id: string, expectedVersion: number, event: ContentRoomEventRecord): Promise<{ id: string }> {
+    const existing = this.productMap.get(id);
+    if (!existing) throw new ContentRoomRepositoryError("NOT_FOUND", "محصول یافت نشد.");
+    if (existing.version !== expectedVersion) throw new ContentRoomRepositoryError("VERSION_CONFLICT", "نسخه قدیمی است.");
+    const removedParts = this.partsByProduct.get(id) ?? [];
+    const removedIds = new Set(removedParts.map((p) => p.id));
+    this.productMap.delete(id);
+    this.products = this.products.filter((p) => p.id !== id);
+    this.partsByProduct.delete(id);
+    this.parts = this.parts.filter((p) => p.productId !== id);
+    for (const pid of removedIds) {
+      this.activitiesByPart.delete(pid);
+      this.activityMeta.delete(pid);
+    }
+    this.events.push(event);
+    return { id };
   }
 
   async getPart(id: string): Promise<ContentPartRecord | null> {
@@ -846,6 +869,26 @@ export function createDrizzleContentRoomPort(): ContentRoomDatabasePort {
       });
     },
 
+    async transactDeleteProduct(id, expectedVersion, event) {
+      const db = await getDb();
+      const { contentProducts, workflowEvents } = await import("@/db/schema");
+      const { eq, and } = await import("drizzle-orm");
+      return db.transaction(async (tx) => {
+        const [existingRow] = await tx.select().from(contentProducts).where(eq(contentProducts.id, id)).limit(1);
+        if (!existingRow) throw new ContentRoomRepositoryError("NOT_FOUND", "محصول یافت نشد.");
+        const existing = existingRow as unknown as { version: number };
+        if (existing.version !== expectedVersion) throw new ContentRoomRepositoryError("VERSION_CONFLICT", "نسخه قدیمی است.");
+        await tx.insert(workflowEvents).values(toEventInsert(event) as never);
+        // content_parts / activities / assets follow via ON DELETE CASCADE
+        const deleted = await tx
+          .delete(contentProducts)
+          .where(and(eq(contentProducts.id, id), eq(contentProducts.version, expectedVersion)))
+          .returning({ id: contentProducts.id });
+        if (!deleted.length) throw new ContentRoomRepositoryError("VERSION_CONFLICT", "نسخه قدیمی است.");
+        return { id };
+      });
+    },
+
     async transactUpdatePartFile(partId, expectedVersion, patch, event) {
       const db = await getDb();
       const { contentParts, workflowEvents } = await import("@/db/schema");
@@ -1080,6 +1123,7 @@ export interface ContentRoomRepository {
   togglePartActivity(command: TogglePartActivityCommand): Promise<ContentPartRecord>;
   archiveProduct(command: { id: string; actorUserId: string }): Promise<ContentProductRecord>;
   unarchiveProduct(command: { id: string; actorUserId: string }): Promise<ContentProductRecord>;
+  deleteProduct(command: { id: string; expectedVersion: number; actorUserId: string }): Promise<{ id: string }>;
   getParts(productId: string): Promise<ContentPartRecord[]>;
   getPart?(id: string): Promise<ContentPartRecord | null>;
   updatePartFile?(command: { partId: string; fileRef?: string | null; coverFileRef?: string | null; highlightFileRef?: string | null; reelFileRef?: string | null; expectedVersion?: number | null; actorUserId: string }): Promise<ContentPartRecord>;
@@ -1523,6 +1567,29 @@ export function createContentRoomRepository(port?: ContentRoomDatabasePort): Con
         return dbPort.transactArchiveProduct(command.id, null, event);
       }
       return dbPort.transactUpdateProduct(command.id, existing.version, { archivedAt: null, updatedAt: now } as unknown as Partial<ContentProductRecord>, event);
+    },
+
+    async deleteProduct(command) {
+      const existing = await dbPort.getProduct(command.id);
+      if (!existing) throw new ContentRoomRepositoryError("NOT_FOUND", "محصول یافت نشد.");
+      if (existing.version !== command.expectedVersion) throw new ContentRoomRepositoryError("VERSION_CONFLICT", "نسخه قدیمی است.");
+      const now = new Date();
+      const event: ContentRoomEventRecord = {
+        id: generateEntityId("WEV"),
+        entityType: "content_product",
+        entityId: command.id,
+        action: "deleted",
+        before: { ...existing } as unknown as Record<string, unknown>,
+        after: null,
+        actorUserId: command.actorUserId,
+        source: "api",
+        reason: null,
+        createdAt: now,
+      };
+      if (dbPort.transactDeleteProduct) {
+        return dbPort.transactDeleteProduct(command.id, command.expectedVersion, event);
+      }
+      throw new ContentRoomRepositoryError("NOT_FOUND", "حذف پشتیبانی نمی‌شود.");
     },
 
     async getPart(id) {

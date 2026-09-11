@@ -8,14 +8,33 @@ import { buildTelegramMediaUrl } from "@/lib/media/telegram-url";
 export interface ProductRouteDependencies {
   requirePermission: typeof requirePermission;
   getCurrentUser: typeof getCurrentUser;
-  repository: Pick<ContentRoomRepository, "getProduct" | "updateProductStatus" | "updateProductMetadata">;
+  repository: Pick<ContentRoomRepository, "getProduct" | "updateProductStatus" | "updateProductMetadata" | "deleteProduct">;
   syncWorkflowTitle?: (productId: string, newTitle: string, actorUserId: string) => Promise<void>;
+  hasLinkedProgram?: (productId: string) => Promise<boolean>;
+}
+
+async function defaultHasLinkedProgram(productId: string): Promise<boolean> {
+  try {
+    const { db } = await import("@/db");
+    const { workflowPrograms } = await import("@/db/schema");
+    const { eq } = await import("drizzle-orm");
+    const [row] = await (db as unknown as {
+      select: (fields: unknown) => { from: (t: unknown) => { where: (c: unknown) => { limit: (n: number) => Promise<Array<{ id: string }>> } } };
+    })
+      .select({ id: workflowPrograms.id })
+      .from(workflowPrograms)
+      .where(eq(workflowPrograms.sourceRef, productId))
+      .limit(1);
+    return !!row;
+  } catch {
+    return false;
+  }
 }
 
 const defaultDependencies: ProductRouteDependencies = {
   requirePermission,
   getCurrentUser,
-  repository: contentRoomRepository as unknown as Pick<ContentRoomRepository, "getProduct" | "updateProductStatus" | "updateProductMetadata">,
+  repository: contentRoomRepository as unknown as Pick<ContentRoomRepository, "getProduct" | "updateProductStatus" | "updateProductMetadata" | "deleteProduct">,
   syncWorkflowTitle: async (productId: string, newTitle: string) => {
     try {
       const { db } = await import("@/db");
@@ -212,6 +231,39 @@ export async function handleProductRequest(
     }
   }
 
+  if (method === "DELETE") {
+    const { user, response } = await deps.requirePermission("manage_content_room");
+    if (!user) return response!;
+
+    let body: unknown;
+    try {
+      body = await request.json();
+    } catch {
+      body = null;
+    }
+    const expectedVersion = (body as { expectedVersion?: unknown } | null)?.expectedVersion;
+    if (typeof expectedVersion !== "number" || !Number.isInteger(expectedVersion) || expectedVersion <= 0) {
+      return jsonError("نسخه محصول برای حذف الزامی است.", 422, "VALIDATION_ERROR");
+    }
+
+    try {
+      const hasLinkedProgram = deps.hasLinkedProgram ?? defaultHasLinkedProgram;
+      if (await hasLinkedProgram(id)) {
+        return jsonError("این محصول به اتاق انتشار ارسال شده و قابل حذف نیست. از بایگانی استفاده کنید.", 422, "INVALID_TRANSITION");
+      }
+      const result = await deps.repository.deleteProduct({
+        id,
+        expectedVersion,
+        actorUserId: (user as unknown as { id?: string }).id ?? "unknown",
+      });
+      return jsonOk(result);
+    } catch (error) {
+      const mapped = mapRepositoryError(error);
+      if (mapped) return mapped;
+      return jsonInternalError(error, "api/content-room/products/[id] DELETE");
+    }
+  }
+
   return jsonError("روش پشتیبانی نمی‌شود.", 405, "METHOD_NOT_ALLOWED");
 }
 
@@ -220,5 +272,9 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
 }
 
 export async function PATCH(request: Request, ctx: { params: Promise<{ id: string }> }): Promise<Response> {
+  return handleProductRequest(request, ctx, defaultDependencies);
+}
+
+export async function DELETE(request: Request, ctx: { params: Promise<{ id: string }> }): Promise<Response> {
   return handleProductRequest(request, ctx, defaultDependencies);
 }

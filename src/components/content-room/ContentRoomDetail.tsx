@@ -2,9 +2,10 @@
 
 import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import useSWR from "swr";
 import { Pencil, UploadCloud, Film, Image as ImageIcon, Scissors, Smartphone, Hash, X, Play } from "lucide-react";
-import { Button, Card, Input } from "@/components/ui";
+import { Button, Card, ConfirmModal, Input } from "@/components/ui";
 import { DedicatedPlayer } from "@/components/media/DedicatedPlayer";
 import { fetchContentRoomApi, ContentRoomApiError } from "@/lib/content-room/client";
 import { contentStatusPresentation } from "@/lib/content-room/presentation";
@@ -37,10 +38,13 @@ function DestinationStatus({ label, connected, settingsHref, optional }: { label
 }
 
 export function ContentRoomDetail({ product, onRefresh }: Props) {
+  const router = useRouter();
   const [actionError, setActionError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [sendLoading, setSendLoading] = useState(false);
   const [sendPartId, setSendPartId] = useState<string | null>(null);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
   const [sendResult, setSendResult] = useState<{ programId: string } | null>(null);
   const [editOpen, setEditOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<"checklist" | "files" | "group">("checklist");
@@ -116,6 +120,31 @@ export function ContentRoomDetail({ product, onRefresh }: Props) {
       }
     } finally {
       setSendLoading(false);
+    }
+  }
+
+  /** Permanently delete the product with all parts (blocked server-side if sent). */
+  async function handleDelete() {
+    setDeleteLoading(true);
+    setActionError(null);
+    try {
+      await fetchContentRoomApi(`/api/content-room/products/${product.id}`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ expectedVersion: product.version }),
+      });
+      setDeleteOpen(false);
+      router.push("/content-room");
+    } catch (e) {
+      const isConflict = e instanceof ContentRoomApiError && e.status === 409;
+      if (isConflict) {
+        setActionError("اطلاعات توسط کاربر دیگری تغییر کرده است. لطفاً صفحه را تازه‌سازی کنید.");
+        await onRefresh();
+      } else {
+        setActionError(e instanceof ContentRoomApiError ? e.message : e instanceof Error ? e.message : "خطا در حذف محصول");
+      }
+    } finally {
+      setDeleteLoading(false);
     }
   }
 
@@ -285,6 +314,37 @@ export function ContentRoomDetail({ product, onRefresh }: Props) {
         )}
       </Card>
       )}
+
+      <Card className="space-y-3 border-rose-500/25">
+        <div>
+          <h2 className="text-sm font-bold text-tg-text">حذف دائمی محصول</h2>
+          <p className="mt-1 text-xs leading-5 text-tg-secondary">
+            محصول با همه قسمت‌ها، فایل‌ها و تیک‌ها برای همیشه پاک می‌شود و قابل بازیابی نیست.
+          </p>
+        </div>
+        {product.sentProgram ? (
+          <p className="text-xs leading-5 text-amber-700 dark:text-amber-300">
+            این محصول به اتاق انتشار ارسال شده و قابل حذف نیست؛ از بایگانی استفاده کنید.
+          </p>
+        ) : (
+          <div>
+            <Button variant="danger" size="sm" onClick={() => setDeleteOpen(true)} className="min-h-[40px]">
+              حذف دائمی
+            </Button>
+          </div>
+        )}
+      </Card>
+
+      <ConfirmModal
+        open={deleteOpen}
+        onClose={() => setDeleteOpen(false)}
+        onConfirm={handleDelete}
+        title="حذف دائمی محصول؟"
+        description={`«${product.title}» با همه قسمت‌ها برای همیشه پاک می‌شود. این عمل قابل بازگشت نیست.`}
+        danger
+        loading={deleteLoading}
+        confirmLabel="حذف برای همیشه"
+      />
 
       <EditProductDialog open={editOpen} product={product} onClose={() => setEditOpen(false)} onSuccess={onRefresh} />
     </div>

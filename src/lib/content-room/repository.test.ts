@@ -241,4 +241,26 @@ describe("content room repository", () => {
     const afterIncrease = await repo.getProduct(created.id);
     expect(afterIncrease?.parts.filter((p) => p.isActive)).toHaveLength(3);
   });
+
+  it("deletes product with parts and activities permanently", async () => {
+    const port = new InMemoryContentRoomPort();
+    const repo = createContentRoomRepository(port);
+    const created = await repo.createProduct({ title: "حذف شونده", productType: "serial", channel: "zed_revayat", partsCount: 2, actorUserId: "u1" });
+    const result = await repo.deleteProduct({ id: created.id, expectedVersion: 1, actorUserId: "u1" });
+    expect(result).toEqual({ id: created.id });
+    expect(await repo.getProduct(created.id)).toBeNull();
+    expect(await repo.getParts(created.id)).toEqual([]);
+    expect(port.products).toHaveLength(0);
+    expect(port.parts).toHaveLength(0);
+    expect(port.events[port.events.length - 1]).toMatchObject({ action: "deleted", entityId: created.id });
+    await expect(repo.deleteProduct({ id: created.id, expectedVersion: 1, actorUserId: "u1" })).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
+
+  it("rejects delete on version conflict and keeps the product", async () => {
+    const port = new InMemoryContentRoomPort();
+    const repo = createContentRoomRepository(port);
+    const created = await repo.createProduct({ title: "X", productType: "serial", channel: "tamashin", partsCount: 1, actorUserId: "u1" });
+    await expect(repo.deleteProduct({ id: created.id, expectedVersion: 999, actorUserId: "u1" })).rejects.toMatchObject({ code: "VERSION_CONFLICT" });
+    expect(await repo.getProduct(created.id)).not.toBeNull();
+  });
 });

@@ -17,6 +17,7 @@ function makeDeps(overrides: Partial<ProductRouteDependencies> & { user?: unknow
   return {
     getCurrentUser: overrides.getCurrentUser ?? (getCurrentUser as never),
     requirePermission: overrides.requirePermission ?? (requirePermission as never),
+    hasLinkedProgram: (overrides as { hasLinkedProgram?: unknown }).hasLinkedProgram as never,
     repository: overrides.repository ?? {
       getProduct: vi.fn().mockResolvedValue({ id: "CPR-1", title: "a", status: "imported", version: 1, parts: [] }),
       updateProductStatus: vi.fn().mockResolvedValue({ id: "CPR-1", status: "editing_youtube", version: 2 }),
@@ -363,5 +364,104 @@ describe("PATCH /api/content-room/products/:id metadata edit", () => {
     );
     expect(response.status).toBe(200);
     expect(repository.updateProductMetadata).toHaveBeenCalledWith(expect.objectContaining({ partsCount: 3 }));
+  });
+});
+
+describe("DELETE /api/content-room/products/:id", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  function deleteDeps(overrides: Partial<ProductRouteDependencies> = {}): ProductRouteDependencies {
+    const repository = {
+      deleteProduct: vi.fn().mockResolvedValue({ id: "CPR-1" }),
+    };
+    return makeDeps({
+      repository: repository as never,
+      hasLinkedProgram: vi.fn().mockResolvedValue(false) as never,
+      ...overrides,
+    });
+  }
+
+  it("rejects DELETE when unauthenticated (401)", async () => {
+    const deps = deleteDeps({
+      requirePermission: vi.fn().mockResolvedValue({ user: null, response: jsonError("ابتدا وارد حساب کاربری خود شوید.", 401, "UNAUTHENTICATED") }) as never,
+    });
+    const response = await handleProductRequest(
+      request("DELETE", { expectedVersion: 1 }),
+      { params: Promise.resolve({ id: "CPR-1" }) },
+      deps,
+    );
+    expect(response.status).toBe(401);
+  });
+
+  it("rejects DELETE without manage_content_room (403)", async () => {
+    const deleteProduct = vi.fn();
+    const deps = deleteDeps({
+      requirePermission: vi.fn().mockResolvedValue({ user: null, response: jsonError("شما مجوز انجام این عملیات را ندارید.", 403, "FORBIDDEN") }) as never,
+      repository: { deleteProduct } as never,
+    });
+    const response = await handleProductRequest(
+      request("DELETE", { expectedVersion: 1 }),
+      { params: Promise.resolve({ id: "CPR-1" }) },
+      deps,
+    );
+    expect(response.status).toBe(403);
+    expect(deleteProduct).not.toHaveBeenCalled();
+  });
+
+  it("blocks DELETE when product was sent to publishing room (422)", async () => {
+    const deleteProduct = vi.fn();
+    const deps = deleteDeps({
+      repository: { deleteProduct } as never,
+      hasLinkedProgram: vi.fn().mockResolvedValue(true) as never,
+    });
+    const response = await handleProductRequest(
+      request("DELETE", { expectedVersion: 1 }),
+      { params: Promise.resolve({ id: "CPR-1" }) },
+      deps,
+    );
+    expect(response.status).toBe(422);
+    const body = await response.json();
+    expect(body.code).toBe("INVALID_TRANSITION");
+    expect(deleteProduct).not.toHaveBeenCalled();
+  });
+
+  it("returns 404 when product not found", async () => {
+    const deleteProduct = vi.fn().mockRejectedValue({ code: "NOT_FOUND", message: "محصول یافت نشد." });
+    const deps = deleteDeps({ repository: { deleteProduct } as never });
+    const response = await handleProductRequest(
+      request("DELETE", { expectedVersion: 1 }),
+      { params: Promise.resolve({ id: "missing" }) },
+      deps,
+    );
+    expect(response.status).toBe(404);
+  });
+
+  it("deletes successfully inside the standard data envelope", async () => {
+    const deleteProduct = vi.fn().mockResolvedValue({ id: "CPR-1" });
+    const hasLinkedProgram = vi.fn().mockResolvedValue(false);
+    const deps = deleteDeps({ repository: { deleteProduct } as never, hasLinkedProgram: hasLinkedProgram as never });
+    const response = await handleProductRequest(
+      request("DELETE", { expectedVersion: 2 }),
+      { params: Promise.resolve({ id: "CPR-1" }) },
+      deps,
+    );
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.ok).toBe(true);
+    expect(body.data).toEqual({ id: "CPR-1" });
+    expect(hasLinkedProgram).toHaveBeenCalledWith("CPR-1");
+    expect(deleteProduct).toHaveBeenCalledWith(expect.objectContaining({ id: "CPR-1", expectedVersion: 2, actorUserId: "u1" }));
+  });
+
+  it("returns 422 when expectedVersion is missing", async () => {
+    const deleteProduct = vi.fn();
+    const deps = deleteDeps({ repository: { deleteProduct } as never });
+    const response = await handleProductRequest(
+      request("DELETE", {}),
+      { params: Promise.resolve({ id: "CPR-1" }) },
+      deps,
+    );
+    expect(response.status).toBe(422);
+    expect(deleteProduct).not.toHaveBeenCalled();
   });
 });

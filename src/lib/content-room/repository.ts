@@ -1,5 +1,5 @@
 import { generateEntityId } from "@/lib/ids";
-import { PART_ACTIVITIES, REQUIRED_FOR_SEND, deriveProductStatusFromParts } from "./activities";
+import { PART_ACTIVITIES, REQUIRED_FOR_SEND, deriveProductStatusFromParts, planPartsReconciliation } from "./activities";
 
 // ---------------------------------------------------------------------------
 // Constants & types
@@ -650,9 +650,62 @@ export function createDrizzleContentRoomPort(): ContentRoomDatabasePort {
 
     async transactUpdateProduct(id, expectedVersion, patch, event) {
       const db = await getDb();
-      const { contentProducts, workflowEvents } = await import("@/db/schema");
-      const { eq, and } = await import("drizzle-orm");
+      const { contentProducts, contentParts, contentPartActivities, workflowEvents } = await import("@/db/schema");
+      const { eq, and, inArray } = await import("drizzle-orm");
       return db.transaction(async (tx) => {
+        // Reconcile content_parts rows when partsCount changes so upload slots
+        // always match the product's partsCount (parity with the InMemory port).
+        const requestedCount = (patch as { partsCount?: unknown }).partsCount;
+        if (typeof requestedCount === "number") {
+          const [existingRow] = await tx.select().from(contentProducts).where(eq(contentProducts.id, id)).limit(1);
+          if (!existingRow) throw new ContentRoomRepositoryError("NOT_FOUND", "محصول یافت نشد.");
+          const existingCount = (existingRow as unknown as { partsCount?: number }).partsCount ?? 0;
+          if (requestedCount !== existingCount) {
+            const partRows = await tx.select().from(contentParts).where(eq(contentParts.productId, id));
+            const plan = planPartsReconciliation(
+              partRows.map((r) => {
+                const rec = r as unknown as { id: string; partNumber: number; isActive: boolean };
+                return { id: rec.id, partNumber: rec.partNumber, isActive: rec.isActive ?? true };
+              }),
+              requestedCount,
+            );
+            const now = new Date();
+            if (plan.deactivateIds.length) {
+              await tx
+                .update(contentParts)
+                .set({ isActive: false, updatedAt: now } as never)
+                .where(inArray(contentParts.id, plan.deactivateIds));
+            }
+            if (plan.reactivateIds.length) {
+              await tx
+                .update(contentParts)
+                .set({ isActive: true, updatedAt: now } as never)
+                .where(inArray(contentParts.id, plan.reactivateIds));
+            }
+            for (const partNumber of plan.newPartNumbers) {
+              const partId = generateEntityId("CPP");
+              await tx.insert(contentParts).values(
+                toPartInsert({
+                  id: partId,
+                  productId: id,
+                  partNumber,
+                  fileRef: null,
+                  coverFileRef: null,
+                  highlightFileRef: null,
+                  reelFileRef: null,
+                  version: 1,
+                  status: null,
+                  isActive: true,
+                  createdAt: now,
+                  updatedAt: now,
+                }) as never,
+              );
+              await tx.insert(contentPartActivities).values(
+                PART_ACTIVITIES.map((a) => ({ id: generateEntityId("CPP"), partId, activity: a, isDone: false })) as never,
+              );
+            }
+          }
+        }
         const drizzlePatch = toProductPatch(patch, expectedVersion);
         const [updated] = await tx
           .update(contentProducts)

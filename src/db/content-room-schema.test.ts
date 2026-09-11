@@ -1,8 +1,13 @@
 import { getTableColumns } from "drizzle-orm";
 import { getTableConfig } from "drizzle-orm/pg-core";
 import { describe, expect, it } from "vitest";
+import { readdirSync, readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { dirname, resolve } from "node:path";
 
 import { contentPartActivities, contentParts, contentProducts } from "./schema";
+import { PART_ACTIVITIES } from "@/lib/content-room/activities";
+import { PART_ACTIVITIES as VALIDATION_PART_ACTIVITIES } from "@/lib/content-room/validation";
 
 describe("content room schema batch activities", () => {
   it("exposes isActive and activities table", () => {
@@ -89,5 +94,29 @@ describe("content room schema", () => {
     expect(columns["productType"]).toBeDefined();
     expect(columns["channel"]).toBeDefined();
     expect(columns["status"]).toBeDefined();
+  });
+});
+
+describe("content_part_activities check constraint drift guard", () => {
+  it("keeps both code PART_ACTIVITIES lists identical", () => {
+    expect([...VALIDATION_PART_ACTIVITIES].sort()).toEqual([...PART_ACTIVITIES].sort());
+  });
+
+  it("migration SQL permits every code PART_ACTIVITY (else inserts fail on real DB)", () => {
+    const dir = resolve(dirname(fileURLToPath(import.meta.url)), "../../drizzle");
+    const files = readdirSync(dir).filter((f) => f.endsWith(".sql")).sort();
+    const allowed = new Set<string>();
+    for (const f of files) {
+      const sql = readFileSync(resolve(dir, f), "utf8");
+      const re = /CHECK\s*\(\s*activity\s+IN\s*\(([^)]+)\)/gi;
+      let m: RegExpExecArray | null;
+      while ((m = re.exec(sql)) !== null) {
+        for (const v of m[1].split(",")) {
+          allowed.add(v.trim().replace(/^'|'$/g, ""));
+        }
+      }
+    }
+    const missing = (PART_ACTIVITIES as readonly string[]).filter((a) => !allowed.has(a));
+    expect(missing).toEqual([]);
   });
 });

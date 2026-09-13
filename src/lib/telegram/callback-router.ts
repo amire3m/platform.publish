@@ -201,6 +201,15 @@ async function handleLinkPickPart(contentId: string, botMessageId?: number): Pro
       ],
     ],
   };
+  // back to the previous step: part list when the product is known, else product list
+  let backTarget = `link_existing:${messageId}:0`;
+  try {
+    const [prow] = await db.select().from(contentParts).where(eq(contentParts.id, partId)).limit(1);
+    const pid = (prow as unknown as { productId?: string; product_id?: string } | undefined)?.productId
+      ?? (prow as unknown as { product_id?: string } | undefined)?.product_id;
+    if (pid) backTarget = `link_pick_product:${messageId}:${pid}:0`;
+  } catch {}
+  (kb.inline_keyboard as unknown[][]).push([{ text: "◀️ بازگشت", callback_data: backTarget }]);
   const text = `<b>🏷️ انتخاب نوع</b>\nقسمت <code>${escapeHtml(partId)}</code>\nنوع فایل را انتخاب کنید:`;
 
   try {

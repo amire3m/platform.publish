@@ -78,6 +78,25 @@ describe("link_existing", () => {
     expect(res.ok).toBe(true);
   });
 
+  it("kind picker has a back button to the previous step", async () => {
+    const { TelegramClient } = await import("./client");
+    const mockEdit = vi.fn().mockResolvedValue({});
+    const mockSend = vi.fn().mockResolvedValue({ message_id: 102 });
+    vi.mocked(TelegramClient.fromEnv as unknown as () => unknown).mockReturnValueOnce({
+      editMessageText: mockEdit,
+      sendMessage: mockSend,
+      getFile: vi.fn(),
+      answerCallbackQuery: vi.fn().mockResolvedValue({}),
+      editMessageReplyMarkup: vi.fn().mockResolvedValue({}),
+    } as never);
+    const { routeCallback } = await import("./callback-router");
+    const res = await routeCallback("link_pick_part", "123:CPP-1", "999", 100);
+    expect(res.ok).toBe(true);
+    const kb = mockEdit.mock.calls[0][2] as { replyMarkup: { inline_keyboard: Array<Array<{ text: string; callback_data?: string }>> } };
+    const lastRow = kb.replyMarkup.inline_keyboard[kb.replyMarkup.inline_keyboard.length - 1];
+    expect(lastRow[0].callback_data).toMatch(/^link_(pick_product|existing):123/);
+  });
+
   it("links file via link_pick_kind", async () => {
     const { routeCallback } = await import("./callback-router");
     const res = await routeCallback("link_pick_kind", "123:CPP-1:highlight", "999");

@@ -459,7 +459,7 @@ async function handleLinkNew(messageIdRaw: string, botMessageId?: number): Promi
   return { ok: true, message: "لطفاً عنوان محصول را بفرستید." };
 }
 
-async function handleLinkSearch(messageIdRaw: string, fromTelegramId: string, botMessageId?: number): Promise<{ ok: boolean; message: string }> {
+async function handleLinkSearch(messageIdRaw: string, fromTelegramId: string, botMessageId?: number, messageThreadId?: number): Promise<{ ok: boolean; message: string }> {
   const messageId = messageIdRaw.split(":")[0]?.trim() || messageIdRaw;
   if (!messageId) return { ok: false, message: "شناسه پیام نامعتبر است." };
   const { setPendingSearch } = await import("@/lib/content-room/pending-search");
@@ -470,7 +470,7 @@ async function handleLinkSearch(messageIdRaw: string, fromTelegramId: string, bo
     const client = await getTelegramClientSafe();
     if (client) {
       try {
-        await (client as unknown as { sendMessage: (t: string, tid: number | undefined, o: unknown) => Promise<unknown> }).sendMessage(text, undefined, {
+        await (client as unknown as { sendMessage: (t: string, tid: number | undefined, o: unknown) => Promise<unknown> }).sendMessage(text, messageThreadId ?? undefined, {
           parseMode: "HTML",
           replyMarkup: kb,
         } as never);
@@ -485,6 +485,7 @@ export async function routeCallback(
   contentId: string,
   fromTelegramId: string,
   botMessageId?: number,
+  messageThreadId?: number,
 ): Promise<{ ok: boolean; message: string }> {
   // Live conductor callbacks (live:menu, live:stop, live:sched_toggle:LSC-…)
   if (action === "live") {
@@ -602,7 +603,7 @@ export async function routeCallback(
         case "link_pick_kind":
           return await handleLinkPickKind(contentId, user.id, user.telegramId || fromTelegramId, botMessageId);
         case "link_search":
-          return await handleLinkSearch(contentId, fromTelegramId, botMessageId);
+          return await handleLinkSearch(contentId, fromTelegramId, botMessageId, messageThreadId);
         default:
           return { ok: false, message: "عملیات نامعتبر است." };
       }

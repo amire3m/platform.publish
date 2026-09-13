@@ -172,7 +172,7 @@ export async function POST(req: Request) {
     return Response.json({ ok: true });
   }
 
-  const cq = (body as { callback_query?: { id: string; data?: string; from: { id: number | string }; message?: { message_id: number; chat: { id: number } } } })?.callback_query;
+  const cq = (body as { callback_query?: { id: string; data?: string; from: { id: number | string }; message?: { message_id: number; message_thread_id?: number; chat: { id: number } } } })?.callback_query;
   if (!cq) {
     // pending product search (armed from the picker 🔍 button) takes text replies
     if (msg && msg.text && !msg.video && !msg.document) {
@@ -207,7 +207,7 @@ export async function POST(req: Request) {
   let result: { ok: boolean; message: string };
   try {
     const { routeCallback } = await import("@/lib/telegram/callback-router");
-    result = await routeCallback(action, contentId, fromTelegramId, cq.message?.message_id);
+    result = await routeCallback(action, contentId, fromTelegramId, cq.message?.message_id, cq.message?.message_thread_id);
   } catch (err) {
     console.error("[webhook] routeCallback failed:", (err as Error).message);
     result = { ok: false, message: "\u062E\u0637\u0627\u06CC \u062F\u0627\u062E\u0644\u06CC \u0631\u062E \u062F\u0627\u062F." };

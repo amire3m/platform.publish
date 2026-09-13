@@ -97,4 +97,21 @@ describe("link_existing", () => {
     const { getPendingSearch } = await import("@/lib/content-room/pending-search");
     expect(getPendingSearch("999")?.messageId).toBe("123");
   });
+
+  it("sends the search prompt to the same topic", async () => {
+    const { TelegramClient } = await import("./client");
+    const mockSend = vi.fn().mockResolvedValue({ message_id: 101 });
+    vi.mocked(TelegramClient.fromEnv as unknown as () => unknown).mockReturnValueOnce({
+      editMessageText: vi.fn().mockResolvedValue({}),
+      sendMessage: mockSend,
+      getFile: vi.fn(),
+      answerCallbackQuery: vi.fn().mockResolvedValue({}),
+      editMessageReplyMarkup: vi.fn().mockResolvedValue({}),
+    } as never);
+    const { routeCallback } = await import("./callback-router");
+    const res = await routeCallback("link_search", "123", "999", 100, 42);
+    expect(res.ok).toBe(true);
+    expect(mockSend).toHaveBeenCalledTimes(1);
+    expect(mockSend.mock.calls[0][1]).toBe(42);
+  });
 });

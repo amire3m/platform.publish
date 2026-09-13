@@ -89,4 +89,12 @@ describe("link_existing", () => {
     const res = await routeCallback("link_new", "123", "999");
     expect(res.ok).toBe(true);
   });
+
+  it("arms product search via link_search", async () => {
+    const { routeCallback } = await import("./callback-router");
+    const res = await routeCallback("link_search", "123", "999");
+    expect(res.ok).toBe(true);
+    const { getPendingSearch } = await import("@/lib/content-room/pending-search");
+    expect(getPendingSearch("999")?.messageId).toBe("123");
+  });
 });

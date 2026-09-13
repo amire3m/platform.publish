@@ -213,6 +213,15 @@ export class TelegramClient {
   async answerCallbackQuery(id:string, text?:string, showAlert=false) {
     return callApi(this.cfg.botToken, "answerCallbackQuery", {callback_query_id:id, text, show_alert:showAlert});
   }
+  async answerInlineQuery(inlineQueryId: string, results: unknown[], opts?: { cacheTime?: number; isPersonal?: boolean; switchPmText?: string; switchPmParameter?: string }) {
+    return callApi(this.cfg.botToken, "answerInlineQuery", {
+      inline_query_id: inlineQueryId,
+      results,
+      cache_time: opts?.cacheTime ?? 30,
+      is_personal: opts?.isPersonal ?? true,
+      ...(opts?.switchPmText ? { switch_pm_text: opts.switchPmText, switch_pm_parameter: opts.switchPmParameter ?? "search" } : {}),
+    });
+  }
   async editMessageReplyMarkup(messageId:number, replyMarkup: unknown) {
     return callApi(this.cfg.botToken, "editMessageReplyMarkup", {chat_id:this.cfg.groupId, message_id:messageId, reply_markup:replyMarkup});
   }

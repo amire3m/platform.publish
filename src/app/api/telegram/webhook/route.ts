@@ -12,6 +12,16 @@ export async function POST(req: Request) {
     return Response.json({ ok: true });
   }
 
+  const iq = (body as { inline_query?: { id: string; from?: { id: number | string }; query: string } })?.inline_query;
+  if (iq) {
+    try {
+      await handleInlineQuery(iq);
+    } catch (err) {
+      console.error("[webhook] inline query failed:", (err as Error).message);
+    }
+    return Response.json({ ok: true });
+  }
+
   const msg = (body as { message?: { message_id: number; chat: { id: number; type?: string }; from?: { id: number | string; first_name?: string; last_name?: string; username?: string }; video?: { file_id: string; file_unique_id: string; duration?: number; thumbnail?: { file_id: string }; file_name?: string }; document?: { file_id: string; file_unique_id: string; mime_type?: string; file_name?: string; thumbnail?: { file_id: string } }; caption?: string; text?: string; date?: number; message_thread_id?: number; reply_to_message?: { message_id: number; video?: { file_id: string }; document?: { file_id: string; mime_type?: string; file_name?: string }; caption?: string; from?: { id: number | string } } } })?.message;
   const hasVideo = !!(msg?.video || (msg?.document && String(msg.document?.mime_type || "").startsWith("video/")));
   const replyTarget = msg?.reply_to_message;
@@ -164,6 +174,14 @@ export async function POST(req: Request) {
 
   const cq = (body as { callback_query?: { id: string; data?: string; from: { id: number | string }; message?: { message_id: number; chat: { id: number } } } })?.callback_query;
   if (!cq) {
+    // pending product search (armed from the picker 🔍 button) takes text replies
+    if (msg && msg.text && !msg.video && !msg.document) {
+      try {
+        if (await tryHandleProductSearch(msg as never)) return Response.json({ ok: true });
+      } catch (err) {
+        console.error("[webhook] product search failed:", (err as Error).message);
+      }
+    }
     // /live command + playlist reply handling for the live conductor
     if (msg && msg.text) {
       const handled = await handleLiveTextMessage(msg as never);
@@ -327,5 +345,149 @@ async function handleLiveTextMessage(msg: LiveTextMessage): Promise<boolean> {
   } catch (err) {
     await reply(`⚠️ شروع لایو ناموفق بود: ${String(err instanceof Error ? err.message : err)}`);
   }
+  return true;
+}
+
+// ---------------------------------------------------------------------------
+// Product search: inline queries (@bot title) + picker text replies (🔍)
+// ---------------------------------------------------------------------------
+function escapeInlineHtml(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+async function findProductsByTitle(query: string, limit: number): Promise<Array<Record<string, unknown>>> {
+  const { db } = await import("@/db");
+  const { contentProducts } = await import("@/db/schema");
+  const { desc, sql } = await import("drizzle-orm");
+  const rows = await db
+    .select()
+    .from(contentProducts)
+    .where(sql`${contentProducts.title} ILIKE ${"%" + query + "%"}`)
+    .orderBy(desc(contentProducts.createdAt))
+    .limit(limit);
+  return rows as unknown as Array<Record<string, unknown>>;
+}
+
+function mapProductRow(r: Record<string, unknown>) {
+  return {
+    id: String(r.id ?? ""),
+    title: String(r.title ?? "بدون عنوان"),
+    productType: String(r.productType ?? r.product_type ?? ""),
+    channel: String(r.channel ?? ""),
+    status: String(r.status ?? "imported"),
+    partsCount: Number(r.partsCount ?? r.parts_count ?? 0),
+  };
+}
+
+async function handleInlineQuery(iq: { id: string; from?: { id: number | string }; query: string }): Promise<void> {
+  const { TelegramClient } = await import("@/lib/telegram/client");
+  const client = TelegramClient.fromEnv();
+  const answer = (results: unknown[], switchPmText?: string) =>
+    client.answerInlineQuery(iq.id, results, switchPmText ? { switchPmText, switchPmParameter: "search" } : undefined);
+  const fromId = String(iq.from?.id ?? "");
+  let allowed = false;
+  try {
+    const { db } = await import("@/db");
+    const { users } = await import("@/db/schema");
+    const { eq } = await import("drizzle-orm");
+    const [u] = await db.select().from(users).where(eq(users.telegramId, fromId)).limit(1);
+    allowed = !!u && (u as unknown as { active?: boolean }).active !== false;
+  } catch {
+    allowed = false;
+  }
+  if (!allowed) {
+    await answer([]);
+    return;
+  }
+  const q = (iq.query ?? "").trim();
+  if (!q) {
+    await answer([], "عنوان محصول را بنویسید");
+    return;
+  }
+  let rows: Array<Record<string, unknown>> = [];
+  try {
+    rows = await findProductsByTitle(q, 15);
+  } catch {
+    rows = [];
+  }
+  const { buildInlineResults } = await import("@/lib/telegram/inline-search");
+  const base = (process.env.APP_BASE_URL || "").replace(/\/$/, "") || null;
+  await answer(buildInlineResults(rows.map(mapProductRow).filter((p) => p.id), base));
+}
+
+type ProductSearchMessage = {
+  message_id: number;
+  chat: { id: number };
+  from?: { id: number | string };
+  text: string;
+  message_thread_id?: number;
+};
+
+async function tryHandleProductSearch(msg: ProductSearchMessage): Promise<boolean> {
+  const text = String(msg.text ?? "").trim();
+  if (/^(\/live|!live|پنل لایو|لایو)$/i.test(text)) return false;
+  const fromId = String(msg.from?.id ?? "");
+  const { consumePendingSearch } = await import("@/lib/content-room/pending-search");
+  const pending = consumePendingSearch(fromId);
+  if (!pending) return false;
+  const groupId = process.env.TELEGRAM_GROUP_ID || "";
+  const { TelegramClient } = await import("@/lib/telegram/client");
+  const client = TelegramClient.fromEnv();
+  const reply = async (html: string, kb?: { inline_keyboard: unknown[][] }) => {
+    try {
+      await client.sendMessage(html, msg.message_thread_id, { parseMode: "HTML", replyMarkup: kb, replyToMessageId: msg.message_id } as never);
+    } catch {
+      await client.sendMessage(html, undefined, { parseMode: "HTML", replyMarkup: kb, replyToMessageId: msg.message_id } as never).catch(() => {});
+    }
+  };
+  if (String(msg.chat?.id) !== String(groupId)) return true;
+  // same link permission as the picker
+  let allowed = false;
+  try {
+    const { db } = await import("@/db");
+    const { users } = await import("@/db/schema");
+    const { eq } = await import("drizzle-orm");
+    const { hasPermission } = await import("@/lib/permissions");
+    const [u] = await db.select().from(users).where(eq(users.telegramId, fromId)).limit(1);
+    const uu = u as unknown as { active?: boolean; role?: string; allowedActions?: string[]; allowedAccountIds?: string[] } | undefined;
+    const subject = { role: uu?.role, allowedActions: uu?.allowedActions, allowedAccountIds: uu?.allowedAccountIds } as never;
+    allowed =
+      !!uu &&
+      uu.active !== false &&
+      (hasPermission(subject, "manage_content_room" as never) || hasPermission(subject, "update_assigned_content" as never));
+  } catch {
+    allowed = false;
+  }
+  if (!allowed) {
+    await reply("شما مجوز جستجو ندارید.");
+    return true;
+  }
+  if (text.length < 2) {
+    await reply("عبارت جستجو کوتاه است؛ حداقل ۲ حرف بفرستید.");
+    return true;
+  }
+  const backKb = { inline_keyboard: [[{ text: "↩ بازگشت به لیست", callback_data: `link_existing:${pending.messageId}:0` }]] };
+  let rows: Array<Record<string, unknown>> = [];
+  try {
+    rows = await findProductsByTitle(text, 11);
+  } catch {
+    rows = [];
+  }
+  if (!rows.length) {
+    await reply(`موردی برای «${escapeInlineHtml(text.slice(0, 60))}» یافت نشد.`, backKb);
+    return true;
+  }
+  const kb = {
+    inline_keyboard: [
+      ...rows.slice(0, 10).map((r) => {
+        const rec = r as unknown as { id: string; title: string };
+        const pid = String(rec.id ?? "");
+        const title = String(rec.title ?? "بدون عنوان").slice(0, 30) || "بدون عنوان";
+        return [{ text: title, callback_data: `link_pick_product:${pending.messageId}:${pid}:0` }];
+      }),
+      backKb.inline_keyboard[0],
+    ],
+  };
+  await reply(`🔍 نتایج جستجو (${Math.min(rows.length, 10)}):`, kb);
   return true;
 }

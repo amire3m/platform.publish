@@ -14,8 +14,8 @@ vi.mock("@/lib/telegram/callback-router", () => ({
 }));
 
 // Mock TelegramClient to avoid real fetch
-vi.mock("@/db", () => ({ db: { select: () => ({ from: () => ({ where: () => ({ limit: () => Promise.resolve([]) }) }) }), insert: () => ({ values: () => Promise.resolve() }) } }));
-vi.mock("@/db/schema", () => ({ workflowEvents: {} }));
+vi.mock("@/db", () => ({ db: { select: () => ({ from: () => ({ where: () => ({ limit: () => Promise.resolve([]), orderBy: () => ({ limit: () => Promise.resolve([]) }) }) }) }), insert: () => ({ values: () => Promise.resolve() }) } }));
+vi.mock("@/db/schema", () => ({ workflowEvents: {}, users: { telegramId: "telegram_id" }, contentProducts: { id: "id", title: "title", createdAt: "created_at" } }));
 vi.mock("@/lib/telegram/client", async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>;
   const RealClient = actual.TelegramClient as unknown as { fromEnv: () => unknown };
@@ -26,6 +26,8 @@ vi.mock("@/lib/telegram/client", async (importOriginal) => {
       fromEnv: vi.fn(() => ({
         answerCallbackQuery: vi.fn().mockResolvedValue({}),
         editMessageReplyMarkup: vi.fn().mockResolvedValue({}),
+        answerInlineQuery: vi.fn().mockResolvedValue({}),
+        sendMessage: vi.fn().mockResolvedValue({ message_id: 1 }),
       })),
     },
   };
@@ -131,7 +133,7 @@ describe("webhook group video", () => {
     const kb = opts.replyMarkup.inline_keyboard as Array<Array<{ text: string; callback_data?: string; url?: string }>>;
     expect(kb[0][0].callback_data).toBe("link_existing:123");
     expect(kb[0][1].callback_data).toBe("link_new:123");
-    expect(kb[1][0].url).toContain("https://t.me/c/");
+        expect(kb[1][0].url).toContain("https://t.me/c/");
     expect(kb[1][0].text).toContain("\u0645\u0634\u0627\u0647\u062F\u0647");
   });
 });

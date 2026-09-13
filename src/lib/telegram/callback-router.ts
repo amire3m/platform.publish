@@ -35,7 +35,7 @@ function kindLabel(kind: string): string {
   }
 }
 
-function hasLinkPermission(subject: { role: string; allowedActions?: string[] | null; allowedAccountIds?: string[] | null }): boolean {
+export function hasLinkPermission(subject: { role: string; allowedActions?: string[] | null; allowedAccountIds?: string[] | null }): boolean {
   const p1 = hasPermission(subject as never, "manage_content_room" as Permission);
   const p2 = hasPermission(subject as never, "update_assigned_content" as Permission);
   return p1 || p2;
@@ -96,6 +96,7 @@ async function handleLinkExisting(messageIdRaw: string, fromUser: typeof users.$
   for (const p of products) {
     kb.inline_keyboard.push([{ text: p.title.slice(0, 30) || "بدون عنوان", callback_data: `link_pick_product:${messageId}:${p.id}:${page}` }]);
   }
+  kb.inline_keyboard.push([{ text: "🔍 جستجو", callback_data: `link_search:${messageId}` }]);
   const navRow: Array<{ text: string; callback_data: string }> = [];
   if (hasPrev) navRow.push({ text: "◀️ قبلی", callback_data: `link_existing:${messageId}:${page - 1}` });
   if (hasNext) navRow.push({ text: "▶️ بعدی", callback_data: `link_existing:${messageId}:${page + 1}` });
@@ -458,6 +459,27 @@ async function handleLinkNew(messageIdRaw: string, botMessageId?: number): Promi
   return { ok: true, message: "لطفاً عنوان محصول را بفرستید." };
 }
 
+async function handleLinkSearch(messageIdRaw: string, fromTelegramId: string, botMessageId?: number): Promise<{ ok: boolean; message: string }> {
+  const messageId = messageIdRaw.split(":")[0]?.trim() || messageIdRaw;
+  if (!messageId) return { ok: false, message: "شناسه پیام نامعتبر است." };
+  const { setPendingSearch } = await import("@/lib/content-room/pending-search");
+  setPendingSearch(fromTelegramId, { messageId });
+  const text = `🔍 <b>جستجوی محصول</b>\nبخشی از عنوان محصول را ریپلای کنید (۵ دقیقه فرصت دارید):`;
+  const kb = { inline_keyboard: [[{ text: "↩ بازگشت به لیست", callback_data: `link_existing:${messageId}:0` }]] };
+  try {
+    const client = await getTelegramClientSafe();
+    if (client) {
+      try {
+        await (client as unknown as { sendMessage: (t: string, tid: number | undefined, o: unknown) => Promise<unknown> }).sendMessage(text, undefined, {
+          parseMode: "HTML",
+          replyMarkup: kb,
+        } as never);
+      } catch {}
+    }
+  } catch {}
+  return { ok: true, message: "بخشی از عنوان را بفرستید." };
+}
+
 export async function routeCallback(
   action: string,
   contentId: string,
@@ -500,7 +522,7 @@ export async function routeCallback(
     user = found ?? null;
   } catch {
     // if DB unavailable, allow link actions to proceed in test mode with mock user
-    const linkActions = new Set(["link_existing", "link_new", "link_pick_product", "link_pick_part", "link_pick_kind"]);
+    const linkActions = new Set(["link_existing", "link_new", "link_pick_product", "link_pick_part", "link_pick_kind", "link_search"]);
     if (linkActions.has(action)) {
       const isTest = typeof process !== "undefined" && (process.env.VITEST === "true" || process.env.NODE_ENV === "test");
       if (isTest) {
@@ -529,7 +551,7 @@ export async function routeCallback(
     }
   }
   if (!user) {
-    const linkActionsForNull = new Set(["link_existing", "link_new", "link_pick_product", "link_pick_part", "link_pick_kind"]);
+    const linkActionsForNull = new Set(["link_existing", "link_new", "link_pick_product", "link_pick_part", "link_pick_kind", "link_search"]);
     const isTestNull = typeof process !== "undefined" && (process.env.VITEST === "true" || process.env.NODE_ENV === "test");
     if (isTestNull && linkActionsForNull.has(action)) {
       user = {
@@ -557,7 +579,7 @@ export async function routeCallback(
   }
 
   // Link flow handling — before old PERMISSION_MAP check, with manage_content_room | update_assigned_content
-  const linkActionsSet = new Set(["link_existing", "link_new", "link_pick_product", "link_pick_part", "link_pick_kind"]);
+  const linkActionsSet = new Set(["link_existing", "link_new", "link_pick_product", "link_pick_part", "link_pick_kind", "link_search"]);
   if (linkActionsSet.has(action)) {
     const subject = {
       role: user.role,
@@ -579,6 +601,8 @@ export async function routeCallback(
           return await handleLinkPickPart(contentId, botMessageId);
         case "link_pick_kind":
           return await handleLinkPickKind(contentId, user.id, user.telegramId || fromTelegramId, botMessageId);
+        case "link_search":
+          return await handleLinkSearch(contentId, fromTelegramId, botMessageId);
         default:
           return { ok: false, message: "عملیات نامعتبر است." };
       }

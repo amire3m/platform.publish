@@ -24,6 +24,7 @@ export const PRODUCT_TYPES = [
   "educational",
   "teaser",
   "music_video",
+  "raw_video",
 ] as const;
 export type ProductType = (typeof PRODUCT_TYPES)[number];
 

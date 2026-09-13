@@ -20,6 +20,7 @@ export const PRODUCT_TYPES = [
   "educational",
   "teaser",
   "music_video",
+  "raw_video",
 ] as const;
 
 export const CHANNELS = [

@@ -9,6 +9,7 @@ export const PRODUCT_TYPE_LABELS_FA: Record<string, string> = {
   educational: "آموزشی",
   teaser: "تیزر",
   music_video: "نماهنگ",
+  raw_video: "ویدیو خام",
 };
 
 export const ACTIVITY_LABELS_FA: Record<string, string> = {

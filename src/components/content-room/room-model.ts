@@ -13,6 +13,7 @@ export const PRODUCT_TYPE_LABELS: Record<string, string> = {
   educational: "آموزشی",
   teaser: "تیزر",
   music_video: "نماهنگ",
+  raw_video: "ویدیو خام",
 };
 
 export const ACTIVITY_LABELS: Record<string, string> = {

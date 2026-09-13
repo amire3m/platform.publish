@@ -179,6 +179,7 @@ export default function ContentRoomPage() {
                   <option value="educational">آموزشی</option>
                   <option value="teaser">تیزر</option>
                   <option value="music_video">نماهنگ</option>
+                  <option value="raw_video">ویدیو خام</option>
                 </Select>
               </div>
               <div className="flex flex-col gap-1">

@@ -7,7 +7,7 @@ import { dirname, resolve } from "node:path";
 
 import { contentPartActivities, contentParts, contentProducts } from "./schema";
 import { PART_ACTIVITIES } from "@/lib/content-room/activities";
-import { PART_ACTIVITIES as VALIDATION_PART_ACTIVITIES } from "@/lib/content-room/validation";
+import { PART_ACTIVITIES as VALIDATION_PART_ACTIVITIES, PRODUCT_TYPES as VALIDATION_PRODUCT_TYPES } from "@/lib/content-room/validation";
 import { CONTENT_STATUS_ORDER } from "@/lib/content-room/presentation";
 
 describe("content room schema batch activities", () => {
@@ -136,6 +136,24 @@ describe("content_part_activities check constraint drift guard", () => {
       }
     }
     const missing = Object.keys(CONTENT_STATUS_ORDER).filter((s) => !allowed.has(s));
+    expect(missing).toEqual([]);
+  });
+
+  it("migration SQL permits every code product type (else create fails on real DB)", () => {
+    const dir = resolve(dirname(fileURLToPath(import.meta.url)), "../../drizzle");
+    const files = readdirSync(dir).filter((f) => f.endsWith(".sql")).sort();
+    const allowed = new Set<string>();
+    for (const f of files) {
+      const sql = readFileSync(resolve(dir, f), "utf8");
+      const re = /CHECK\s*\([^)]*product_type[^)]*IN\s*\(([^)]+)\)/gi;
+      let m: RegExpExecArray | null;
+      while ((m = re.exec(sql)) !== null) {
+        for (const v of m[1].split(",")) {
+          allowed.add(v.trim().replace(/^'|'$/g, ""));
+        }
+      }
+    }
+    const missing = (VALIDATION_PRODUCT_TYPES as readonly string[]).filter((t) => !allowed.has(t));
     expect(missing).toEqual([]);
   });
 });

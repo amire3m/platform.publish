@@ -1,6 +1,6 @@
 import type { ContentStatus } from "@/lib/content-room/presentation";
 
-export type ProductType = "serial" | "documentary" | "tv_program" | "film" | "short_film" | "educational" | "teaser" | "music_video";
+export type ProductType = "serial" | "documentary" | "tv_program" | "film" | "short_film" | "educational" | "teaser" | "music_video" | "raw_video";
 export type Channel = "zed_revayat" | "zaviye_no" | "tamashin" | "iranian_frame" | "shock" | "tinazh";
 
 export const PART_ACTIVITIES = [

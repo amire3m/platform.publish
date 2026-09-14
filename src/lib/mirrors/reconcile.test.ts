@@ -23,6 +23,8 @@ describe("reconcileMirrors", () => {
       setReady: vi.fn().mockResolvedValue(undefined),
       setError: vi.fn().mockResolvedValue(undefined),
       getTranscriptSrt: vi.fn().mockResolvedValue(null),
+      discoverUnmirrored: vi.fn().mockResolvedValue([]),
+      enqueue: vi.fn().mockResolvedValue(undefined),
     };
     const out = await reconcileMirrors({
       client,
@@ -41,7 +43,24 @@ describe("reconcileMirrors", () => {
     vi.stubEnv("VIDS_API_KEY", "");
     const store = { listPending: vi.fn() };
     const out = await reconcileMirrors({ store: store as never, client: new FakeVidsClient() });
-    expect(out).toEqual({ checked: 0, completed: 0, failed: 0 });
+    expect(out).toEqual({ checked: 0, completed: 0, failed: 0, enqueued: 0 });
     expect(store.listPending).not.toHaveBeenCalled();
+  });
+
+  it("enqueues discovered unmirrored files", async () => {
+    vi.stubEnv("VIDS_API_KEY", "test-key");
+    const client = new FakeVidsClient();
+    const store = {
+      listPending: vi.fn().mockResolvedValue([]),
+      setUploading: vi.fn().mockResolvedValue(undefined),
+      setReady: vi.fn().mockResolvedValue(undefined),
+      setError: vi.fn().mockResolvedValue(undefined),
+      getTranscriptSrt: vi.fn().mockResolvedValue(null),
+      discoverUnmirrored: vi.fn().mockResolvedValue([{ partId: "CPP-9", fileId: "file-old" }]),
+      enqueue: vi.fn().mockResolvedValue(undefined),
+    };
+    const out = await reconcileMirrors({ client, store: store as never, maxItems: 5, poll: { tries: 1, intervalMs: 0 } });
+    expect(store.enqueue).toHaveBeenCalledWith("CPP-9", "file-old");
+    expect(out.enqueued).toBe(1);
   });
 });

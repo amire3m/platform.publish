@@ -9,6 +9,8 @@ export interface ReconcileStore {
   setReady: (fileId: string, remoteId: string, remoteUrl: string | null) => Promise<void>;
   setError: (fileId: string, error: string) => Promise<void>;
   getTranscriptSrt: (partId: string) => Promise<string | null>;
+  discoverUnmirrored: () => Promise<Array<{ partId: string; fileId: string }>>;
+  enqueue: (partId: string, fileId: string) => Promise<void>;
 }
 
 export interface ReconcileInput {
@@ -22,12 +24,12 @@ export interface ReconcileInput {
  * Cron sweep: resume uploading mirrors and process queued ones.
  * No-ops without a mirror key. Never throws.
  */
-export async function reconcileMirrors(input: ReconcileInput = {}): Promise<{ checked: number; completed: number; failed: number }> {
-  const result = { checked: 0, completed: 0, failed: 0 };
+export async function reconcileMirrors(input: ReconcileInput = {}): Promise<{ checked: number; completed: number; failed: number; enqueued: number }> {
+  const result = { checked: 0, completed: 0, failed: 0, enqueued: 0 };
   try {
     if (!(process.env.VIDS_API_KEY ?? "").trim()) return result;
     const { getVidsClient } = await import("./vids");
-    const { listPendingMirrors, setMirrorUploading, setMirrorReady, setMirrorError } = await import("./store");
+    const { listPendingMirrors, setMirrorUploading, setMirrorReady, setMirrorError, listUnmirroredVideoFiles, upsertQueuedMirror } = await import("./store");
     const client = input.client ?? getVidsClient();
     const maxItems = input.maxItems ?? 5;
     const poll = input.poll ?? { tries: 4, intervalMs: 15000 };
@@ -45,6 +47,8 @@ export async function reconcileMirrors(input: ReconcileInput = {}): Promise<{ ch
           return null;
         }
       },
+      discoverUnmirrored: () => listUnmirroredVideoFiles(maxItems),
+      enqueue: (partId, fileId) => upsertQueuedMirror(partId, fileId).then(() => {}),
     };
     const pending = await store.listPending();
     for (const row of pending.slice(0, maxItems)) {
@@ -90,6 +94,14 @@ export async function reconcileMirrors(input: ReconcileInput = {}): Promise<{ ch
         result.failed++;
       }
     }
+    // discover existing video files with no mirror row yet and enqueue them
+    try {
+      const fresh = await store.discoverUnmirrored();
+      for (const f of fresh.slice(0, maxItems)) {
+        await store.enqueue(f.partId, f.fileId);
+        result.enqueued++;
+      }
+    } catch {}
     return result;
   } catch {
     return result;

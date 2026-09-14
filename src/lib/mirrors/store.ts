@@ -1,4 +1,4 @@
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, gte, inArray, notLike, sql } from "drizzle-orm";
 
 import { db } from "@/db";
 import { mediaMirrors } from "@/db/schema";
@@ -122,6 +122,39 @@ export async function listPendingMirrors(limit = 20, provider = MIRROR_PROVIDER)
 export async function deleteMirrorsByPartIds(partIds: string[]): Promise<void> {
   if (!partIds.length) return;
   await db.delete(mediaMirrors).where(inArray(mediaMirrors.partId, partIds));
+}
+
+/** Real video file_ids (parts + assets) with no mirror row yet. Covers excluded. */
+export async function listUnmirroredVideoFiles(limit = 5): Promise<Array<{ partId: string; fileId: string }>> {
+  const { contentParts, contentPartAssets } = await import("@/db/schema");
+  const realFile = (col: Parameters<typeof notLike>[0]) => and(notLike(col, "tg_msg_%"), notLike(col, "sample_%"));
+  const partRows = (await db
+    .select({ partId: contentParts.id, fileId: contentParts.fileRef })
+    .from(contentParts)
+    .where(realFile(contentParts.fileRef))
+    .limit(500)) as unknown as Array<{ partId: string; fileId: string | null }>;
+  const assetRows = (await db
+    .select({ partId: contentPartAssets.partId, fileId: contentPartAssets.fileRef })
+    .from(contentPartAssets)
+    .where(realFile(contentPartAssets.fileRef))
+    .limit(500)) as unknown as Array<{ partId: string; fileId: string | null }>;
+  const candidates = [...partRows, ...assetRows].filter((r) => r.fileId);
+  if (!candidates.length) return [];
+  const existing = (await db
+    .select({ fileId: mediaMirrors.fileId })
+    .from(mediaMirrors)
+    .where(inArray(mediaMirrors.fileId, [...new Set(candidates.map((c) => c.fileId as string))]))) as unknown as Array<{ fileId: string }>;
+  const mirrored = new Set(existing.map((r) => r.fileId));
+  const out: Array<{ partId: string; fileId: string }> = [];
+  const seen = new Set<string>();
+  for (const c of candidates) {
+    const fileId = c.fileId as string;
+    if (mirrored.has(fileId) || seen.has(fileId)) continue;
+    seen.add(fileId);
+    out.push({ partId: c.partId, fileId });
+    if (out.length >= limit) break;
+  }
+  return out;
 }
 
 export async function listMirrorsByPartIds(partIds: string[]): Promise<MirrorRow[]> {

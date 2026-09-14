@@ -31,6 +31,7 @@ export function generateEntityId(
     | "WIB"
     | "CPR"
     | "CPP"
+    | "PTR"
     | "LCH"
     | "LSC"
     | "LSE"

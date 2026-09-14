@@ -14,6 +14,7 @@ import type { ContentRoomProductDetail } from "./types";
 import { channelLabelFa, productTypeLabelFa, getProductProgressFromActivities, getNextActionFromActivities } from "./room-model";
 import { getChannelAccounts } from "@/lib/channels";
 import { PartActivitiesGrid } from "./PartActivitiesGrid";
+import { TranscriptPanel } from "./TranscriptPanel";
 import { EditProductDialog } from "./EditProductDialog";
 
 interface Props {
@@ -858,6 +859,8 @@ function PartUploadCard({
           </span>
         </div>
       </div>
+
+      <TranscriptPanel partId={part.id} hasFile={hasVideo} onToast={onToast} />
 
       {part.playbackUrl && (
         <DedicatedPlayer src={part.playbackUrl} poster={part.coverUrl ?? undefined} title={`قسمت ${part.partNumber} — ویدیو کامل`} className="aspect-video w-full" />

@@ -25,9 +25,10 @@ function isRealFileId(v: string | null | undefined): boolean {
 export interface LibraryFileItem {
   id: string;
   filename: string;
-  /** full_video | highlight | reel | cover */
-  type: string;
+  type: "full_video" | "highlight" | "reel" | "cover" | string;
   playbackUrl: string;
+  mirrorUrl?: string | null;
+  fileId?: string | null;
   createdAt: string;
   telegramLink?: string;
   partId?: string;
@@ -63,6 +64,17 @@ export interface LibraryTreeResponse {
   group: Array<LibraryFileItem & { messageId: string }>;
 }
 
+/** Attach ready mirror URLs to items (pure; fetching happens in GET). */
+export function attachMirrorUrls<T extends { fileId?: string | null }>(
+  items: readonly T[],
+  mirrors: Record<string, string>,
+): Array<T & { mirrorUrl: string | null }> {
+  return items.map((item) => ({
+    ...item,
+    mirrorUrl: (item.fileId && mirrors[item.fileId]) || null,
+  }));
+}
+
 export async function GET() {
   const user = await getCurrentUser();
   if (!user) return jsonError("ابتدا وارد حساب کاربری خود شوید.", 401, "UNAUTHENTICATED");
@@ -92,6 +104,7 @@ export async function GET() {
     filename,
     type,
     playbackUrl: buildUrl(buildToken(ref, mime)),
+    fileId: ref,
     createdAt: createdAt.toISOString(),
     partId,
   });
@@ -166,11 +179,39 @@ export async function GET() {
         filename: `ویدیوی گروه — پیام ${messageId}`,
         type: "full_video",
         playbackUrl: buildUrl(buildToken(fileId, "video/mp4")),
+        fileId,
         createdAt: ev.createdAt.toISOString(),
         telegramLink: `https://t.me/c/${chatIdForLink}/${messageId}`,
         messageId,
       });
     }
+  } catch {}
+
+  // best-effort mirror enrichment (never fails the listing)
+  try {
+    const { getMirrorUrlsByFile } = await import("@/lib/mirrors/store");
+    const collect = (items: Array<{ fileId?: string | null }>): string[] =>
+      items.map((i) => i.fileId).filter((f): f is string => !!f);
+    const allItems = [...channels.flatMap((c) => c.products.flatMap((p) => p.parts.flatMap((part) => [
+      ...(part.fullVideo ? [part.fullVideo] : []),
+      ...part.highlights,
+      ...part.reels,
+    ]))), ...group];
+    const mirrors = await getMirrorUrlsByFile(collect(allItems));
+    const withUrls = new Map(attachMirrorUrls(allItems, mirrors).map((i) => [i.id, i.mirrorUrl ?? null]));
+    const apply = (item: { id: string; mirrorUrl?: string | null }) => {
+      item.mirrorUrl = withUrls.get(item.id) ?? null;
+    };
+    for (const ch of channels) {
+      for (const prod of ch.products) {
+        for (const part of prod.parts) {
+          if (part.fullVideo) apply(part.fullVideo);
+          for (const h of part.highlights) apply(h);
+          for (const r of part.reels) apply(r);
+        }
+      }
+    }
+    for (const g of group) apply(g);
   } catch {}
 
   return jsonOk({ channels, group } satisfies LibraryTreeResponse);

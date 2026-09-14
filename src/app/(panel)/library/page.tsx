@@ -21,6 +21,7 @@ interface FileItem {
   filename: string;
   type: "full_video" | "highlight" | "reel" | "cover" | string;
   playbackUrl: string;
+  mirrorUrl?: string | null;
   createdAt: string;
   telegramLink?: string;
 }
@@ -79,7 +80,13 @@ function FilePreview({ item }: { item: FileItem }) {
           )}
         </div>
       ) : (
-        <DedicatedPlayer src={item.playbackUrl} title={item.filename} className="aspect-video w-full" onError={() => setFailed(true)} />
+        <DedicatedPlayer
+          src={item.mirrorUrl ?? item.playbackUrl}
+          fallbackSrc={item.mirrorUrl ? item.playbackUrl : undefined}
+          title={item.filename}
+          className="aspect-video w-full"
+          onError={() => setFailed(true)}
+        />
       )}
     </div>
   );

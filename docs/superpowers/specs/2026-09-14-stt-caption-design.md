@@ -1,14 +1,15 @@
 # Smart Caption (STT + Caption) — Design
 
-Date: 2026-09-14. Status: approved approach C (start cloud, migrate self-hosted later).
+Date: 2026-09-14. Status: approved self-hosted (rented GPU VPS, zero
+subscriptions). Supersedes the earlier cloud-start idea per owner decision.
 
 ## Overview
 Per-part Persian transcription + caption/subtitle generation inside content-room.
 Trigger: «رونویسی» button on each part card (files tab), after the part file is
-uploaded/linked. No new server: the main server orchestrates —
-Telegram download → ffmpeg to 16kHz wav → cloud STT → store transcript+SRT →
-cloud LLM builds platform captions. STT behind a provider interface so a
-future self-hosted Persian model replaces the cloud without UI changes.
+uploaded/linked. A rented GPU VPS ("AI box") serves a Persian-tuned Whisper
+model and a Persian-capable open LLM; the main server orchestrates —
+Telegram download → ffmpeg to 16kHz wav → AI box STT → store transcript+SRT →
+AI box LLM builds platform captions. No per-use fees anywhere.
 
 ## Goals
 - Accurate Persian transcript per part (editable, searchable).
@@ -20,28 +21,41 @@ future self-hosted Persian model replaces the cloud without UI changes.
 ## Non-Goals
 - Real-time/live transcription. Diarization v1 (single-speaker assumption).
 - Auto-publishing captions (human copies/uses explicitly).
-- Self-hosted model now (migration path only).
 
 ## Architecture
-- No new infrastructure. Main Next.js server only; ffmpeg (present) for audio
-  extraction; telegram file download via existing client (self-hosted Bot API).
-- Provider abstraction: `SttProvider.transcribe(wav): segments[]` and
-  `CaptionProvider.generate(transcript, channel): captions`. Cloud
-  implementations first; `FasterWhisperProvider` later on the GPU box.
-- API keys in ENV: `STT_API_KEY`, `CAPTION_LLM_KEY` (+ model names). Never in repo.
+- Main server (unchanged size): orchestration + queue + storage + UI only.
+  Heavy compute never touches it.
+- AI box (new rented VPS with NVIDIA GPU): two local HTTP services behind one
+  shared-secret token, IP-allowlisted to the main server only:
+  - STT: faster-whisper, Persian-tuned whisper-large (Neyshekar-family /
+    whisper-persian-v4 class; final pick after eval on our own videos),
+    `POST /transcribe` → segments [{start,end,text}] + full text.
+  - LLM: OpenAI-compatible server (llama.cpp / vLLM / Ollama) with a
+    Persian-capable open model, `POST /v1/chat/completions` for captions.
+  - Served sequentially (one job at a time) to fit VRAM; queue lives on main.
+- Secrets in ENV: `AI_BOX_URL`, `AI_BOX_TOKEN`. Never in repo.
 
-## Components
+## AI Box Spec (to procure)
+- Minimum: NVIDIA T4 (16GB VRAM), 4+ vCPU, 16GB RAM, 100GB disk.
+- Recommended: L4 (24GB) or A10G, 8 vCPU, 32GB RAM, 200GB disk (headroom for
+  larger Persian models + concurrent future jobs).
+- OS Ubuntu 22.04+, CUDA 12, Docker optional but recommended.
+- Network: inbound only from main server IP (46.249.100.151) + SSH key.
+
+## Components (main server)
 - UI (PartUploadCard, files tab): «رونویسی» button, status pill, transcript
   editor (textarea, save), «دانلود SRT», «ساخت کپشن» → two caption cards
   (YouTube / Instagram) with copy buttons.
 - API: `POST parts/[id]/transcribe` (enqueue), `GET parts/[id]/transcript`
   (status+text+segments), `PATCH` transcript (manual edit), `POST
   parts/[id]/captions` (generate), `GET parts/[id]/subtitle.srt` (download).
-- Job runner: in-process queue (existing patterns) with concurrency 1–2,
-  progress in DB row, timeouts per chunk, retry x2 on transient errors.
+- Providers: `SttProvider` (RemoteWhisper impl) + `CaptionProvider`
+  (RemoteLlm impl) — same interfaces a future local/cloud swap would use.
+- Job runner: in-process queue, concurrency 1 (box serves sequentially),
+  per-chunk timeouts, retry x2 on transient/network errors.
 - DB (new migration): `part_transcripts` (id, part_id UNIQUE FK cascade,
   language default 'fa', full_text, segments JSONB [{start,end,text}],
-  srt_text, captions JSONB {youtube, instagram}, stt_provider, stt_model,
+  srt_text, captions JSONB {youtube, instagram}, stt_model, llm_model,
   status, error, version, created/updated). Manual edits bump version and
   regenerate SRT from edited text (even split) — timestamps approximate.
 
@@ -49,9 +63,9 @@ future self-hosted Persian model replaces the cloud without UI changes.
 1. Click رونویسی → job row `queued`.
 2. Download part file (Telegram fileRef) to /tmp → ffmpeg `-ar 16000 -ac 1` wav.
 3. If duration > 10 min: split into 10-min chunks (30s overlap) → transcribe
-   each → offset-merge segments.
+   each on the box → offset-merge segments.
 4. Persist transcript + segments + generated SRT. Cleanup /tmp.
-5. Click ساخت کپشن → LLM prompt (FA, channel tone, product title/type,
+5. Click ساخت کپشن → box LLM prompt (FA, channel tone, product title/type,
    transcript truncated to budget) → store {youtube, instagram}.
 
 ## SRT
@@ -60,9 +74,11 @@ future self-hosted Persian model replaces the cloud without UI changes.
 
 ## Limits / Cost / Errors
 - V1 cap: 60 min per part; files above → 422 with message.
-- Cost guard: env `STT_MAX_MINUTES_PER_DAY` (default 300); counter in DB.
-- Chunkwah errors: mark job error with Persian message + «تلاش دوباره».
-- Secrets: never logged; file buffers never persisted outside /tmp.
+- Fair use: one box job at a time; per-user daily minutes guard (env, default
+  300) to keep the queue sane.
+- Box unreachable → job error with Persian message + «تلاش دوباره»; main site
+  never blocks on the box (async everywhere, timeouts enforced).
+- Secrets: never logged; audio buffers only in /tmp with cleanup.
 
 ## Permissions
 Reuse content-room model: trigger/edit = `update_assigned_content` or
@@ -70,18 +86,19 @@ Reuse content-room model: trigger/edit = `update_assigned_content` or
 
 ## Testing
 - Unit: SRT builder, chunk merge with offsets, prompt builder, provider
-  interface fakes.
+  fakes (no box needed).
 - Route tests with mocked providers (success/422/409/500 paths).
-- Manual e2e: one real short part → transcript+SRT+captions verified by user.
+- Box contract test: script hitting staging endpoints with a sample video.
+- Manual e2e: one real short part → transcript+SRT+captions verified by owner.
 
-## Migration to Self-Hosted (later)
-- Implement `FasterWhisperProvider` (FastAPI on GPU box, Persian-tuned
-  whisper-large, e.g. Neyshekar-family) behind the same interface + ENV switch.
-- Recommended box when the time comes: 16GB+ VRAM (T4 minimum, L4/A10G
-  ideal), 32GB RAM, 100GB disk. No code changes in UI/routes.
+## Scaling Later (no redesign)
+- Bigger/faster box or second box + concurrency bump (queue already central).
+- Swap models by changing box image + `stt_model`/`llm_model` ENV labels.
 
 ## Open Items (before implementation)
-1. STT vendor + key procurement (candidate: ElevenLabs Scribe for FA accuracy).
-2. Caption LLM vendor + key (FA quality matters more than price here).
-3. Confirm 60-min cap and daily minutes budget.
-4. Confirm caption tones per channel (one sample each is enough).
+1. Procure the GPU VPS (spec above) + give SSH + its IP for allowlisting.
+2. Model eval on 2–3 of our own videos (STT candidates + LLM candidates) —
+   owner picks by reading outputs.
+3. Shared secret exchange for box auth (main → box).
+4. Confirm 60-min cap and daily minutes budget.
+5. Caption tones per channel (one sample each is enough).

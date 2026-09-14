@@ -763,3 +763,26 @@ export const channelAccounts = pgTable("channel_accounts", {
   updatedBy: text("updated_by"),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+// ---------------------------------------------------------------------------
+// Media mirrors (e.g. vids.st): fast playback/publish copies of Telegram files.
+// Telegram file_id stays canonical; rows here are best-effort cache entries.
+// ---------------------------------------------------------------------------
+export const mediaMirrors = pgTable(
+  "media_mirrors",
+  {
+    id: text("id").primaryKey(), // MMR-1405-000001
+    partId: text("part_id").references(() => contentParts.id, { onDelete: "cascade" }),
+    fileId: text("file_id").notNull(),
+    provider: text("provider").notNull().default("vids.st"),
+    remoteId: text("remote_id"),
+    remoteUrl: text("remote_url"),
+    status: text("status").notNull().default("queued"), // queued | uploading | ready | error
+    error: text("error"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    providerFileUnique: uniqueIndex("media_mirrors_provider_file_unique").on(t.provider, t.fileId),
+  }),
+);

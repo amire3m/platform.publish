@@ -5,7 +5,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 
-import { contentPartActivities, contentParts, contentProducts, partTranscripts, channelAccounts } from "./schema";
+import { contentPartActivities, contentParts, contentProducts, partTranscripts, channelAccounts, mediaMirrors } from "./schema";
 import { PART_ACTIVITIES } from "@/lib/content-room/activities";
 import { PART_ACTIVITIES as VALIDATION_PART_ACTIVITIES, PRODUCT_TYPES as VALIDATION_PRODUCT_TYPES } from "@/lib/content-room/validation";
 import { CONTENT_STATUS_ORDER } from "@/lib/content-room/presentation";
@@ -176,5 +176,15 @@ describe("channel_accounts table", () => {
       expect.arrayContaining(["channelId", "youtubeAccountId", "instagramAccountId", "telegramTopicId"]),
     );
     expect(columns.channelId.notNull).toBe(true);
+  });
+});
+
+describe("media_mirrors table", () => {
+  it("defines media_mirrors keyed by provider and file", () => {
+    const columns = getTableColumns(mediaMirrors);
+    expect(Object.keys(columns)).toEqual(
+      expect.arrayContaining(["id", "partId", "fileId", "provider", "remoteId", "remoteUrl", "status"]),
+    );
+    expect(columns.fileId.notNull).toBe(true);
   });
 });

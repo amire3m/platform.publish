@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, waitFor, cleanup } from "@testing-library/react";
+import { render, screen, waitFor, cleanup, fireEvent } from "@testing-library/react";
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), back: vi.fn() }),
@@ -145,6 +145,72 @@ describe("panel group media", () => {
 
     await waitFor(() => {
       expect(calls.some((c) => c.url.includes("/transcribe") && c.init?.method === "POST")).toBe(true);
+    });
+
+    global.fetch = originalFetch;
+  });
+
+  it("opens channel link dialog and saves youtube linkage", async () => {
+    const originalFetch = global.fetch;
+    const calls: Array<{ url: string; init?: RequestInit }> = [];
+    global.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : (input as Request).url;
+      calls.push({ url, init });
+      if (typeof url === "string" && url.includes("/api/channels") && init?.method === "PATCH") {
+        return { ok: true, json: async () => ({ ok: true, data: { channel: {} } }) } as unknown as Response;
+      }
+      if (typeof url === "string" && url.includes("/api/channels")) {
+        return {
+          ok: true,
+          json: async () => ({
+            ok: true,
+            data: { channels: [{ id: "youtube", labelFa: "Y", youtubeAccountId: null, instagramAccountId: null, telegramTopicId: null }] },
+          }),
+        } as unknown as Response;
+      }
+      if (typeof url === "string" && url.includes("/api/accounts")) {
+        return {
+          ok: true,
+          json: async () => ({
+            ok: true,
+            data: [{ id: "acc-yt", platform: "youtube", displayName: "YT", username: "yt", active: true, connectionStatus: "connected" }],
+          }),
+        } as unknown as Response;
+      }
+      if (typeof url === "string" && url.includes("/api/telegram/topics")) {
+        return { ok: true, json: async () => ({ ok: true, data: [] }) } as unknown as Response;
+      }
+      return { ok: true, json: async () => ({ ok: true, data: {} }) } as unknown as Response;
+    }) as unknown as typeof fetch;
+
+    const { ContentRoomDetail } = await import("./ContentRoomDetail");
+    const product = {
+      id: "p1",
+      title: "t1",
+      status: "draft",
+      productType: "episode",
+      channel: "youtube",
+      partsCount: 1,
+      version: 1,
+      notes: null,
+      parts: [],
+    } as unknown as never;
+
+    render(<ContentRoomDetail product={product as never} onRefresh={vi.fn()} />);
+
+    const connectBtns = await screen.findAllByRole("button", { name: /اتصال/ });
+    connectBtns[0].click();
+
+    const ytSelect = await screen.findByLabelText("حساب یوتیوب");
+    fireEvent.change(ytSelect, { target: { value: "acc-yt" } });
+
+    const saveBtn = await screen.findByRole("button", { name: "ذخیره" });
+    saveBtn.click();
+
+    await waitFor(() => {
+      const patch = calls.find((c) => c.url.includes("/api/channels") && c.init?.method === "PATCH");
+      expect(patch).toBeDefined();
+      expect(String(patch!.init!.body)).toContain("acc-yt");
     });
 
     global.fetch = originalFetch;

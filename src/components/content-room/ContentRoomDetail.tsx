@@ -15,6 +15,7 @@ import { channelLabelFa, productTypeLabelFa, getProductProgressFromActivities, g
 import { getChannelAccounts } from "@/lib/channels";
 import { PartActivitiesGrid } from "./PartActivitiesGrid";
 import { TranscriptPanel } from "./TranscriptPanel";
+import { ChannelLinkDialog } from "./ChannelLinkDialog";
 import { EditProductDialog } from "./EditProductDialog";
 
 interface Props {
@@ -22,7 +23,7 @@ interface Props {
   onRefresh: () => Promise<void> | void;
 }
 
-function DestinationStatus({ label, connected, settingsHref, optional }: { label: string; connected: boolean; settingsHref: string; optional?: boolean }) {
+function DestinationStatus({ label, connected, optional, onConnect }: { label: string; connected: boolean; optional?: boolean; onConnect: () => void }) {
   return (
     <span className="inline-flex items-center gap-1.5">
       <span aria-hidden="true" className={`size-2 shrink-0 rounded-full ${connected ? "bg-emerald-500" : optional ? "bg-slate-400" : "bg-amber-500"}`} />
@@ -30,9 +31,9 @@ function DestinationStatus({ label, connected, settingsHref, optional }: { label
       {connected ? (
         <span className="text-tg-secondary">متصل</span>
       ) : (
-        <Link href={settingsHref} className="text-tg-accent hover:underline">
+        <button type="button" onClick={onConnect} className="text-tg-accent hover:underline">
           اتصال{optional ? " (اختیاری)" : ""}
-        </Link>
+        </button>
       )}
     </span>
   );
@@ -46,6 +47,7 @@ export function ContentRoomDetail({ product, onRefresh }: Props) {
   const [sendPartId, setSendPartId] = useState<string | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [linkOpen, setLinkOpen] = useState(false);
   const [sendResult, setSendResult] = useState<{ programId: string } | null>(null);
   const [editOpen, setEditOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<"checklist" | "files" | "group">("checklist");
@@ -57,7 +59,7 @@ export function ContentRoomDetail({ product, onRefresh }: Props) {
 
   const isReadyToSend = product.status === "ready_to_send";
   const channelAccounts = getChannelAccounts(product.channel);
-  const { data: channelsData } = useSWR<{ channels: Array<{ id: string; labelFa: string; youtubeAccountId: string | null; instagramAccountId: string | null; telegramTopicId: string | null; linked?: { youtube: boolean; instagram: boolean; telegram: boolean } }> }>(
+  const { data: channelsData, mutate: mutateChannels } = useSWR<{ channels: Array<{ id: string; labelFa: string; youtubeAccountId: string | null; instagramAccountId: string | null; telegramTopicId: string | null; linked?: { youtube: boolean; instagram: boolean; telegram: boolean } }> }>(
     "/api/channels",
     async (url: string) => {
       try {
@@ -223,9 +225,9 @@ export function ContentRoomDetail({ product, onRefresh }: Props) {
             <div className="mt-4 rounded-lg border border-tg-border bg-tg-surface p-3">
               <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs">
                 <span className="font-semibold text-tg-secondary">حساب‌های مقصد</span>
-                <DestinationStatus label="یوتیوب" connected={!!ytId} settingsHref="/settings/youtube" />
-                <DestinationStatus label="اینستاگرام" connected={!!igId} settingsHref="/settings/instagram" />
-                <DestinationStatus label="تلگرام" connected={!!tgId} settingsHref="/settings/telegram" optional />
+                <DestinationStatus label="یوتیوب" connected={!!ytId} onConnect={() => setLinkOpen(true)} />
+                <DestinationStatus label="اینستاگرام" connected={!!igId} onConnect={() => setLinkOpen(true)} />
+                <DestinationStatus label="تلگرام" connected={!!tgId} optional onConnect={() => setLinkOpen(true)} />
               </div>
             </div>
           </div>
@@ -348,6 +350,14 @@ export function ContentRoomDetail({ product, onRefresh }: Props) {
       />
 
       <EditProductDialog open={editOpen} product={product} onClose={() => setEditOpen(false)} onSuccess={onRefresh} />
+      <ChannelLinkDialog
+        open={linkOpen}
+        channelId={product.channel}
+        channelLabel={channelLabelFa(product.channel)}
+        current={{ youtubeAccountId: ytId ?? null, instagramAccountId: igId ?? null, telegramTopicId: tgId ?? null }}
+        onClose={() => setLinkOpen(false)}
+        onSaved={() => mutateChannels()}
+      />
     </div>
   );
 }

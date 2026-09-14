@@ -10,7 +10,7 @@ export interface TranscriptionDeps {
   extractWav: (video: Buffer, start: number, end: number) => Promise<Buffer>;
   stt: SttProvider;
   saveProgress: (status: string) => Promise<void>;
-  persist: (result: { text: string; segments: TranscriptSegment[]; srt: string; model: string }) => Promise<void>;
+  persist: (result: { text: string; durationSec: number; segments: TranscriptSegment[]; srt: string; model: string }) => Promise<void>;
 }
 
 export function transcriptionTooLongError(): Error & { code: string } {
@@ -33,7 +33,7 @@ export async function runTranscription(deps: TranscriptionDeps, opts: { maxMinut
   }
   const segments = mergeSegments(merged);
   const text = segments.map((s) => s.text).join(" ");
-  await deps.persist({ text, segments, srt: buildSrt(segments), model });
+  await deps.persist({ text, durationSec, segments, srt: buildSrt(segments), model });
   return { segments: segments.length };
 }
 

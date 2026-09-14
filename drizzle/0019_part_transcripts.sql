@@ -3,6 +3,7 @@ CREATE TABLE IF NOT EXISTS part_transcripts (
   part_id text NOT NULL REFERENCES content_parts(id) ON DELETE CASCADE,
   language text NOT NULL DEFAULT 'fa',
   full_text text NOT NULL DEFAULT '',
+  duration_sec integer,
   segments jsonb NOT NULL DEFAULT '[]',
   srt_text text NOT NULL DEFAULT '',
   captions jsonb,

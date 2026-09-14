@@ -53,6 +53,12 @@ vi.mock("@/lib/telegram/client", () => ({
   contentTypeFromPath: vi.fn(() => null),
 }));
 
+vi.mock("@/lib/content-room/repository", () => ({
+  contentRoomRepository: {
+    createProduct: vi.fn().mockResolvedValue({ id: "CPR-99", title: "My Title" }),
+  },
+}));
+
 describe("link_existing", () => {
   it("shows product picker for link_existing", async () => {
     const { routeCallback } = await import("./callback-router");
@@ -132,5 +138,57 @@ describe("link_existing", () => {
     expect(res.ok).toBe(true);
     expect(mockSend).toHaveBeenCalledTimes(1);
     expect(mockSend.mock.calls[0][1]).toBe(42);
+  });
+
+  it("completes telegram product creation: title, type, channel", async () => {
+    const { TelegramClient } = await import("./client");
+    const { db } = await import("@/db");
+    const OWNER = { id: "u-tg", telegramId: "999", name: "T", username: null, phone: null, role: "owner", active: true, allowedActions: [], allowedAccountIds: [], allowedChannels: [], avatarUrl: null, isOwnerProtected: false, createdAt: new Date(), updatedAt: new Date() };
+    const userChain = { from: () => ({ where: () => ({ limit: () => Promise.resolve([OWNER]) }) }) };
+    const mockSend = vi.fn().mockResolvedValue({ message_id: 200 });
+    const clientMock = {
+      editMessageText: vi.fn().mockResolvedValue({}),
+      sendMessage: mockSend,
+      getFile: vi.fn(),
+      answerCallbackQuery: vi.fn().mockResolvedValue({}),
+      editMessageReplyMarkup: vi.fn().mockResolvedValue({}),
+    };
+    vi.mocked(TelegramClient.fromEnv as unknown as () => unknown).mockReturnValue(clientMock as never);
+    const selectMock = vi.mocked(db.select as unknown as () => unknown);
+    selectMock.mockImplementation(() => userChain as never);
+
+    const mod = await import("./callback-router");
+    // step 1: arm via link_new, then reply the title
+    const armed = await mod.routeCallback("link_new", "555", "999");
+    expect(armed.ok).toBe(true);
+    const titled = await mod.handleNewProductTitle("999", "My Title");
+    expect(titled.handled).toBe(true);
+    const { getPendingNewProduct } = await import("@/lib/content-room/pending-new-product");
+    expect(getPendingNewProduct("999")?.title).toBe("My Title");
+    // step 2: pick type
+    const typed = await mod.routeCallback("link_new_type", "serial", "999");
+    expect(typed.ok).toBe(true);
+    expect(getPendingNewProduct("999")?.productType).toBe("serial");
+    // step 3: pick channel creates the product and opens the part picker
+    const { contentRoomRepository } = await import("@/lib/content-room/repository");
+    const created = await mod.routeCallback("link_new_channel", "zed_revayat", "999");
+    expect(created.ok).toBe(true);
+    expect(contentRoomRepository.createProduct).toHaveBeenCalledWith(
+      expect.objectContaining({ title: "My Title", productType: "serial", channel: "zed_revayat", partsCount: 1 }),
+    );
+    expect(getPendingNewProduct("999")).toBeNull();
+  });
+
+  it("rejects invalid product type in telegram creation", async () => {
+    const { db } = await import("@/db");
+    const OWNER = { id: "u-tg", telegramId: "998", name: "T", username: null, phone: null, role: "owner", active: true, allowedActions: [], allowedAccountIds: [], allowedChannels: [], avatarUrl: null, isOwnerProtected: false, createdAt: new Date(), updatedAt: new Date() };
+    vi.mocked(db.select as unknown as () => unknown).mockImplementation(
+      (() => ({ from: () => ({ where: () => ({ limit: () => Promise.resolve([OWNER]) }) }) })) as never,
+    );
+    const mod = await import("./callback-router");
+    await mod.routeCallback("link_new", "556", "998");
+    await mod.handleNewProductTitle("998", "T2");
+    const res = await mod.routeCallback("link_new_type", "nope", "998");
+    expect(res.ok).toBe(false);
   });
 });

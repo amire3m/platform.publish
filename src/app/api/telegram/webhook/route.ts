@@ -181,6 +181,18 @@ export async function POST(req: Request) {
       } catch (err) {
         console.error("[webhook] product search failed:", (err as Error).message);
       }
+      // new-product title step (armed from link_new)
+      try {
+        const mod = (await import("@/lib/telegram/callback-router")) as unknown as {
+          handleNewProductTitle?: (from: string, text: string, threadId?: number) => Promise<{ handled: boolean }>;
+        };
+        if (mod.handleNewProductTitle) {
+          const r = await mod.handleNewProductTitle(String(msg.from?.id ?? ""), msg.text, msg.message_thread_id);
+          if (r?.handled) return Response.json({ ok: true });
+        }
+      } catch (err) {
+        console.error("[webhook] new-product title failed:", (err as Error).message);
+      }
     }
     // /live command + playlist reply handling for the live conductor
     if (msg && msg.text) {

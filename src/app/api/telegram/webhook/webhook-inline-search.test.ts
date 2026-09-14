@@ -8,6 +8,7 @@ vi.stubEnv("APP_BASE_URL", "http://localhost:3000");
 vi.mock("@/lib/telegram/callback-router", () => ({
   routeCallback: vi.fn(async () => ({ ok: false, message: "error" })),
   hasLinkPermission: vi.fn(() => true),
+  handleNewProductTitle: vi.fn(async () => ({ handled: false })),
 }));
 
 vi.mock("@/db", () => ({

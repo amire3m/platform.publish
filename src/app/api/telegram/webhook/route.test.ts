@@ -11,6 +11,7 @@ vi.mock("@/lib/telegram/callback-router", () => ({
     if (action === "invalid") return { ok: false, message: "عملیات نامعتبر است." };
     return { ok: false, message: "خطا" };
   }),
+  handleNewProductTitle: vi.fn(async () => ({ handled: false })),
 }));
 
 // Mock TelegramClient to avoid real fetch

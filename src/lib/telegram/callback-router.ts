@@ -436,9 +436,11 @@ async function handleLinkPickKind(contentId: string, actorUserId: string, actorT
   }
 }
 
-async function handleLinkNew(messageIdRaw: string, botMessageId?: number): Promise<{ ok: boolean; message: string }> {
+async function handleLinkNew(messageIdRaw: string, fromTelegramId: string, botMessageId?: number): Promise<{ ok: boolean; message: string }> {
   const messageId = messageIdRaw.split(":")[0]?.trim() || messageIdRaw;
   if (!messageId) return { ok: false, message: "شناسه پیام نامعتبر است." };
+  const { setPendingNewProduct } = await import("@/lib/content-room/pending-new-product");
+  setPendingNewProduct(fromTelegramId, { messageId });
   const text = `<b>🆕 ساخت محصول جدید</b>\nپیام <code>${escapeHtml(messageId)}</code>\nلطفاً عنوان محصول را بفرستید (ریپلای به این پیام):`;
   // force_reply markup
   const kb: Record<string, unknown> = { force_reply: true, input_field_placeholder: "عنوان محصول...", selective: true };
@@ -466,6 +468,191 @@ async function handleLinkNew(messageIdRaw: string, botMessageId?: number): Promi
   } catch {}
   // Note: follow-up steps (title → type/channel picker → create product via POST /api/content-room/products then link to part 1) are handled via subsequent message replies and callbacks link_new_type / link_new_channel. For now return prompt.
   return { ok: true, message: "لطفاً عنوان محصول را بفرستید." };
+}
+
+const NEW_PRODUCT_TYPE_LABELS: Record<string, string> = {
+  serial: "سریال",
+  documentary: "مستند",
+  tv_program: "برنامه تلویزیونی",
+  film: "فیلم سینمایی",
+  short_film: "فیلم کوتاه",
+  educational: "آموزشی",
+  teaser: "تیزر",
+  music_video: "نماهنگ",
+  raw_video: "ویدیو خام",
+};
+
+async function findLinkUser(fromTelegramId: string): Promise<typeof users.$inferSelect | null> {
+  try {
+    const [found] = await db.select().from(users).where(eq(users.telegramId, fromTelegramId)).limit(1);
+    return found ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function linkNewTypeKeyboard(): { inline_keyboard: unknown[][] } {
+  const types = Object.keys(NEW_PRODUCT_TYPE_LABELS);
+  const rows: unknown[][] = [];
+  for (let i = 0; i < types.length; i += 2) {
+    rows.push(types.slice(i, i + 2).map((t) => ({ text: NEW_PRODUCT_TYPE_LABELS[t], callback_data: `link_new_type:${t}` })));
+  }
+  rows.push([
+    { text: "✏️ عنوان جدید", callback_data: "link_new_title" },
+    { text: "❌ انصراف", callback_data: "link_new_cancel" },
+  ]);
+  return { inline_keyboard: rows };
+}
+
+async function sendNewProductMessage(
+  text: string,
+  kb: unknown,
+  opts: { threadId?: number; botMessageId?: number },
+): Promise<void> {
+  try {
+    const client = await getTelegramClientSafe();
+    if (!client) return;
+    if (opts.botMessageId) {
+      try {
+        await (client as unknown as { editMessageText: (id: number, t: string, o: unknown) => Promise<unknown> }).editMessageText(
+          opts.botMessageId,
+          text,
+          { parseMode: "HTML", replyMarkup: kb },
+        );
+        return;
+      } catch {}
+    }
+    try {
+      await (client as unknown as { sendMessage: (t: string, tid: number | undefined, o: unknown) => Promise<unknown> }).sendMessage(
+        text,
+        opts.threadId,
+        { parseMode: "HTML", replyMarkup: kb } as never,
+      );
+    } catch {}
+  } catch {}
+}
+
+async function requireNewProductPending(
+  fromTelegramId: string,
+): Promise<{ pending: import("@/lib/content-room/pending-new-product").PendingNewProduct; user: typeof users.$inferSelect } | { error: string }> {
+  const { getPendingNewProduct } = await import("@/lib/content-room/pending-new-product");
+  const pending = getPendingNewProduct(fromTelegramId);
+  if (!pending) return { error: "نشست ساخت محصول منقضی شده؛ دوباره «ساخت محصول جدید» را بزنید." };
+  const user = await findLinkUser(fromTelegramId);
+  if (!user || !user.active) return { error: "کاربر یافت نشد یا دسترسی ندارد." };
+  if (!hasLinkPermission({ role: user.role, allowedActions: user.allowedActions, allowedAccountIds: user.allowedAccountIds })) {
+    return { error: "شما مجوز انجام این عملیات را ندارید." };
+  }
+  return { pending, user };
+}
+
+export async function handleNewProductTitle(
+  fromTelegramId: string,
+  text: string,
+  threadId?: number,
+): Promise<{ handled: boolean; ok?: boolean; message?: string }> {
+  const { getPendingNewProduct, setPendingNewProduct } = await import("@/lib/content-room/pending-new-product");
+  const pending = getPendingNewProduct(fromTelegramId);
+  if (!pending || pending.title) return { handled: false };
+  const gate = await requireNewProductPending(fromTelegramId);
+  if ("error" in gate) {
+    await sendNewProductMessage(`⚠️ ${escapeHtml(gate.error)}`, undefined, { threadId });
+    return { handled: true, ok: false, message: gate.error };
+  }
+  const title = (text ?? "").trim();
+  if (!title || title.length > 200) {
+    await sendNewProductMessage("⚠️ عنوان باید ۱ تا ۲۰۰ کاراکتر باشد؛ دوباره بفرستید.", undefined, { threadId });
+    return { handled: true, ok: false, message: "عنوان نامعتبر است." };
+  }
+  setPendingNewProduct(fromTelegramId, { messageId: pending.messageId, title });
+  await sendNewProductMessage(
+    `📝 عنوان ثبت شد: <b>${escapeHtml(title)}</b>\nنوع محصول را انتخاب کنید:`,
+    linkNewTypeKeyboard(),
+    { threadId },
+  );
+  return { handled: true, ok: true, message: "نوع محصول را انتخاب کنید." };
+}
+
+async function handleLinkNewType(typeRaw: string, fromTelegramId: string, botMessageId?: number): Promise<{ ok: boolean; message: string }> {
+  const { PRODUCT_TYPES } = await import("@/lib/content-room/validation");
+  const type = typeRaw.split(":")[0]?.trim() || typeRaw;
+  if (!(PRODUCT_TYPES as readonly string[]).includes(type)) {
+    return { ok: false, message: "نوع نامعتبر است." };
+  }
+  const gate = await requireNewProductPending(fromTelegramId);
+  if ("error" in gate) return { ok: false, message: gate.error };
+  const { setPendingNewProduct } = await import("@/lib/content-room/pending-new-product");
+  const { getChannelLabelFa, CHANNEL_IDS } = await import("@/lib/channels");
+  setPendingNewProduct(fromTelegramId, { messageId: gate.pending.messageId, productType: type });
+  const rows: unknown[][] = [];
+  const ids = [...(CHANNEL_IDS as readonly string[])];
+  for (let i = 0; i < ids.length; i += 2) {
+    rows.push(ids.slice(i, i + 2).map((c) => ({ text: getChannelLabelFa(c), callback_data: `link_new_channel:${c}` })));
+  }
+  rows.push([
+    { text: "◀️ بازگشت", callback_data: "link_new_back" },
+    { text: "❌ انصراف", callback_data: "link_new_cancel" },
+  ]);
+  await sendNewProductMessage(
+    `نوع: <b>${escapeHtml(NEW_PRODUCT_TYPE_LABELS[type] ?? type)}</b>\nکانال را انتخاب کنید:`,
+    { inline_keyboard: rows },
+    { botMessageId },
+  );
+  return { ok: true, message: "کانال را انتخاب کنید." };
+}
+
+async function handleLinkNewChannel(channelRaw: string, fromTelegramId: string, botMessageId?: number): Promise<{ ok: boolean; message: string }> {
+  const { CHANNEL_IDS } = await import("@/lib/channels");
+  const channel = channelRaw.split(":")[0]?.trim() || channelRaw;
+  if (!(CHANNEL_IDS as readonly string[]).includes(channel)) {
+    return { ok: false, message: "کانال نامعتبر است." };
+  }
+  const gate = await requireNewProductPending(fromTelegramId);
+  if ("error" in gate) return { ok: false, message: gate.error };
+  if (!gate.pending.title || !gate.pending.productType) {
+    return { ok: false, message: "ابتدا عنوان و نوع را کامل کنید." };
+  }
+  try {
+    const { contentRoomRepository } = await import("@/lib/content-room/repository");
+    const created = await contentRoomRepository.createProduct({
+      title: gate.pending.title,
+      productType: gate.pending.productType,
+      channel,
+      partsCount: 1,
+      actorUserId: gate.user.id,
+    } as never);
+    const { clearPendingNewProduct } = await import("@/lib/content-room/pending-new-product");
+    clearPendingNewProduct(fromTelegramId);
+    const productId = (created as unknown as { id: string }).id;
+    return await handleLinkPickProduct(`${gate.pending.messageId}:${productId}:0`, botMessageId);
+  } catch (err) {
+    console.error("[callback-router] telegram product create failed:", (err as Error).message);
+    return { ok: false, message: "خطا در ساخت محصول." };
+  }
+}
+
+async function handleLinkNewNav(kind: "back" | "title" | "cancel", fromTelegramId: string, botMessageId?: number): Promise<{ ok: boolean; message: string }> {
+  const { getPendingNewProduct, setPendingNewProduct, clearPendingNewProduct } = await import("@/lib/content-room/pending-new-product");
+  const pending = getPendingNewProduct(fromTelegramId);
+  if (!pending) return { ok: false, message: "نشستی فعال نیست." };
+  if (kind === "cancel") {
+    clearPendingNewProduct(fromTelegramId);
+    await sendNewProductMessage("❌ ساخت محصول لغو شد.", undefined, { botMessageId });
+    return { ok: true, message: "لغو شد." };
+  }
+  if (kind === "title") {
+    clearPendingNewProduct(fromTelegramId);
+    setPendingNewProduct(fromTelegramId, { messageId: pending.messageId });
+    await sendNewProductMessage("✏️ عنوان جدید محصول را بفرستید:", undefined, { botMessageId });
+    return { ok: true, message: "عنوان جدید را بفرستید." };
+  }
+  // back → type picker again
+  await sendNewProductMessage(
+    `📝 عنوان: <b>${escapeHtml(pending.title ?? "")}</b>\nنوع محصول را انتخاب کنید:`,
+    linkNewTypeKeyboard(),
+    { botMessageId },
+  );
+  return { ok: true, message: "نوع محصول را انتخاب کنید." };
 }
 
 async function handleLinkSearch(messageIdRaw: string, fromTelegramId: string, botMessageId?: number, messageThreadId?: number): Promise<{ ok: boolean; message: string }> {
@@ -532,7 +719,7 @@ export async function routeCallback(
     user = found ?? null;
   } catch {
     // if DB unavailable, allow link actions to proceed in test mode with mock user
-    const linkActions = new Set(["link_existing", "link_new", "link_pick_product", "link_pick_part", "link_pick_kind", "link_search"]);
+    const linkActions = new Set(["link_existing", "link_new", "link_new_type", "link_new_channel", "link_new_back", "link_new_title", "link_new_cancel", "link_pick_product", "link_pick_part", "link_pick_kind", "link_search"]);
     if (linkActions.has(action)) {
       const isTest = typeof process !== "undefined" && (process.env.VITEST === "true" || process.env.NODE_ENV === "test");
       if (isTest) {
@@ -561,7 +748,7 @@ export async function routeCallback(
     }
   }
   if (!user) {
-    const linkActionsForNull = new Set(["link_existing", "link_new", "link_pick_product", "link_pick_part", "link_pick_kind", "link_search"]);
+    const linkActionsForNull = new Set(["link_existing", "link_new", "link_new_type", "link_new_channel", "link_new_back", "link_new_title", "link_new_cancel", "link_pick_product", "link_pick_part", "link_pick_kind", "link_search"]);
     const isTestNull = typeof process !== "undefined" && (process.env.VITEST === "true" || process.env.NODE_ENV === "test");
     if (isTestNull && linkActionsForNull.has(action)) {
       user = {
@@ -589,7 +776,7 @@ export async function routeCallback(
   }
 
   // Link flow handling — before old PERMISSION_MAP check, with manage_content_room | update_assigned_content
-  const linkActionsSet = new Set(["link_existing", "link_new", "link_pick_product", "link_pick_part", "link_pick_kind", "link_search"]);
+  const linkActionsSet = new Set(["link_existing", "link_new", "link_new_type", "link_new_channel", "link_new_back", "link_new_title", "link_new_cancel", "link_pick_product", "link_pick_part", "link_pick_kind", "link_search"]);
   if (linkActionsSet.has(action)) {
     const subject = {
       role: user.role,
@@ -604,7 +791,7 @@ export async function routeCallback(
         case "link_existing":
           return await handleLinkExisting(contentId, user, botMessageId);
         case "link_new":
-          return await handleLinkNew(contentId, botMessageId);
+          return await handleLinkNew(contentId, fromTelegramId, botMessageId);
         case "link_pick_product":
           return await handleLinkPickProduct(contentId, botMessageId);
         case "link_pick_part":
@@ -613,6 +800,16 @@ export async function routeCallback(
           return await handleLinkPickKind(contentId, user.id, user.telegramId || fromTelegramId, botMessageId);
         case "link_search":
           return await handleLinkSearch(contentId, fromTelegramId, botMessageId, messageThreadId);
+        case "link_new_type":
+          return await handleLinkNewType(contentId, fromTelegramId, botMessageId);
+        case "link_new_channel":
+          return await handleLinkNewChannel(contentId, fromTelegramId, botMessageId);
+        case "link_new_back":
+          return await handleLinkNewNav("back", fromTelegramId, botMessageId);
+        case "link_new_title":
+          return await handleLinkNewNav("title", fromTelegramId, botMessageId);
+        case "link_new_cancel":
+          return await handleLinkNewNav("cancel", fromTelegramId, botMessageId);
         default:
           return { ok: false, message: "عملیات نامعتبر است." };
       }

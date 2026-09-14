@@ -4,6 +4,7 @@ import { Play, Pause, Volume2, VolumeX, Maximize, Minimize, Settings, PictureInP
 
 interface Props {
   src: string;
+  fallbackSrc?: string;
   poster?: string;
   title?: string;
   className?: string;
@@ -17,8 +18,15 @@ function formatTime(s: number) {
   return `${m}:${String(sec).padStart(2, "0")}`;
 }
 
-export function DedicatedPlayer({ src, poster, title, className, onError }: Props) {
+export function DedicatedPlayer({ src, fallbackSrc, poster, title, className, onError }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const [activeSrc, setActiveSrc] = useState(src);
+  const [fellBack, setFellBack] = useState(false);
+
+  useEffect(() => {
+    setActiveSrc(src);
+    setFellBack(false);
+  }, [src]);
   const containerRef = useRef<HTMLDivElement>(null);
   const [playing, setPlaying] = useState(false);
   const [muted, setMuted] = useState(false);
@@ -75,6 +83,15 @@ export function DedicatedPlayer({ src, poster, title, className, onError }: Prop
     const v = videoRef.current;
     if (!v) return;
     v.muted = !v.muted;
+  }
+
+  function handleVideoError() {
+    if (fallbackSrc && !fellBack) {
+      setFellBack(true);
+      setActiveSrc(fallbackSrc);
+      return;
+    }
+    onError?.();
   }
 
   function handleSeek(e: React.ChangeEvent<HTMLInputElement>) {
@@ -139,13 +156,13 @@ export function DedicatedPlayer({ src, poster, title, className, onError }: Prop
     >
       <video
         ref={videoRef}
-        src={src}
+        src={activeSrc}
         poster={poster}
         preload="metadata"
         playsInline
         className="h-full w-full object-contain"
         onClick={togglePlay}
-        onError={onError}
+        onError={handleVideoError}
       />
       {!poster && !playing && title && (
         <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-2 bg-zinc-900 p-4 text-center" dir="rtl">

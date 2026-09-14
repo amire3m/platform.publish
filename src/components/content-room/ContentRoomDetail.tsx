@@ -520,6 +520,7 @@ function PartUploadCard({
     highlightFileRef?: string | null;
     reelFileRef?: string | null;
     playbackUrl?: string | null;
+    mirrorUrl?: string | null;
     coverUrl?: string | null;
     highlightUrl?: string | null;
     reelUrl?: string | null;
@@ -873,7 +874,13 @@ function PartUploadCard({
       <TranscriptPanel partId={part.id} hasFile={hasVideo} onToast={onToast} />
 
       {part.playbackUrl && (
-        <DedicatedPlayer src={part.playbackUrl} poster={part.coverUrl ?? undefined} title={`قسمت ${part.partNumber} — ویدیو کامل`} className="aspect-video w-full" />
+        <DedicatedPlayer
+          src={part.mirrorUrl ?? part.playbackUrl}
+          fallbackSrc={part.mirrorUrl ? part.playbackUrl : undefined}
+          poster={part.coverUrl ?? undefined}
+          title={`قسمت ${part.partNumber} — ویدیو کامل`}
+          className="aspect-video w-full"
+        />
       )}
       {part.coverFileRef && (
         <div className="space-y-1">

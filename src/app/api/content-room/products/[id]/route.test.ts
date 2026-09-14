@@ -1,6 +1,17 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { jsonError } from "@/lib/api-helpers";
 import { handleProductRequest, type ProductRouteDependencies } from "./route";
+import { getMirrorUrlsByFile, listMirrorsByPartIds } from "@/lib/mirrors/store";
+import { getVidsClient } from "@/lib/mirrors/vids";
+
+vi.mock("@/lib/mirrors/store", () => ({
+  getMirrorUrlsByFile: vi.fn().mockResolvedValue({}),
+  listMirrorsByPartIds: vi.fn().mockResolvedValue([]),
+}));
+
+vi.mock("@/lib/mirrors/vids", () => ({
+  getVidsClient: vi.fn(() => ({ deleteFile: vi.fn().mockResolvedValue(undefined) })),
+}));
 
 function makeDeps(overrides: Partial<ProductRouteDependencies> & { user?: unknown; requirePermissionResult?: unknown } = {}): ProductRouteDependencies {
   const user = overrides.user !== undefined ? overrides.user : { id: "u1", role: "manager", allowedActions: [], allowedAccountIds: [] };
@@ -463,5 +474,54 @@ describe("DELETE /api/content-room/products/:id", () => {
     );
     expect(response.status).toBe(422);
     expect(deleteProduct).not.toHaveBeenCalled();
+  });
+
+  it("removes remote mirror files on delete (best-effort)", async () => {
+    const deleteProduct = vi.fn().mockResolvedValue({ id: "CPR-1" });
+    const getParts = vi.fn().mockResolvedValue([{ id: "CPP-1" }, { id: "CPP-2" }]);
+    const deleteFile = vi.fn().mockResolvedValue(undefined);
+    vi.mocked(getVidsClient).mockReturnValue({ deleteFile } as never);
+    vi.mocked(listMirrorsByPartIds).mockResolvedValue([
+      { id: "M-1", partId: "CPP-1", fileId: "f1", provider: "vids.st", remoteId: "F-1", remoteTaskId: null, remoteUrl: null, status: "ready", error: null },
+    ]);
+    const deps = deleteDeps({
+      repository: { deleteProduct, getParts } as never,
+      hasLinkedProgram: vi.fn().mockResolvedValue(false) as never,
+    });
+    const response = await handleProductRequest(
+      request("DELETE", { expectedVersion: 2 }),
+      { params: Promise.resolve({ id: "CPR-1" }) },
+      deps,
+    );
+    expect(response.status).toBe(200);
+    expect(listMirrorsByPartIds).toHaveBeenCalledWith(["CPP-1", "CPP-2"]);
+    expect(deleteFile).toHaveBeenCalledWith("F-1");
+  });
+});
+
+describe("GET product mirror enrichment", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("attaches mirrorUrl to parts when mirrors are ready", async () => {
+    vi.mocked(getMirrorUrlsByFile).mockResolvedValue({ "file-1": "https://cdn.example/v.mp4" });
+    const repository = {
+      getProduct: vi.fn().mockResolvedValue({
+        id: "CPR-1",
+        title: "a",
+        status: "imported",
+        version: 1,
+        parts: [{ id: "part-1", fileRef: "file-1", coverFileRef: null }],
+      }),
+      updateProductStatus: vi.fn(),
+    };
+    const response = await handleProductRequest(
+      request("GET"),
+      { params: Promise.resolve({ id: "CPR-1" }) },
+      makeDeps({ repository: repository as never }),
+    );
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.data.parts[0].mirrorUrl).toBe("https://cdn.example/v.mp4");
+    expect(body.data.parts[0].playbackUrl).toContain("/api/media/telegram/");
   });
 });

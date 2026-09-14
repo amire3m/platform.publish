@@ -8,7 +8,7 @@ import { buildTelegramMediaUrl } from "@/lib/media/telegram-url";
 export interface ProductRouteDependencies {
   requirePermission: typeof requirePermission;
   getCurrentUser: typeof getCurrentUser;
-  repository: Pick<ContentRoomRepository, "getProduct" | "updateProductStatus" | "updateProductMetadata" | "deleteProduct">;
+  repository: Pick<ContentRoomRepository, "getProduct" | "updateProductStatus" | "updateProductMetadata" | "deleteProduct" | "getParts">;
   syncWorkflowTitle?: (productId: string, newTitle: string, actorUserId: string) => Promise<void>;
   hasLinkedProgram?: (productId: string) => Promise<boolean>;
 }
@@ -34,7 +34,7 @@ async function defaultHasLinkedProgram(productId: string): Promise<boolean> {
 const defaultDependencies: ProductRouteDependencies = {
   requirePermission,
   getCurrentUser,
-  repository: contentRoomRepository as unknown as Pick<ContentRoomRepository, "getProduct" | "updateProductStatus" | "updateProductMetadata" | "deleteProduct">,
+  repository: contentRoomRepository as unknown as Pick<ContentRoomRepository, "getProduct" | "updateProductStatus" | "updateProductMetadata" | "deleteProduct" | "getParts">,
   syncWorkflowTitle: async (productId: string, newTitle: string) => {
     try {
       const { db } = await import("@/db");
@@ -62,6 +62,27 @@ function mapRepositoryError(error: unknown): Response | null {
   if (code === "INVALID_TRANSITION") return jsonError(message, 422, "INVALID_TRANSITION");
   if (code === "REASON_REQUIRED") return jsonError(message, 422, "REASON_REQUIRED");
   return null;
+}
+
+/** Enrich parts with playback/cover URLs plus mirror URL (best-effort, never fails). */
+interface PartMediaRefs {
+  fileRef?: string | null;
+  coverFileRef?: string | null;
+  [key: string]: unknown;
+}
+
+async function withMirrorUrls(parts: PartMediaRefs[]) {
+  let mirrors: Record<string, string> = {};
+  try {
+    const { getMirrorUrlsByFile } = await import("@/lib/mirrors/store");
+    mirrors = await getMirrorUrlsByFile(parts.map((p) => p.fileRef).filter((f): f is string => !!f));
+  } catch {}
+  return parts.map((part) => ({
+    ...part,
+    playbackUrl: buildTelegramMediaUrl(part.fileRef),
+    coverUrl: buildTelegramMediaUrl(part.coverFileRef),
+    mirrorUrl: (part.fileRef && mirrors[part.fileRef]) || null,
+  }));
 }
 
 export async function handleProductRequest(
@@ -97,11 +118,7 @@ export async function handleProductRequest(
       return jsonOk({
         ...product,
         sentProgram,
-        parts: (product.parts ?? []).map((part) => ({
-          ...part,
-          playbackUrl: buildTelegramMediaUrl(part.fileRef),
-          coverUrl: buildTelegramMediaUrl(part.coverFileRef),
-        })),
+        parts: await withMirrorUrls((product.parts ?? []) as unknown as PartMediaRefs[]),
       });
     } catch (error) {
       const mapped = mapRepositoryError(error);
@@ -251,11 +268,25 @@ export async function handleProductRequest(
       if (await hasLinkedProgram(id)) {
         return jsonError("این محصول به اتاق انتشار ارسال شده و قابل حذف نیست. از بایگانی استفاده کنید.", 422, "INVALID_TRANSITION");
       }
+      let partsBeforeDelete: Array<{ id: string }> = [];
+      try {
+        partsBeforeDelete = (await deps.repository.getParts?.(id)) ?? [];
+      } catch {}
       const result = await deps.repository.deleteProduct({
         id,
         expectedVersion,
         actorUserId: (user as unknown as { id?: string }).id ?? "unknown",
       });
+      // best-effort: remove remote mirror files (DB rows cascade with parts)
+      try {
+        const { listMirrorsByPartIds } = await import("@/lib/mirrors/store");
+        const mirrors = await listMirrorsByPartIds(partsBeforeDelete.map((p) => p.id)).catch(() => []);
+        if (mirrors.length) {
+          const { getVidsClient } = await import("@/lib/mirrors/vids");
+          const client = getVidsClient();
+          await Promise.allSettled(mirrors.filter((m) => m.remoteId).map((m) => client.deleteFile(m.remoteId as string)));
+        }
+      } catch {}
       return jsonOk(result);
     } catch (error) {
       const mapped = mapRepositoryError(error);

@@ -161,6 +161,16 @@ function buildMediaProxyUrl(fileId: string): string {
   return `${base}/api/media/telegram/${token}`;
 }
 
+/** Prefer a ready vids.st mirror URL; fall back to the signed proxy (never throws). */
+export async function resolvePublishUrl(fileId: string): Promise<string> {
+  try {
+    const { getMirrorUrl } = await import("@/lib/mirrors/store");
+    const mirror = await getMirrorUrl(fileId);
+    if (mirror) return mirror;
+  } catch {}
+  return buildMediaProxyUrl(fileId);
+}
+
 async function processContent(row: typeof content.$inferSelect, opts?: { force?: boolean }) {
   const targets = (row.platformTargets as unknown as PersistedPlatformTarget[]) ?? [];
   const media = (row.media as { telegram_file_id?: string; mime_type?: string; file_name?: string }[]) ?? [];
@@ -283,7 +293,7 @@ async function processContent(row: typeof content.$inferSelect, opts?: { force?:
                 caption: row.caption,
                 hashtags: row.hashtags as string[],
               },
-              buildMediaProxyUrl(primaryMedia.telegram_file_id),
+              await resolvePublishUrl(primaryMedia.telegram_file_id),
             );
 
       publishResults.push({

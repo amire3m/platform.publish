@@ -47,6 +47,26 @@ export async function getMirrorUrl(fileId: string, provider = MIRROR_PROVIDER): 
   return row?.status === "ready" ? (row.remoteUrl ?? null) : null;
 }
 
+/** Batch mirror URLs for player enrichment (ready rows only, never throws). */
+export async function getMirrorUrlsByFile(fileIds: readonly string[], provider = MIRROR_PROVIDER): Promise<Record<string, string>> {
+  const ids = [...new Set(fileIds.filter(Boolean))];
+  if (!ids.length) return {};
+  try {
+    const rows = (await db
+      .select()
+      .from(mediaMirrors)
+      .where(and(eq(mediaMirrors.provider, provider), inArray(mediaMirrors.fileId, ids)))) as unknown as Array<Record<string, unknown>>;
+    const out: Record<string, string> = {};
+    for (const r of rows) {
+      const mapped = mapRow(r);
+      if (mapped.status === "ready" && mapped.remoteUrl) out[mapped.fileId] = mapped.remoteUrl;
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
 export async function upsertQueuedMirror(partId: string | null, fileId: string, provider = MIRROR_PROVIDER): Promise<MirrorRow> {
   const now = new Date();
   const [row] = await db
@@ -102,4 +122,13 @@ export async function listPendingMirrors(limit = 20, provider = MIRROR_PROVIDER)
 export async function deleteMirrorsByPartIds(partIds: string[]): Promise<void> {
   if (!partIds.length) return;
   await db.delete(mediaMirrors).where(inArray(mediaMirrors.partId, partIds));
+}
+
+export async function listMirrorsByPartIds(partIds: string[]): Promise<MirrorRow[]> {
+  if (!partIds.length) return [];
+  const rows = (await db
+    .select()
+    .from(mediaMirrors)
+    .where(inArray(mediaMirrors.partId, partIds))) as unknown as Array<Record<string, unknown>>;
+  return rows.map(mapRow);
 }

@@ -1,6 +1,7 @@
 import { z } from "zod";
-import { jsonError, jsonOk, requirePermission } from "@/lib/api-helpers";
-import { CHANNEL_IDS, CHANNELS, getChannelsWithAccountStatus, getChannelConfig } from "@/lib/channels";
+import { jsonError, jsonInternalError, jsonOk, requirePermission } from "@/lib/api-helpers";
+import { CHANNEL_IDS, CHANNELS, getChannelConfig } from "@/lib/channels";
+import { mergeChannelOverrides, readChannelOverrides, saveChannelOverride } from "@/lib/channel-accounts";
 import { hasPermission } from "@/lib/permissions";
 
 export async function GET() {
@@ -8,19 +9,10 @@ export async function GET() {
   if (!user) return response!;
 
   try {
-    const channels = await getChannelsWithAccountStatus();
+    const channels = mergeChannelOverrides(CHANNELS, await readChannelOverrides());
     return jsonOk({ channels });
-  } catch {
-    // fallback sync
-    const channels = CHANNELS.map((c) => ({
-      ...c,
-      linked: {
-        youtube: Boolean(c.youtubeAccountId),
-        instagram: Boolean(c.instagramAccountId),
-        telegram: Boolean(c.telegramTopicId),
-      },
-    }));
-    return jsonOk({ channels });
+  } catch (error) {
+    return jsonInternalError(error, "api/channels GET");
   }
 }
 
@@ -76,14 +68,17 @@ export async function PATCH(request: Request) {
     }
   }
 
-  // Return updated view (in-memory echo)
-  const updated = {
-    id: channelId,
-    labelFa: cfg.labelFa,
-    youtubeAccountId: platform === "youtube" ? (accountId ?? null) : cfg.youtubeAccountId,
-    instagramAccountId: platform === "instagram" ? (accountId ?? null) : cfg.instagramAccountId,
-    telegramTopicId: platform === "telegram" ? (accountId ?? parsed.data.telegramTopicId ?? null) : cfg.telegramTopicId,
-  };
-
-  return jsonOk({ channel: updated, note: "تنظیمات کانال به صورت ایستا (null fallback) است؛ برای ذخیره دائمی به اتصال دیتابیس یا کانفیگ ENV نیاز است." });
+  // Persist the override; other platforms keep their previous values.
+  try {
+    const actorUserId = (user as unknown as { id?: string }).id ?? null;
+    const patch: { youtubeAccountId?: string | null; instagramAccountId?: string | null; telegramTopicId?: string | null } = {};
+    if (platform === "youtube") patch.youtubeAccountId = accountId ?? null;
+    if (platform === "instagram") patch.instagramAccountId = accountId ?? null;
+    if (platform === "telegram") patch.telegramTopicId = accountId ?? parsed.data.telegramTopicId ?? null;
+    const saved = await saveChannelOverride(channelId, patch, actorUserId);
+    const [channel] = mergeChannelOverrides([cfg], { [channelId]: saved });
+    return jsonOk({ channel });
+  } catch (error) {
+    return jsonInternalError(error, "api/channels PATCH");
+  }
 }

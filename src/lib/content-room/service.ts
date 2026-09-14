@@ -9,7 +9,8 @@ import type {
   WorkflowProgramRecord,
   WorkflowPublicationRecord,
 } from "@/lib/workflow/repository";
-import { DELIVERABLE_KIND_TO_PLATFORM, resolveChannelAccountId } from "@/lib/channels";
+import { DELIVERABLE_KIND_TO_PLATFORM } from "@/lib/channels";
+import { resolveChannelAccountIdDb } from "@/lib/channel-accounts";
 
 // ---------------------------------------------------------------------------
 // Errors
@@ -276,7 +277,7 @@ export function createContentRoomService(options: {
 
           // Create single publication per deliverable mapped to channel's social account
           const platform = (KIND_PLATFORM_MAP[kindDef.kind] ?? DELIVERABLE_KIND_TO_PLATFORM[kindDef.kind as keyof typeof DELIVERABLE_KIND_TO_PLATFORM] ?? "youtube") as (typeof PUBLICATION_PLATFORMS)[number];
-          const socialAccountId = resolveChannelAccountId(product.channel, platform as "youtube" | "instagram" | "telegram");
+          const socialAccountId = await resolveChannelAccountIdDb(product.channel, platform as "youtube" | "instagram" | "telegram");
           const pubId = generateEntityId("WPB");
           const pub: WorkflowPublicationRecord = {
             id: pubId,

@@ -5,7 +5,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 
-import { contentPartActivities, contentParts, contentProducts, partTranscripts } from "./schema";
+import { contentPartActivities, contentParts, contentProducts, partTranscripts, channelAccounts } from "./schema";
 import { PART_ACTIVITIES } from "@/lib/content-room/activities";
 import { PART_ACTIVITIES as VALIDATION_PART_ACTIVITIES, PRODUCT_TYPES as VALIDATION_PRODUCT_TYPES } from "@/lib/content-room/validation";
 import { CONTENT_STATUS_ORDER } from "@/lib/content-room/presentation";
@@ -162,9 +162,19 @@ describe("part_transcripts table", () => {
   it("defines part_transcripts with required columns", () => {
     const columns = getTableColumns(partTranscripts);
     expect(Object.keys(columns)).toEqual(
-      expect.arrayContaining(["id", "partId", "language", "fullText", "segments", "srtText", "captions", "status"]),
+      expect.arrayContaining(["id", "partId", "language", "fullText", "durationSec", "segments", "srtText", "captions", "status"]),
     );
     expect(columns.id.notNull).toBe(true);
     expect(columns.partId.notNull).toBe(true);
+  });
+});
+
+describe("channel_accounts table", () => {
+  it("defines channel_accounts keyed by channel", () => {
+    const columns = getTableColumns(channelAccounts);
+    expect(Object.keys(columns)).toEqual(
+      expect.arrayContaining(["channelId", "youtubeAccountId", "instagramAccountId", "telegramTopicId"]),
+    );
+    expect(columns.channelId.notNull).toBe(true);
   });
 });

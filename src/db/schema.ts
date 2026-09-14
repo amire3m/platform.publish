@@ -734,6 +734,7 @@ export const partTranscripts = pgTable(
       .references(() => contentParts.id, { onDelete: "cascade" }),
     language: text("language").notNull().default("fa"),
     fullText: text("full_text").notNull().default(""),
+    durationSec: integer("duration_sec"),
     segments: jsonb("segments").$type<Array<{ start: number; end: number; text: string }>>().notNull().default([]),
     srtText: text("srt_text").notNull().default(""),
     captions: jsonb("captions").$type<{ youtube: string; instagram: string } | null>(),
@@ -749,3 +750,16 @@ export const partTranscripts = pgTable(
     partUnique: uniqueIndex("part_transcripts_part_unique").on(t.partId),
   }),
 );
+
+// ---------------------------------------------------------------------------
+// Channel linkage: which social account / telegram topic each channel uses.
+// Static CHANNELS config stays the fallback; rows here override per channel.
+// ---------------------------------------------------------------------------
+export const channelAccounts = pgTable("channel_accounts", {
+  channelId: text("channel_id").primaryKey(),
+  youtubeAccountId: text("youtube_account_id"),
+  instagramAccountId: text("instagram_account_id"),
+  telegramTopicId: text("telegram_topic_id"),
+  updatedBy: text("updated_by"),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});

@@ -11,6 +11,7 @@ export interface ReconcileStore {
   getTranscriptSrt: (partId: string) => Promise<string | null>;
   discoverUnmirrored: () => Promise<Array<{ partId: string; fileId: string }>>;
   enqueue: (partId: string, fileId: string) => Promise<void>;
+  listReadyWithoutUrl: () => Promise<MirrorRow[]>;
 }
 
 export interface ReconcileInput {
@@ -29,7 +30,7 @@ export async function reconcileMirrors(input: ReconcileInput = {}): Promise<{ ch
   try {
     if (!(process.env.VIDS_API_KEY ?? "").trim()) return result;
     const { getVidsClient } = await import("./vids");
-    const { listPendingMirrors, setMirrorUploading, setMirrorReady, setMirrorError, listUnmirroredVideoFiles, upsertQueuedMirror } = await import("./store");
+    const { listPendingMirrors, setMirrorUploading, setMirrorReady, setMirrorError, listUnmirroredVideoFiles, upsertQueuedMirror, listReadyWithoutUrl } = await import("./store");
     const client = input.client ?? getVidsClient();
     const maxItems = input.maxItems ?? 5;
     const poll = input.poll ?? { tries: 4, intervalMs: 15000 };
@@ -49,6 +50,7 @@ export async function reconcileMirrors(input: ReconcileInput = {}): Promise<{ ch
       },
       discoverUnmirrored: () => listUnmirroredVideoFiles(maxItems),
       enqueue: (partId, fileId) => upsertQueuedMirror(partId, fileId).then(() => {}),
+      listReadyWithoutUrl: () => listReadyWithoutUrl(),
     };
     const pending = await store.listPending();
     for (const row of pending.slice(0, maxItems)) {
@@ -100,6 +102,20 @@ export async function reconcileMirrors(input: ReconcileInput = {}): Promise<{ ch
       for (const f of fresh.slice(0, maxItems)) {
         await store.enqueue(f.partId, f.fileId);
         result.enqueued++;
+      }
+    } catch {}
+    // refresh playback links of ready rows that have none yet (transcoding lag)
+    try {
+      const bare = await store.listReadyWithoutUrl();
+      for (const row of bare.slice(0, 3)) {
+        if (!row.remoteId) continue;
+        try {
+          const url = (await client.fileInfo(row.remoteId)).streamUrl;
+          if (url) {
+            await store.setReady(row.fileId, row.remoteId, url);
+            result.completed++;
+          }
+        } catch {}
       }
     } catch {}
     return result;

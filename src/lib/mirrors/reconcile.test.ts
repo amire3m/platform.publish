@@ -25,6 +25,7 @@ describe("reconcileMirrors", () => {
       getTranscriptSrt: vi.fn().mockResolvedValue(null),
       discoverUnmirrored: vi.fn().mockResolvedValue([]),
       enqueue: vi.fn().mockResolvedValue(undefined),
+      listReadyWithoutUrl: vi.fn().mockResolvedValue([]),
     };
     const out = await reconcileMirrors({
       client,
@@ -58,9 +59,33 @@ describe("reconcileMirrors", () => {
       getTranscriptSrt: vi.fn().mockResolvedValue(null),
       discoverUnmirrored: vi.fn().mockResolvedValue([{ partId: "CPP-9", fileId: "file-old" }]),
       enqueue: vi.fn().mockResolvedValue(undefined),
+      listReadyWithoutUrl: vi.fn().mockResolvedValue([]),
     };
     const out = await reconcileMirrors({ client, store: store as never, maxItems: 5, poll: { tries: 1, intervalMs: 0 } });
     expect(store.enqueue).toHaveBeenCalledWith("CPP-9", "file-old");
     expect(out.enqueued).toBe(1);
+  });
+
+  it("refreshes missing playback links of ready rows", async () => {
+    vi.stubEnv("VIDS_API_KEY", "test-key");
+    const client = new FakeVidsClient();
+    const taskId = await client.remoteUpload("https://example.com/v.mp4");
+    await client.uploadStatus(taskId);
+    await client.uploadStatus(taskId);
+    const store = {
+      listPending: vi.fn().mockResolvedValue([]),
+      setUploading: vi.fn(),
+      setReady: vi.fn().mockResolvedValue(undefined),
+      setError: vi.fn(),
+      getTranscriptSrt: vi.fn().mockResolvedValue(null),
+      discoverUnmirrored: vi.fn().mockResolvedValue([]),
+      enqueue: vi.fn(),
+      listReadyWithoutUrl: vi.fn().mockResolvedValue([
+        { id: "M-7", partId: "CPP-7", fileId: "file-g", provider: "vids.st", remoteId: `F-fake-${taskId}`, remoteTaskId: taskId, remoteUrl: null, status: "ready", error: null },
+      ]),
+    };
+    const out = await reconcileMirrors({ client, store: store as never });
+    expect(store.setReady).toHaveBeenCalledWith("file-g", expect.any(String), expect.stringContaining("https://cdn.fake/"));
+    expect(out.completed).toBe(1);
   });
 });

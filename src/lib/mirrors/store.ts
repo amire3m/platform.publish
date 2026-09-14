@@ -165,3 +165,13 @@ export async function listMirrorsByPartIds(partIds: string[]): Promise<MirrorRow
     .where(inArray(mediaMirrors.partId, partIds))) as unknown as Array<Record<string, unknown>>;
   return rows.map(mapRow);
 }
+
+/** Ready rows still missing a playback URL (transcoding finished later). */
+export async function listReadyWithoutUrl(limit = 3, provider = MIRROR_PROVIDER): Promise<MirrorRow[]> {
+  const rows = (await db
+    .select()
+    .from(mediaMirrors)
+    .where(and(eq(mediaMirrors.provider, provider), eq(mediaMirrors.status, "ready"), sql`${mediaMirrors.remoteUrl} IS NULL`))
+    .limit(limit)) as unknown as Array<Record<string, unknown>>;
+  return rows.map(mapRow);
+}

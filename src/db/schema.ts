@@ -776,6 +776,7 @@ export const mediaMirrors = pgTable(
     fileId: text("file_id").notNull(),
     provider: text("provider").notNull().default("vids.st"),
     remoteId: text("remote_id"),
+    remoteTaskId: text("remote_task_id"),
     remoteUrl: text("remote_url"),
     status: text("status").notNull().default("queued"), // queued | uploading | ready | error
     error: text("error"),

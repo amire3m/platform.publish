@@ -4,6 +4,7 @@ CREATE TABLE IF NOT EXISTS media_mirrors (
   file_id text NOT NULL,
   provider text NOT NULL DEFAULT 'vids.st',
   remote_id text,
+  remote_task_id text,
   remote_url text,
   status text NOT NULL DEFAULT 'queued' CHECK (status IN ('queued','uploading','ready','error')),
   error text,

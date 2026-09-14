@@ -86,6 +86,16 @@ export async function linkPartMedia(opts: LinkPartMediaOptions): Promise<LinkPar
     } catch {}
   }
 
+  // best-effort vids.st mirror (video kinds only) — never fails linking
+  try {
+    const { maybeMirrorAfterLink } = await import("@/lib/mirrors/job");
+    const { buildMirrorSourceUrl } = await import("@/lib/media/telegram-url");
+    const sourceUrl = buildMirrorSourceUrl(storedRef);
+    if (sourceUrl) {
+      void maybeMirrorAfterLink({ partId, kind, fileId: storedRef, sourceUrl }).catch(() => {});
+    }
+  } catch {}
+
   return { storedRef };
 }
 

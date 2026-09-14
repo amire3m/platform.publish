@@ -15,6 +15,9 @@ vi.mock("@/lib/workflow/notification-scheduler", () => ({
 vi.mock("@/lib/workflow/notifications", () => ({
   runWorkflowNotificationDelivery: vi.fn(),
 }));
+vi.mock("@/lib/mirrors/reconcile", () => ({
+  reconcileMirrors: vi.fn().mockResolvedValue({ checked: 0, completed: 0, failed: 0 }),
+}));
 vi.mock("@/lib/api-helpers", () => ({
   jsonError: (message: string, status = 400) =>
     Response.json({ ok: false, error: message }, { status }),
@@ -27,6 +30,7 @@ import { runPublishTick } from "@/lib/worker";
 import { reconcileWorkflowTargets } from "@/lib/workflow/reconciliation";
 import { runSchedulerTick } from "@/lib/workflow/notification-scheduler";
 import { runWorkflowNotificationDelivery } from "@/lib/workflow/notifications";
+import { reconcileMirrors } from "@/lib/mirrors/reconcile";
 
 describe("/api/cron/tick", () => {
   beforeEach(() => {
@@ -139,5 +143,15 @@ describe("/api/cron/tick", () => {
     expect(body.data.publish.ok).toBe(true);
     expect(body.data.notifications.ok).toBe(false);
     expect(JSON.stringify(body)).not.toContain("notif secret");
+  });
+
+  it("runs mirror reconciliation on every tick", async () => {
+    const response = await POST(new Request("http://localhost/api/cron/tick", {
+      method: "POST",
+      headers: { "x-cron-secret": "cron-secret" },
+    }));
+    const body = await response.json();
+    expect(reconcileMirrors).toHaveBeenCalledOnce();
+    expect(body.data.mirrors).toEqual({ ok: true, value: { checked: 0, completed: 0, failed: 0 } });
   });
 });

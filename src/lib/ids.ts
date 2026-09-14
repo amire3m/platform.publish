@@ -32,6 +32,7 @@ export function generateEntityId(
     | "CPR"
     | "CPP"
     | "PTR"
+    | "MMR"
     | "LCH"
     | "LSC"
     | "LSE"

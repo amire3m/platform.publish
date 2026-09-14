@@ -183,7 +183,7 @@ describe("media_mirrors table", () => {
   it("defines media_mirrors keyed by provider and file", () => {
     const columns = getTableColumns(mediaMirrors);
     expect(Object.keys(columns)).toEqual(
-      expect.arrayContaining(["id", "partId", "fileId", "provider", "remoteId", "remoteUrl", "status"]),
+      expect.arrayContaining(["id", "partId", "fileId", "provider", "remoteId", "remoteTaskId", "remoteUrl", "status"]),
     );
     expect(columns.fileId.notNull).toBe(true);
   });

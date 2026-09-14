@@ -7,6 +7,7 @@ import { runScheduledAnalyticsSync } from "@/lib/analytics/scheduler";
 import { reconcileWorkflowTargets } from "@/lib/workflow/reconciliation";
 import { runSchedulerTick } from "@/lib/workflow/notification-scheduler";
 import { runWorkflowNotificationDelivery } from "@/lib/workflow/notifications";
+import { reconcileMirrors } from "@/lib/mirrors/reconcile";
 import { jsonError, jsonOk } from "@/lib/api-helpers";
 
 async function runWorkflowReconciliation() {
@@ -69,12 +70,13 @@ export async function POST(req: Request) {
   if (!secret) return jsonError("زمان‌بندی خودکار پیکربندی نشده است.", 503);
   const provided = req.headers.get("x-cron-secret");
   if (provided !== secret) return jsonError("دسترسی غیرمجاز.", 401);
-  const [publishResult, analyticsResult, reconciliationResult, remindersResult, notificationsResult] = await Promise.allSettled([
+  const [publishResult, analyticsResult, reconciliationResult, remindersResult, notificationsResult, mirrorsResult] = await Promise.allSettled([
     runPublishTick(),
     runScheduledAnalyticsSync(),
     runWorkflowReconciliation(),
     runWorkflowReminders(),
     runNotificationsDelivery(),
+    reconcileMirrors(),
   ]);
   const publish = publishResult.status === "fulfilled"
     ? { ok: true as const, value: publishResult.value }
@@ -91,7 +93,10 @@ export async function POST(req: Request) {
   const notifications = notificationsResult.status === "fulfilled"
     ? { ok: true as const, value: notificationsResult.value }
     : { ok: false as const, error: "اجرای وظیفه اعلان‌ها ناموفق بود." };
-  return jsonOk({ publish, analytics, reconciliation, reminders, notifications });
+  const mirrors = mirrorsResult.status === "fulfilled"
+    ? { ok: true as const, value: mirrorsResult.value }
+    : { ok: false as const, error: "اجرای وظیفه آینه‌ها ناموفق بود." };
+  return jsonOk({ publish, analytics, reconciliation, reminders, notifications, mirrors });
 }
 
 export async function GET() {

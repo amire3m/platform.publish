@@ -1,4 +1,4 @@
-import { jsonError, jsonInternalError, jsonOk, requirePermission } from "@/lib/api-helpers";
+import { firstZodIssueMessage, jsonError, jsonInternalError, jsonOk, requirePermission } from "@/lib/api-helpers";
 import { contentRoomRepository, type ContentRoomRepository } from "@/lib/content-room/repository";
 import { requiresReasonForTransition, updateMetadataSchema, updateStatusSchema } from "@/lib/content-room/validation";
 import { getCurrentUser } from "@/lib/auth";
@@ -138,7 +138,7 @@ export async function handleProductRequest(
     if (isStatusPatch) {
       const parsed = updateStatusSchema.safeParse(body);
       if (!parsed.success) {
-        return jsonError("ورودی نامعتبر است. اطلاعات واردشده را بررسی کنید.", 422, "VALIDATION_ERROR");
+        return jsonError(firstZodIssueMessage(parsed.error), 422, "VALIDATION_ERROR");
       }
 
       try {
@@ -171,7 +171,7 @@ export async function handleProductRequest(
       // Metadata edit branch
       const parsed = updateMetadataSchema.safeParse(body);
       if (!parsed.success) {
-        return jsonError("ورودی نامعتبر است. اطلاعات واردشده را بررسی کنید.", 422, "VALIDATION_ERROR");
+        return jsonError(firstZodIssueMessage(parsed.error), 422, "VALIDATION_ERROR");
       }
 
       try {

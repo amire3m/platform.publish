@@ -106,7 +106,7 @@ describe("GET/POST /api/content-room/products", () => {
     expect(response.status).toBe(422);
     const body = await response.json();
     expect(body.code).toBe("VALIDATION_ERROR");
-    expect(body.error).toBe("ورودی نامعتبر است. اطلاعات واردشده را بررسی کنید.");
+    expect(body.error).toBe("عنوان الزامی است.");
     expect(repository.createProduct).not.toHaveBeenCalled();
   });
 

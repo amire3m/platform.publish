@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { jsonError, jsonInternalError, jsonOk, requirePermission } from "@/lib/api-helpers";
+import { firstZodIssueMessage, jsonError, jsonInternalError, jsonOk, requirePermission } from "@/lib/api-helpers";
 import { createContentRoomService, type ContentRoomService } from "@/lib/content-room/service";
 import { createDrizzleContentRoomPort } from "@/lib/content-room/repository";
 import { createDrizzleWorkflowPort } from "@/lib/workflow/repository";
@@ -66,7 +66,7 @@ export async function handleSendRequest(
 
   const parsed = sendSchema.safeParse(body);
   if (!parsed.success) {
-    return jsonError("ورودی نامعتبر است. اطلاعات واردشده را بررسی کنید.", 422, "VALIDATION_ERROR");
+    return jsonError(firstZodIssueMessage(parsed.error), 422, "VALIDATION_ERROR");
   }
 
   try {

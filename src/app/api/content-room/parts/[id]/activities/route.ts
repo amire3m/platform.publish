@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { jsonError, jsonInternalError, jsonOk } from "@/lib/api-helpers";
+import { firstZodIssueMessage, jsonError, jsonInternalError, jsonOk } from "@/lib/api-helpers";
 import { getCurrentUser } from "@/lib/auth";
 import { hasPermission } from "@/lib/permissions";
 import { toggleActivitySchema } from "@/lib/content-room/validation";
@@ -63,7 +63,7 @@ export async function handleActivitiesRequest(
 
   const parsed = toggleActivitySchema.safeParse(toValidate);
   if (!parsed.success) {
-    return jsonError("ورودی نامعتبر است. اطلاعات واردشده را بررسی کنید.", 422, "VALIDATION_ERROR");
+    return jsonError(firstZodIssueMessage(parsed.error), 422, "VALIDATION_ERROR");
   }
 
   try {

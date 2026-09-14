@@ -1,4 +1,4 @@
-import { jsonError, jsonInternalError, jsonOk, requirePermission } from "@/lib/api-helpers";
+import { firstZodIssueMessage, jsonError, jsonInternalError, jsonOk, requirePermission } from "@/lib/api-helpers";
 import { contentRoomRepository, type ContentRoomRepository } from "@/lib/content-room/repository";
 import { createProductSchema } from "@/lib/content-room/validation";
 
@@ -78,7 +78,7 @@ export async function handleProductsRequest(
 
     const parsed = createProductSchema.safeParse(body);
     if (!parsed.success) {
-      return jsonError("ورودی نامعتبر است. اطلاعات واردشده را بررسی کنید.", 422, "VALIDATION_ERROR");
+      return jsonError(firstZodIssueMessage(parsed.error), 422, "VALIDATION_ERROR");
     }
 
     try {

@@ -6,6 +6,13 @@ export function jsonError(message: string, status = 400, code?: string) {
   return NextResponse.json({ ok: false, error: message, code }, { status });
 }
 
+/** First Persian zod issue message, or the generic validation fallback. */
+export function firstZodIssueMessage(error: unknown): string {
+  const issues = (error as { issues?: Array<{ message?: string }> })?.issues;
+  const first = Array.isArray(issues) ? issues[0]?.message : undefined;
+  return typeof first === "string" && first.length > 0 ? first : "ورودی نامعتبر است. اطلاعات واردشده را بررسی کنید.";
+}
+
 export function jsonInternalError(error: unknown, context: string) {
   console.error(`[${context}]`, error);
   return jsonError("خطای داخلی سرور رخ داد. دوباره تلاش کنید.", 500, "INTERNAL_ERROR");

@@ -721,3 +721,31 @@ export const liveSessionItems = pgTable(
     sessionIdx: index("live_session_items_session_idx").on(t.sessionRef),
   }),
 );
+
+// ---------------------------------------------------------------------------
+// Smart captions: per-part transcripts (STT + LLM captions)
+// ---------------------------------------------------------------------------
+export const partTranscripts = pgTable(
+  "part_transcripts",
+  {
+    id: text("id").primaryKey(), // PTR-1405-000001
+    partId: text("part_id")
+      .notNull()
+      .references(() => contentParts.id, { onDelete: "cascade" }),
+    language: text("language").notNull().default("fa"),
+    fullText: text("full_text").notNull().default(""),
+    segments: jsonb("segments").$type<Array<{ start: number; end: number; text: string }>>().notNull().default([]),
+    srtText: text("srt_text").notNull().default(""),
+    captions: jsonb("captions").$type<{ youtube: string; instagram: string } | null>(),
+    sttModel: text("stt_model"),
+    llmModel: text("llm_model"),
+    status: text("status").notNull().default("queued"), // queued | processing | ready | error
+    error: text("error"),
+    version: integer("version").notNull().default(1),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    partUnique: uniqueIndex("part_transcripts_part_unique").on(t.partId),
+  }),
+);

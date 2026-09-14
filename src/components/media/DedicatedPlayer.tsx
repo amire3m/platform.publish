@@ -147,6 +147,11 @@ export function DedicatedPlayer({ src, poster, title, className, onError }: Prop
         onClick={togglePlay}
         onError={onError}
       />
+      {!poster && !playing && title && (
+        <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-2 bg-zinc-900 p-4 text-center" dir="rtl">
+          <p className="text-balance text-sm font-bold text-white">{title}</p>
+        </div>
+      )}
       {title && (
         <div className={`absolute left-0 right-0 top-0 bg-gradient-to-b from-black/70 to-transparent p-3 text-right text-xs font-medium text-white transition-opacity ${showControls ? "opacity-100" : "opacity-0"}`} dir="rtl">
           {title}

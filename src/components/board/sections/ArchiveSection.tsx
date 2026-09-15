@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { Card } from "@/components/ui";
 import { useBoardDataset } from "@/lib/board/store";
 import { DataTable } from "@/components/board/ui";
-import { DemoBadge, fmt } from "@/components/board/badges";
+import { SourceBadge, fmt } from "@/components/board/badges";
 
 export default function BoardArchivePage() {
   const { dataset } = useBoardDataset();
@@ -24,7 +24,7 @@ export default function BoardArchivePage() {
     <div className="space-y-5">
       <div className="flex flex-wrap items-center gap-2">
         <h2 className="text-lg font-bold text-tg-text">آرشیو محتوا</h2>
-        {dataset.source !== "csv" && <DemoBadge />}
+        <SourceBadge source={dataset.source} />
       </div>
       <p className="max-w-3xl text-sm leading-6 text-tg-secondary">
         فهرست قابل جست‌وجوی همه ویدیوها بر اساس کانال، برنامه و نوع محتوا. آرشیو عملیاتی فایل‌ها (نسخه‌های تدوین، مجوزها، زیرنویس) در اتاق محتوا نگهداری می‌شود.

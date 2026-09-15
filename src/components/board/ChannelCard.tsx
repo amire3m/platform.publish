@@ -3,13 +3,14 @@
 import Link from "next/link";
 import { useState } from "react";
 import { Card } from "@/components/ui";
-import type { ChannelProfile } from "@/lib/board/types";
-import { DemoBadge, MissingBadge, fmt } from "@/components/board/badges";
+import type { ChannelProfile, DatasetSource } from "@/lib/board/types";
+import { MissingBadge, SourceBadge, fmt } from "@/components/board/badges";
 
-export function ChannelCard({ channel, stats, imageUrl }: {
+export function ChannelCard({ channel, stats, imageUrl, source }: {
   channel: ChannelProfile;
-  stats?: { views: number; subs: number; videos: number; demo: boolean };
+  stats?: { views: number; subs: number; videos: number };
   imageUrl?: string | null;
+  source?: DatasetSource;
 }) {
   const [imgOk, setImgOk] = useState(true);
   const showImage = Boolean(imageUrl) && imgOk;
@@ -37,7 +38,7 @@ export function ChannelCard({ channel, stats, imageUrl }: {
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="font-bold text-tg-text">{channel.nameFa}</h3>
-            {stats?.demo ? <DemoBadge /> : null}
+            {source === "demo" || source === "live" ? <SourceBadge source={source} /> : null}
           </div>
           <p className="mt-0.5 text-xs text-tg-secondary">{channel.tagline}</p>
         </div>

@@ -5,16 +5,16 @@ import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Legend, Pie, PieCh
 import { Button, Card } from "@/components/ui";
 import { BOARD_CHANNELS, DEMO_PROGRAMS } from "@/lib/board/channels";
 import { useBoardDataset, printReport } from "@/lib/board/store";
-import { filterRows, monetizationProgress, programShare, topVideos, totals, viewsOverTime } from "@/lib/board/stats";
+import { filterRows, liveTotals, monetizationProgress, programShare, topVideos, totals, viewsOverTime } from "@/lib/board/stats";
 import type { CsvRow } from "@/lib/board/types";
 import { ChartCard, DataTable, Field, BoardSelect } from "@/components/board/ui";
 import { CsvUploader } from "@/components/board/CsvUploader";
-import { DemoBadge, MissingBadge, fmt, fmtPct } from "@/components/board/badges";
+import { LiveBadge, MissingBadge, SourceBadge, fmt, fmtPct } from "@/components/board/badges";
 
 const FA_FONT = { fontFamily: "Vazirmatn, Tahoma, sans-serif", fontSize: 11 };
 
 export default function BoardDashboardPage() {
-  const { dataset, replace, resetDemo } = useBoardDataset();
+  const { dataset, replace, resetDemo, refreshLive, liveLoading } = useBoardDataset();
   const [channels, setChannels] = useState<string[]>([]);
   const [program, setProgram] = useState("");
   const [query, setQuery] = useState("");
@@ -37,7 +37,22 @@ export default function BoardDashboardPage() {
   const top = useMemo(() => topVideos(rows, 10), [rows]);
   const mono = useMemo(() => monetizationProgress(rows), [rows]);
   const programs = useMemo(() => [...new Set(dataset.rows.map((r) => r.program))].sort(), [dataset.rows]);
-  const isDemo = dataset.source !== "csv";
+  const isDemo = dataset.source === "demo";
+  const isLive = dataset.source === "live";
+  // Live channel totals for the selected channels (real subs / watch hours).
+  const liveSel = useMemo(() => {
+    if (!isLive) return null;
+    const metas = (dataset.liveMeta?.channels ?? []).filter((m) => {
+      const ch = BOARD_CHANNELS.find((c) => c.id === m.id);
+      return ch && (channels.length === 0 || channels.includes(ch.nameFa));
+    });
+    return {
+      subs: metas.reduce((s, m) => s + (m.subs ?? 0), 0),
+      hours: metas.reduce((s, m) => s + (m.watchHours12mo ?? 0), 0),
+    };
+  }, [dataset, channels, isLive]);
+  const monoSubsValue = isLive && liveSel ? { subs: liveSel.subs, pct: Math.min(100, Math.round(liveSel.subs / 10)) } : { subs: mono.subs, pct: mono.subsPct };
+  const monoHoursValue = isLive && liveSel ? { hours: liveSel.hours, pct: Math.min(100, Math.round(liveSel.hours / 40)) } : { hours: mono.watchHours, pct: mono.hoursPct };
 
   function toggleChannel(name: string) {
     setChannels((c) => (c.includes(name) ? c.filter((x) => x !== name) : [...c, name]));
@@ -47,8 +62,13 @@ export default function BoardDashboardPage() {
     <div className="space-y-5">
       <div className="flex flex-wrap items-center gap-2">
         <h2 className="text-lg font-bold text-tg-text">داشبورد آماری یوتیوب</h2>
-        {isDemo && <DemoBadge />}
+        <SourceBadge source={dataset.source} />
         <span className="mr-auto flex flex-wrap gap-2">
+          {isLive && (
+            <Button variant="secondary" size="sm" onClick={refreshLive} disabled={liveLoading} className="min-h-[36px]">
+              {liveLoading ? "در حال به‌روزرسانی..." : "به‌روزرسانی داده واقعی"}
+            </Button>
+          )}
           <Button variant="secondary" size="sm" onClick={() => setShowUpload((v) => !v)} className="min-h-[36px]">
             بارگذاری CSV
           </Button>
@@ -109,7 +129,7 @@ export default function BoardDashboardPage() {
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {[
           { label: "بازدید", value: fmt(t.views) },
-          { label: "مشترک جدید (خالص)", value: fmt(t.subsGained - t.subsLost) },
+          { label: isLive ? "مجموع مشترک‌ها" : "مشترک جدید (خالص)", value: fmt(isLive && liveSel ? liveSel.subs : t.subsGained - t.subsLost) },
           { label: "زمان تماشا (ساعت)", value: fmt(Math.round(t.watchMinutes / 60)) },
           { label: "نرخ تعامل", value: fmtPct(t.engagement) },
           { label: "میانگین بازدید ویدیو", value: fmt(t.avgViews) },
@@ -171,8 +191,8 @@ export default function BoardDashboardPage() {
       <Card className="space-y-3">
         <h3 className="font-bold text-tg-text">پیشرفت تا مانیتایز (۱۰۰۰ مشترک + ۴۰۰۰ ساعت)</h3>
         {[
-          { label: "مشترک", pct: mono.subsPct, value: fmt(mono.subs) },
-          { label: "ساعت تماشا", pct: mono.hoursPct, value: fmt(mono.watchHours) },
+          { label: "مشترک", pct: monoSubsValue.pct, value: fmt(monoSubsValue.subs) },
+          { label: "ساعت تماشا", pct: monoHoursValue.pct, value: fmt(monoHoursValue.hours) },
         ].map((m) => (
           <div key={m.label}>
             <div className="mb-1 flex justify-between text-xs">
@@ -185,6 +205,7 @@ export default function BoardDashboardPage() {
           </div>
         ))}
         {isDemo && <p className="text-[11px] text-tg-secondary">بر اساس داده نمایشی؛ با CSV واقعی جایگزین می‌شود.</p>}
+        {isLive && <p className="text-[11px] text-tg-secondary">بر اساس داده واقعی یوتیوب (۵۰ ویدیوی اخیر هر کانال + آمار ۱۲ ماهه مانیتایز).</p>}
       </Card>
 
       <Card className="space-y-3">
@@ -203,7 +224,7 @@ export default function BoardDashboardPage() {
       </Card>
 
       <div className="flex items-center gap-2 text-xs text-tg-secondary">
-        {isDemo ? <><DemoBadge /><span>نمودارها با داده نمایشی رسم شده‌اند.</span></> : <MissingBadge label="داده واقعی CSV فعال است" />}
+        {isDemo ? <><SourceBadge source="demo" /><span>نمودارها با داده نمایشی رسم شده‌اند.</span></> : isLive ? <><LiveBadge /><span>نمودارها با داده واقعی یوتیوب رسم شده‌اند.</span></> : <MissingBadge label="داده واقعی CSV فعال است" />}
       </div>
     </div>
   );

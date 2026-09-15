@@ -1,11 +1,28 @@
 "use client";
 
+import type { DatasetSource } from "@/lib/board/types";
+
 export function DemoBadge({ label = "داده نمایشی" }: { label?: string }) {
   return (
     <span className="rounded-full bg-amber-500/15 px-2.5 py-0.5 text-[11px] font-medium text-amber-700 dark:text-amber-300">
       {label}
     </span>
   );
+}
+
+export function LiveBadge({ label = "داده واقعی یوتیوب" }: { label?: string }) {
+  return (
+    <span className="rounded-full bg-emerald-500/15 px-2.5 py-0.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-300">
+      {label}
+    </span>
+  );
+}
+
+/** Honest source badge: demo → amber, live → green, csv/mixed → none. */
+export function SourceBadge({ source }: { source: DatasetSource }) {
+  if (source === "demo") return <DemoBadge />;
+  if (source === "live") return <LiveBadge />;
+  return null;
 }
 
 export function MissingBadge({ label = "اطلاعات موجود نیست" }: { label?: string }) {

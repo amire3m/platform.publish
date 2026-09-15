@@ -3,9 +3,9 @@
 import { useState } from "react";
 import { Button, Card } from "@/components/ui";
 import { useBoardDataset } from "@/lib/board/store";
-import { filterRows, programShare, topVideos, totals, viewsOverTime } from "@/lib/board/stats";
+import { filterRows, liveMetaFor, programShare, topVideos, totals, viewsOverTime } from "@/lib/board/stats";
 import { ChartCard } from "@/components/board/ui";
-import { DemoBadge, NeedsInput, fmt, fmtPct } from "@/components/board/badges";
+import { NeedsInput, SourceBadge, fmt, fmtPct } from "@/components/board/badges";
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 const FA_FONT = { fontFamily: "Vazirmatn, Tahoma, sans-serif", fontSize: 11 };
@@ -14,7 +14,7 @@ export default function ZaviyeNoPage() {
   const { dataset } = useBoardDataset();
   const [program, setProgram] = useState<string>("all");
   const rows = filterRows(dataset.rows, { channels: ["زاویه نو"] });
-  const isDemo = dataset.source !== "csv";
+  const isDemo = dataset.source === "demo";
 
   if (!rows.length) {
     return (
@@ -26,7 +26,9 @@ export default function ZaviyeNoPage() {
   }
 
   const t = totals(rows);
-  const mono = { subs: t.subsGained - t.subsLost, subsPct: Math.min(100, Math.round(((t.subsGained - t.subsLost) / 1000) * 100)) };
+  const liveSubs = liveMetaFor(dataset, "zaviye_no")?.subs;
+  const monoSubs = liveSubs ?? t.subsGained - t.subsLost;
+  const mono = { subs: monoSubs, subsPct: Math.min(100, Math.round((monoSubs / 1000) * 100)) };
   const share = programShare(rows);
   const farat = rows.filter((r) => r.program === "فرات");
   const notable = rows.filter((r) => r.program === "قابل توجه");
@@ -43,7 +45,7 @@ export default function ZaviyeNoPage() {
     <div className="space-y-5">
       <div className="flex flex-wrap items-center gap-2">
         <h2 className="text-lg font-bold text-tg-text">تحلیل ویژه زاویه نو</h2>
-        {isDemo && <DemoBadge />}
+        <SourceBadge source={dataset.source} />
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">

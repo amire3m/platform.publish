@@ -3,7 +3,7 @@
 import { Button, Card } from "@/components/ui";
 import { BOARD_CHANNELS } from "@/lib/board/channels";
 import { useBoardDataset, downloadJson } from "@/lib/board/store";
-import { totals } from "@/lib/board/stats";
+import { liveMetaFor, totals } from "@/lib/board/stats";
 import { useProduction } from "@/lib/board/production";
 import { useCollection } from "@/components/board/CollectionManager";
 import { fmt, fmtPct } from "@/components/board/badges";
@@ -19,8 +19,11 @@ export default function BoardMeetingPage() {
   const perChannel = BOARD_CHANNELS.map((c) => {
     const rows = dataset.rows.filter((r) => r.channel === c.nameFa);
     const t = totals(rows);
-    const subs = t.subsGained - t.subsLost;
-    return { ...c, views: t.views, subs, count: rows.length };
+    const meta = liveMetaFor(dataset, c.id);
+    const subs = meta?.subs ?? t.subsGained - t.subsLost;
+    const views = meta?.views ?? t.views;
+    const count = meta?.videos ?? rows.length;
+    return { ...c, views, subs, count };
   });
   const grand = totals(dataset.rows);
   const ready = prod.filter((p) => p.editStatus === "ready" || p.editStatus === "published").length;
@@ -43,7 +46,7 @@ export default function BoardMeetingPage() {
         <Card className="space-y-2">
           <h3 className="text-base font-black text-tg-text">گزارش جامع پروژه توسعه کانال‌های یوتیوب — خلاصه جلسه</h3>
           <p className="text-xs text-tg-secondary">
-            منبع داده: {dataset.source === "csv" ? "فایل CSV بارگذاری‌شده" : "داده نمایشی"} · {fmt(dataset.rows.length)} ردیف · {fmt(grand.views)} بازدید کل
+            منبع داده: {dataset.source === "csv" ? "فایل CSV بارگذاری‌شده" : dataset.source === "live" ? "داده واقعی یوتیوب" : "داده نمایشی"} · {fmt(dataset.rows.length)} ردیف · {fmt(grand.views)} بازدید کل
           </p>
         </Card>
 
@@ -53,7 +56,7 @@ export default function BoardMeetingPage() {
             {perChannel.map((c) => (
               <li key={c.nameFa} className="flex flex-wrap gap-x-2">
                 <strong>{c.nameFa}</strong>
-                <span className="text-tg-secondary">— {fmt(c.views)} بازدید، {fmt(c.subs)} مشترک خالص، {fmt(c.count)} ویدیو</span>
+                <span className="text-tg-secondary">— {fmt(c.views)} بازدید، {fmt(c.subs)} {dataset.source === "live" ? "مشترک" : "مشترک خالص"}، {fmt(c.count)} ویدیو</span>
                 <span className="text-tg-secondary">— {c.progressNote}</span>
               </li>
             ))}

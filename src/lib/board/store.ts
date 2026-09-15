@@ -5,6 +5,8 @@ import type { BoardDataset, CsvRow } from "./types";
 import { demoRows } from "./demo";
 
 const KEY = "board-report:dataset:v1";
+const LIVE_KEY = "board-report:live:v1";
+const LIVE_TTL_MS = 6 * 3600 * 1000;
 
 function readStored(): BoardDataset | null {
   try {
@@ -18,14 +20,68 @@ function readStored(): BoardDataset | null {
   }
 }
 
-/** Dataset state: demo until a CSV replaces it (persisted in localStorage). */
+function readLiveCache(): BoardDataset | null {
+  try {
+    const raw = localStorage.getItem(LIVE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as BoardDataset & { cachedAt?: number };
+    if (!Array.isArray(parsed.rows) || !parsed.rows.length) return null;
+    if (!parsed.cachedAt || Date.now() - parsed.cachedAt > LIVE_TTL_MS) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+/** Dataset state: CSV override → live YouTube data → demo fallback. */
 export function useBoardDataset() {
   const [dataset, setDataset] = useState<BoardDataset>({ rows: demoRows(), source: "demo" });
+  const [liveLoading, setLiveLoading] = useState(false);
+
+  const applyLive = useCallback(async (force = false) => {
+    if (!force) {
+      const cached = readLiveCache();
+      if (cached) {
+        setDataset(cached);
+        return;
+      }
+    }
+    setLiveLoading(true);
+    try {
+      const res = await fetch("/api/board/live-data");
+      if (!res.ok) return;
+      const body = (await res.json()) as {
+        data?: { rows?: CsvRow[]; meta?: BoardDataset["liveMeta"] };
+      };
+      const rows = body?.data?.rows;
+      if (!rows?.length) return;
+      const next: BoardDataset = {
+        rows,
+        source: "live",
+        loadedAt: new Date().toISOString(),
+        liveMeta: body.data?.meta,
+      };
+      setDataset(next);
+      try {
+        localStorage.setItem(LIVE_KEY, JSON.stringify({ ...next, cachedAt: Date.now() }));
+      } catch {}
+    } catch {
+      // offline → stay on demo/csv
+    } finally {
+      setLiveLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     const stored = readStored();
-    if (stored && stored.rows.length) setDataset(stored);
-  }, []);
+    if (stored && stored.rows.length) {
+      setDataset(stored);
+      return;
+    }
+    void applyLive(false);
+  }, [applyLive]);
+
+  const refreshLive = useCallback(() => applyLive(true), [applyLive]);
 
   const replace = useCallback((rows: CsvRow[], fileName: string) => {
     const next: BoardDataset = { rows, source: rows.some((r) => r.demo) ? "mixed" : "csv", fileName, loadedAt: new Date().toISOString() };
@@ -40,10 +96,11 @@ export function useBoardDataset() {
     setDataset(next);
     try {
       localStorage.removeItem(KEY);
+      localStorage.removeItem(LIVE_KEY);
     } catch {}
   }, []);
 
-  return { dataset, replace, resetDemo };
+  return { dataset, replace, resetDemo, refreshLive, liveLoading };
 }
 
 export function downloadJson(filename: string, data: unknown) {

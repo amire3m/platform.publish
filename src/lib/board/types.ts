@@ -37,13 +37,24 @@ export interface CsvRow {
   demo?: boolean;
 }
 
-export type DatasetSource = "demo" | "csv" | "mixed";
+export type DatasetSource = "demo" | "csv" | "mixed" | "live";
+
+export interface LiveChannelMeta {
+  id: BoardChannelId;
+  subs: number | null;
+  views: number | null;
+  videos: number | null;
+  subs12mo: number | null;
+  watchHours12mo: number | null;
+  views12mo: number | null;
+}
 
 export interface BoardDataset {
   rows: CsvRow[];
   source: DatasetSource;
   fileName?: string;
   loadedAt?: string;
+  liveMeta?: { fetchedAt: string; channels: LiveChannelMeta[] };
 }
 
 export type ProductionStatus =

@@ -1,4 +1,4 @@
-import type { CsvRow } from "./types";
+import type { BoardChannelId, BoardDataset, CsvRow, LiveChannelMeta } from "./types";
 
 export interface RangeFilter {
   from: string;
@@ -7,6 +7,27 @@ export interface RangeFilter {
 
 /** Board channel names/ids that must never appear in any report surface. */
 const HIDDEN_BOARD_CHANNELS = new Set(["shock", "tinazh", "شوک", "تیناژ"]);
+
+/** Live channel meta for a board channel (only when source is live). */
+export function liveMetaFor(dataset: BoardDataset, id: BoardChannelId): LiveChannelMeta | undefined {
+  if (dataset.source !== "live") return undefined;
+  return dataset.liveMeta?.channels.find((c) => c.id === id);
+}
+
+/** Summed live channel totals across all channels with meta (null-safe). */
+export function liveTotals(dataset: BoardDataset): { subs: number; views: number; videos: number; subs12mo: number; watchHours12mo: number; views12mo: number } {
+  const acc = { subs: 0, views: 0, videos: 0, subs12mo: 0, watchHours12mo: 0, views12mo: 0 };
+  if (dataset.source !== "live") return acc;
+  for (const c of dataset.liveMeta?.channels ?? []) {
+    acc.subs += c.subs ?? 0;
+    acc.views += c.views ?? 0;
+    acc.videos += c.videos ?? 0;
+    acc.subs12mo += c.subs12mo ?? 0;
+    acc.watchHours12mo += c.watchHours12mo ?? 0;
+    acc.views12mo += c.views12mo ?? 0;
+  }
+  return acc;
+}
 
 export function filterRows(rows: CsvRow[], opts: { channels?: string[]; range?: RangeFilter | null; program?: string; query?: string }): CsvRow[] {
   return rows.filter((r) => {

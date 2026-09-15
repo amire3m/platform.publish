@@ -144,9 +144,11 @@ export function AppShell({
         }`}
       >
         <div className="flex h-16 items-center gap-3 border-b border-tg-border px-5">
-          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-tg-accent text-white">
-            <Send className="h-5 w-5 -scale-x-100" />
-          </span>
+          <img
+            src="/brand/imam-logo.png"
+            alt="لوگوی مؤسسه امام روح‌الله"
+            className="h-9 w-9 shrink-0 rounded-full bg-white object-contain"
+          />
           <div>
             <p className="text-sm font-bold text-tg-text">YouTube EmRo</p>
             <p className="text-[11px] text-tg-secondary">مخزن اصلی: گروه تلگرام</p>

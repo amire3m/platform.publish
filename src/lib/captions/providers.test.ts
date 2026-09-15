@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, afterEach } from "vitest";
 
-import { FakeCaptionProvider, FakeSttProvider, RemoteSttProvider, getProviders } from "./providers";
+import { FakeCaptionProvider, FakeSttProvider, RemoteCaptionProvider, RemoteSttProvider, getProviders } from "./providers";
+import { ElevenLabsSttProvider } from "./stt-elevenlabs";
 
 describe("providers", () => {
   afterEach(() => {
@@ -29,5 +30,19 @@ describe("providers", () => {
     const r = await remote.transcribe(Buffer.from("x"));
     expect(fetchMock).toHaveBeenCalledWith("http://box:8000/transcribe", expect.objectContaining({ method: "POST" }));
     expect(r.text).toBe("hello");
+  });
+
+  it("prefers ElevenLabs when its key is set", async () => {
+    vi.stubEnv("ELEVENLABS_API_KEY", "eleven-key");
+    const { stt } = getProviders();
+    expect(stt).toBeInstanceOf(ElevenLabsSttProvider);
+  });
+
+  it("wires any OpenAI-compatible caption endpoint from env", async () => {
+    vi.stubEnv("CAPTION_LLM_BASE", "https://llm.example/v1");
+    vi.stubEnv("CAPTION_LLM_KEY", "llm-key");
+    vi.stubEnv("CAPTION_LLM_MODEL", "fast-fa");
+    const { captions } = getProviders();
+    expect(captions).toBeInstanceOf(RemoteCaptionProvider);
   });
 });

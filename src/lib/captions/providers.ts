@@ -1,4 +1,5 @@
 import type { TranscriptSegment } from "./srt";
+import { ElevenLabsSttProvider } from "./stt-elevenlabs";
 
 export interface SttResult {
   text: string;
@@ -114,10 +115,27 @@ export class FakeCaptionProvider implements CaptionProvider {
 }
 
 export function getProviders(): { stt: SttProvider; captions: CaptionProvider } {
-  const base = (process.env.AI_BOX_URL ?? "").trim();
-  if (!base) {
-    return { stt: new FakeSttProvider(), captions: new FakeCaptionProvider() };
+  const elevenKey = (process.env.ELEVENLABS_API_KEY ?? "").trim();
+  const boxBase = (process.env.AI_BOX_URL ?? "").trim();
+  const boxToken = process.env.AI_BOX_TOKEN ?? "";
+  const llmBase = (process.env.CAPTION_LLM_BASE ?? "").trim();
+  const llmKey = (process.env.CAPTION_LLM_KEY ?? "").trim();
+  const llmModel = (process.env.CAPTION_LLM_MODEL ?? "local-fa").trim() || "local-fa";
+
+  let stt: SttProvider;
+  if (elevenKey) {
+    stt = new ElevenLabsSttProvider(elevenKey);
+  } else if (boxBase) {
+    stt = new RemoteSttProvider(boxBase, boxToken);
+  } else {
+    stt = new FakeSttProvider();
   }
-  const token = process.env.AI_BOX_TOKEN ?? "";
-  return { stt: new RemoteSttProvider(base, token), captions: new RemoteCaptionProvider(base, token) };
+
+  let captions: CaptionProvider;
+  if (llmBase && llmKey) {
+    captions = new RemoteCaptionProvider(llmBase, llmKey, llmModel);
+  } else {
+    captions = new FakeCaptionProvider();
+  }
+  return { stt, captions };
 }

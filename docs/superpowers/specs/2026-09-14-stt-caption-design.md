@@ -1,7 +1,9 @@
 # Smart Caption (STT + Caption) — Design
 
-Date: 2026-09-14. Status: approved self-hosted (rented GPU VPS, zero
-subscriptions). Supersedes the earlier cloud-start idea per owner decision.
+Date: 2026-09-14. Status: pay-as-you-go cloud APIs (owner decision 2026-09-15:
+API is ~10-50x cheaper than a GPU box at 10-50 audio-hours/month).
+Supersedes the self-hosted draft below in the STT/LLM sections; everything
+else (trigger, SRT, UI, limits, permissions, tests) stands unchanged.
 
 ## Overview
 Per-part Persian transcription + caption/subtitle generation inside content-room.
@@ -10,6 +12,13 @@ uploaded/linked. A rented GPU VPS ("AI box") serves a Persian-tuned Whisper
 model and a Persian-capable open LLM; the main server orchestrates —
 Telegram download → ffmpeg to 16kHz wav → AI box STT → store transcript+SRT →
 AI box LLM builds platform captions. No per-use fees anywhere.
+
+> UPDATE 2026-09-15: replaced by cloud APIs (see Status). The provider
+> interfaces (`SttProvider`, `CaptionProvider`) stay; `ElevenLabsSttProvider`
+> (Scribe v2, `fas`, word timestamps grouped to sentences) and the generic
+> OpenAI-compatible `RemoteCaptionProvider` are the live implementations.
+> Set `ELEVENLABS_API_KEY` + `CAPTION_LLM_BASE/KEY/MODEL`. Self-hosted box
+> remains a future option behind the same interfaces.
 
 ## Goals
 - Accurate Persian transcript per part (editable, searchable).

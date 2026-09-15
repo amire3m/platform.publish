@@ -337,4 +337,90 @@ describe("panel group media", () => {
 
     global.fetch = originalFetch;
   });
+
+  it("shows a takeover dialog on arm conflict and continues on confirm", async () => {
+    const originalFetch = global.fetch;
+    const calls: Array<{ url: string; init?: RequestInit }> = [];
+    let armCount = 0;
+    global.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : (input as Request).url;
+      calls.push({ url, init });
+      if (typeof url === "string" && url.includes("/attach")) {
+        const body = JSON.parse(String(init?.body ?? "{}")) as { mode?: string };
+        if (body.mode === "await_reply") {
+          armCount++;
+          if (armCount === 1) {
+            return {
+              ok: false,
+              status: 409,
+              json: async () => ({
+                ok: false,
+                error: "conflict",
+                code: "SESSION_CONFLICT",
+                data: { session: { partId: "CPP-9", partNumber: 9, kind: "cover", ttlSeconds: 200 } },
+              }),
+            } as unknown as Response;
+          }
+          return { ok: true, json: async () => ({ ok: true, data: { mode: "awaiting", ttlSeconds: 300 } }) } as unknown as Response;
+        }
+        return { ok: true, json: async () => ({ ok: true, data: { mode: "cancelled" } }) } as unknown as Response;
+      }
+      if (typeof url === "string" && url.includes("/api/channels")) {
+        return { ok: true, json: async () => ({ ok: true, data: { channels: [] } }) } as unknown as Response;
+      }
+      return { ok: true, json: async () => ({ ok: true, data: {} }) } as unknown as Response;
+    }) as unknown as typeof fetch;
+
+    const { ContentRoomDetail } = await import("./ContentRoomDetail");
+    const product = {
+      id: "p1",
+      title: "t1",
+      status: "draft",
+      productType: "episode",
+      channel: "youtube",
+      partsCount: 1,
+      version: 1,
+      notes: null,
+      parts: [
+        {
+          id: "part-1",
+          partNumber: 1,
+          fileRef: null,
+          coverFileRef: null,
+          highlightFileRef: null,
+          reelFileRef: null,
+          playbackUrl: null,
+          coverUrl: null,
+          highlightUrl: null,
+          reelUrl: null,
+          isActive: true,
+          status: "draft",
+          version: 1,
+        },
+      ],
+    } as unknown as never;
+
+    render(<ContentRoomDetail product={product as never} onRefresh={vi.fn()} />);
+
+    const filesTab = await screen.findByRole("button", { name: /فایل‌ها/ });
+    filesTab.click();
+
+    const videoBtn = await screen.findByRole("button", { name: "ویدیو کامل" });
+    videoBtn.click();
+
+    const armBtn = await screen.findByRole("button", { name: /دکمه ریپلای/ });
+    armBtn.click();
+
+    await screen.findByText("لینک فعال دیگری در جریان است");
+    const confirmBtn = await screen.findByRole("button", { name: "لغو قبلی و ادامه" });
+    confirmBtn.click();
+
+    await waitFor(() => {
+      const bodies = calls.filter((c) => c.url.includes("/attach")).map((c) => JSON.parse(String(c.init?.body ?? "{}")));
+      expect(bodies).toContainEqual(expect.objectContaining({ mode: "cancel", partId: "CPP-9", kind: "cover" }));
+      expect(bodies.filter((b) => b.mode === "await_reply")).toHaveLength(2);
+    });
+
+    global.fetch = originalFetch;
+  });
 });

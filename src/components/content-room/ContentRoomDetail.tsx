@@ -506,6 +506,13 @@ function UploadZone({
   );
 }
 
+interface ConflictSession {
+  partId: string;
+  partNumber: number;
+  kind: string;
+  ttlSeconds: number;
+}
+
 function PartUploadCard({
   part,
   onRefresh,
@@ -630,8 +637,12 @@ function PartUploadCard({
   const [attachKind, setAttachKind] = useState<"video" | "cover" | "highlight" | "reel">("video");
   const [tgLink, setTgLink] = useState("");
   const [awaitTtl, setAwaitTtl] = useState(0);
+  const [conflict, setConflict] = useState<{ partId: string; partNumber: number; kind: string; ttlSeconds: number } | null>(null);
 
   function startAttach(kind: "video" | "cover" | "highlight" | "reel") {
+    if (attachMode === "reply") {
+      void cancelAwaitReply({ silent: true });
+    }
     setAttachKind(kind);
     setAttachMode("link");
     setTgLink("");
@@ -676,7 +687,13 @@ function PartUploadCard({
         body: JSON.stringify({ partId: part.id, kind: attachKind, mode: "await_reply" }),
       });
       const body = await res.json();
-      if (!res.ok || !body.ok) throw new Error(body.error ?? "خطا در شروع حالت ریپلای");
+      if (!res.ok || !body.ok) {
+        if (body?.code === "SESSION_CONFLICT" && body?.data?.session) {
+          setConflict(body.data.session as ConflictSession);
+          return;
+        }
+        throw new Error(body.error ?? "خطا در شروع حالت ریپلای");
+      }
       onToast(`حالت ریپلای فعال شد — ${Math.round((body.data?.ttlSeconds ?? 300) / 60)} دقیقه فرصت دارید.`);
       setTimeout(() => onToast(null), 4000);
       setAttachMode("reply");
@@ -688,17 +705,37 @@ function PartUploadCard({
     }
   }
 
-  async function cancelAwaitReply() {
+  async function cancelAwaitReply(opts?: { silent?: boolean; partId?: string; kind?: string }) {
+    const targetPartId = opts?.partId ?? part.id;
+    const targetKind = opts?.kind ?? attachKind;
     try {
-      await fetch(`/api/content-room/parts/${part.id}/attach`, {
+      const res = await fetch(`/api/content-room/parts/${part.id}/attach`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ partId: part.id, kind: attachKind, mode: "cancel" }),
+        body: JSON.stringify({ partId: targetPartId, kind: targetKind, mode: "cancel" }),
       });
+      const body = await res.json().catch(() => null);
+      if (body?.code === "SESSION_CONFLICT" && body?.data?.session) {
+        // server holds a different session — drop local armed state
+        setAttachMode("idle");
+        if (!opts?.silent) onError("نشست دیگری فعال است؛ حالت محلی بازنشانی شد.");
+        return false;
+      }
     } catch {}
     setAttachMode("idle");
-    onToast("حالت ریپلای لغو شد.");
-    setTimeout(() => onToast(null), 2000);
+    if (!opts?.silent) {
+      onToast("حالت ریپلای لغو شد.");
+      setTimeout(() => onToast(null), 2000);
+    }
+    return true;
+  }
+
+  async function confirmConflictTakeover() {
+    if (!conflict) return;
+    setConflict(null);
+    const ok = await cancelAwaitReply({ silent: true, partId: conflict.partId, kind: conflict.kind });
+    if (!ok) return;
+    await armAwaitReply();
   }
 
   // TTL countdown tick
@@ -1145,9 +1182,22 @@ function PartUploadCard({
                 <div className="h-1 w-full overflow-hidden rounded-full bg-tg-hover">
                   <div className="h-full bg-amber-500 transition-all duration-1000" style={{ width: `${(awaitTtl / 300) * 100}%` }} />
                 </div>
-                <Button size="sm" variant="secondary" onClick={cancelAwaitReply} className="min-h-[30px] text-xs">لغو حالت ریپلای</Button>
+                <Button size="sm" variant="secondary" onClick={() => cancelAwaitReply()} className="min-h-[30px] text-xs">لغو حالت ریپلای</Button>
               </div>
             )}
+
+            <ConfirmModal
+              open={conflict !== null}
+              onClose={() => setConflict(null)}
+              onConfirm={confirmConflictTakeover}
+              title="لینک فعال دیگری در جریان است"
+              description={
+                conflict
+                  ? `قسمت ${conflict.partNumber} (${conflict.kind}) هم‌اکنون در حالت ریپلای است — حدود ${Math.max(1, Math.round(conflict.ttlSeconds / 60))} دقیقه مانده. با ادامه، آن لغو و این قسمت مسلح می‌شود.`
+                  : ""
+              }
+              confirmLabel="لغو قبلی و ادامه"
+            />
 
             {/* Mode switch row (link ↔ reply) */}
             {attachMode === "link" && (

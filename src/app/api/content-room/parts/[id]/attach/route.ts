@@ -1,14 +1,24 @@
+import { NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { contentParts } from "@/db/schema";
 import { jsonError, jsonInternalError, jsonOk, requirePermission } from "@/lib/api-helpers";
 import { linkPartMedia, parseTelegramMessageLink, type PartMediaKind } from "@/lib/content-room/link";
-import { setPendingReply, clearPendingReply, pendingTtlSeconds } from "@/lib/content-room/pending-link";
+import { setPendingReply, clearPendingReply, getPendingReply, pendingTtlSeconds } from "@/lib/content-room/pending-link";
 import { TelegramClient } from "@/lib/telegram/client";
 
 export const runtime = "nodejs";
 
 const KINDS: PartMediaKind[] = ["video", "cover", "highlight", "reel"];
+
+function toSessionInfo(entry: { partId: string; partNumber: number; kind: string; expiresAt: number }) {
+  return {
+    partId: entry.partId,
+    partNumber: entry.partNumber,
+    kind: entry.kind,
+    ttlSeconds: Math.max(0, Math.round((entry.expiresAt - Date.now()) / 1000)),
+  };
+}
 
 /** Resolve a real file_id for a t.me link by forwarding the message once. */
 async function resolveLinkFileId(chatIdNum: string | null, messageId: string): Promise<{ fileId: string | null; fileName: string | null }> {
@@ -46,9 +56,23 @@ export async function POST(req: Request) {
     const [part] = await db.select().from(contentParts).where(eq(contentParts.id, body.partId)).limit(1);
     if (!part) return jsonError("قسمت یافت نشد.", 404, "NOT_FOUND");
 
-    // Cancel a pending await_reply session
+    // Cancel a pending await_reply session (only when it belongs to this target)
     if (body.mode === "cancel") {
-      if (actor.telegramId) clearPendingReply(actor.telegramId);
+      if (!actor.telegramId) return jsonOk({ mode: "cancelled" });
+      const current = getPendingReply(actor.telegramId);
+      if (!current) return jsonOk({ mode: "cancelled" });
+      if (current.partId !== body.partId || current.kind !== kind) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error: "یک لینک فعال دیگر در جریان است.",
+            code: "SESSION_CONFLICT",
+            data: { session: toSessionInfo(current) },
+          },
+          { status: 409 },
+        );
+      }
+      clearPendingReply(actor.telegramId);
       return jsonOk({ mode: "cancelled" });
     }
 
@@ -69,9 +93,21 @@ export async function POST(req: Request) {
       return jsonOk({ mode: "linked", storedRef: result.storedRef, resolved: !!fileId });
     }
 
-    // Mode 2: arm "reply to link" — valid for a short TTL
+    // Mode 2: arm "reply to link" — one live session per user (TTL refresh on re-arm)
     if (body.mode === "await_reply") {
       if (!actor.telegramId) return jsonError("حساب شما به تلگرام متصل نیست؛ لینک را مستقیم وارد کنید.", 422, "NOT_CONFIGURED");
+      const current = getPendingReply(actor.telegramId);
+      if (current && (current.partId !== body.partId || current.kind !== kind)) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error: "یک لینک فعال دیگر در جریان است؛ اول آن را لغو کنید.",
+            code: "SESSION_CONFLICT",
+            data: { session: toSessionInfo(current) },
+          },
+          { status: 409 },
+        );
+      }
       const entry = setPendingReply(actor.telegramId, {
         userId: actor.id,
         partId: body.partId,

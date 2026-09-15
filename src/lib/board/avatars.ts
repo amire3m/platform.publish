@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import type { BoardChannelId } from "./types";
 
-const KEY = "board-report:avatars:v1";
+const KEY = "board-report:avatars:v2";
 const TTL_MS = 24 * 3600 * 1000;
 
 /** Real YouTube avatars keyed by board channel id; missing → undefined/null (monogram fallback). */

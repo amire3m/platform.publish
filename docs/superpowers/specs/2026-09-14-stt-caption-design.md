@@ -1,9 +1,12 @@
 # Smart Caption (STT + Caption) — Design
 
-Date: 2026-09-14. Status: pay-as-you-go cloud APIs (owner decision 2026-09-15:
-API is ~10-50x cheaper than a GPU box at 10-50 audio-hours/month).
-Supersedes the self-hosted draft below in the STT/LLM sections; everything
-else (trigger, SRT, UI, limits, permissions, tests) stands unchanged.
+Date: 2026-09-14. Status: PARKED per owner decision 2026-09-15 — postponed to a
+future program; do not build further until re-activated. Shipped code
+(through 879cfb2) stays deployed; with keys unset the fakes serve clearly
+marked demo data. Earlier approach history: pay-as-you-go cloud APIs
+(10-50x cheaper than a GPU box at 10-50 audio-hours/month), before that
+self-hosted GPU box; everything else below (trigger, SRT, UI, limits,
+permissions, tests) stands unchanged for re-activation.
 
 ## Overview
 Per-part Persian transcription + caption/subtitle generation inside content-room.

@@ -99,10 +99,30 @@ export async function linkPartMedia(opts: LinkPartMediaOptions): Promise<LinkPar
   return { storedRef };
 }
 
-/** Parse a t.me message link → { chatId, messageId } (supports /c/ private groups and public usernames). */
+/** Parse a t.me message link → { chatId, messageId }.
+ * Supports private groups (/c/<chat>/<msg>), group topics (/c/<chat>/<thread>/<msg>,
+ * <username>/<thread>/<msg>), plain public links, and ignores query/fragment
+ * suffixes (?single, ?thread=, #...). messageId is always the last segment. */
 export function parseTelegramMessageLink(link: string): { chatId: string | null; messageId: string | null } {
-  const m = link.trim().match(/^(?:https?:\/\/)?t\.me\/(?:c\/(\d+)\/(\d+)|([a-zA-Z0-9_]+)\/(\d+))\/?$/i);
-  if (!m) return { chatId: null, messageId: null };
-  if (m[1]) return { chatId: m[1], messageId: m[2] };
-  return { chatId: null, messageId: m[4] ?? null };
+  const none = { chatId: null, messageId: null };
+  const clean = link.trim().split(/[?#]/)[0].replace(/\/+$/, "");
+  const m = clean.match(/^(?:https?:\/\/)?t\.me\/([^\s/]+)(?:\/([^\s/]+))?(?:\/([^\s/]+))?(?:\/([^\s/]+))?$/i);
+  if (!m) return none;
+  const [, a, b, c, d] = m;
+  const isNum = (s: string | undefined) => !!s && /^\d+$/.test(s);
+  if (d !== undefined) {
+    // four segments: only c/<chat>/<thread>/<msg> is meaningful
+    if (a.toLowerCase() === "c" && isNum(b) && isNum(d)) return { chatId: b as string, messageId: d as string };
+    return none;
+  }
+  if (c !== undefined) {
+    // three segments: messageId is last when numeric
+    if (!isNum(c)) return none;
+    if (a.toLowerCase() === "c" && isNum(b)) return { chatId: b as string, messageId: c as string };
+    return { chatId: null, messageId: c as string };
+  }
+  if (b === undefined) return none;
+  // two segments: <username>/<msg>
+  if (!isNum(b) || a.toLowerCase() === "c") return none;
+  return { chatId: null, messageId: b };
 }

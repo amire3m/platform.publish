@@ -621,8 +621,12 @@ function PartUploadCard({
       });
       const body = await res.json();
       if (!res.ok || !body.ok) throw new Error(body.error ?? "خطا در لینک");
-      onToast("فایل از تلگرام به این قسمت لینک شد.");
-      setTimeout(() => onToast(null), 3000);
+      if (body.data?.resolved === false) {
+        onError("لینک ثبت شد ولی فایل مستقیم از تلگرام خوانده نشد؛ از «دکمه ریپلای» یا انتخاب از ویدیوهای گروه استفاده کنید.");
+      } else {
+        onToast("فایل از تلگرام به این قسمت لینک شد.");
+        setTimeout(() => onToast(null), 3000);
+      }
       setAttachMode("idle");
       setTgLink("");
       await mutateAssets();

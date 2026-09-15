@@ -215,4 +215,65 @@ describe("panel group media", () => {
 
     global.fetch = originalFetch;
   });
+
+  it("warns when a pasted link resolves without a direct file", async () => {
+    const originalFetch = global.fetch;
+    global.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : (input as Request).url;
+      if (typeof url === "string" && url.includes("/attach") && init?.method === "POST") {
+        return { ok: true, json: async () => ({ ok: true, data: { mode: "linked", storedRef: "tg_msg_9", resolved: false } }) } as unknown as Response;
+      }
+      if (typeof url === "string" && url.includes("/api/channels")) {
+        return { ok: true, json: async () => ({ ok: true, data: { channels: [] } }) } as unknown as Response;
+      }
+      return { ok: true, json: async () => ({ ok: true, data: {} }) } as unknown as Response;
+    }) as unknown as typeof fetch;
+
+    const { ContentRoomDetail } = await import("./ContentRoomDetail");
+    const product = {
+      id: "p1",
+      title: "t1",
+      status: "draft",
+      productType: "episode",
+      channel: "youtube",
+      partsCount: 1,
+      version: 1,
+      notes: null,
+      parts: [
+        {
+          id: "part-1",
+          partNumber: 1,
+          fileRef: null,
+          coverFileRef: null,
+          highlightFileRef: null,
+          reelFileRef: null,
+          playbackUrl: null,
+          coverUrl: null,
+          highlightUrl: null,
+          reelUrl: null,
+          isActive: true,
+          status: "draft",
+          version: 1,
+        },
+      ],
+    } as unknown as never;
+
+    render(<ContentRoomDetail product={product as never} onRefresh={vi.fn()} />);
+
+    const filesTab = await screen.findByRole("button", { name: /فایل‌ها/ });
+    filesTab.click();
+
+    const videoBtn = await screen.findByRole("button", { name: "ویدیو کامل" });
+    videoBtn.click();
+
+    const input = await screen.findByPlaceholderText("https://t.me/c/2326782937/2577");
+    fireEvent.change(input, { target: { value: "https://t.me/emamyt/28/1081" } });
+
+    const linkBtn = await screen.findByRole("button", { name: "لینک کن" });
+    linkBtn.click();
+
+    await waitFor(() => expect(screen.getByText(/فایل مستقیم از تلگرام خوانده نشد/)).toBeInTheDocument());
+
+    global.fetch = originalFetch;
+  });
 });

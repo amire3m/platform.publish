@@ -80,9 +80,21 @@ export function ChannelCard({ channel, stats, imageUrl }: {
       <p className="rounded-lg bg-tg-hover/40 px-3 py-2 text-xs font-medium" style={{ color: channel.color }}>
         {channel.progressNote}
       </p>
-      <Link href="/board/dashboard" className="inline-block text-xs font-medium text-tg-accent hover:underline">
-        مشاهده در داشبورد ←
-      </Link>
+      <div className="flex flex-wrap items-center gap-3">
+        <Link href="/board/dashboard" className="inline-block text-xs font-medium text-tg-accent hover:underline">
+          مشاهده در داشبورد ←
+        </Link>
+        {channel.youtubeUrl && (
+          <a
+            href={channel.youtubeUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-block text-xs font-medium text-tg-secondary hover:text-tg-text hover:underline"
+          >
+            مشاهده کانال در یوتیوب ↗
+          </a>
+        )}
+      </div>
     </Card>
   );
 }

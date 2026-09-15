@@ -7,6 +7,7 @@ export interface ChannelProfile {
   color: string;
   softBg: string;
   monogram: string;
+  youtubeUrl?: string | null;
   contentTypes: string[];
   status: string[];
   progressNote: string;

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import type { BoardChannelId } from "./types";
 
-const KEY = "board-report:avatars:v2";
+const KEY = "board-report:avatars:v3";
 const TTL_MS = 24 * 3600 * 1000;
 
 /** Real YouTube avatars keyed by board channel id; missing → undefined/null (monogram fallback). */
@@ -30,7 +30,10 @@ export function useChannelAvatars(): Partial<Record<BoardChannelId, string | nul
         if (!res.ok) return;
         const body = (await res.json()) as { avatars?: Record<string, { url?: string | null }> };
         const urls: Record<string, string | null> = {};
-        for (const [id, v] of Object.entries(body?.avatars ?? {})) urls[id] = v?.url ?? null;
+        // Same-origin proxy: the browser never fetches Google directly.
+        for (const [id, v] of Object.entries(body?.avatars ?? {})) {
+          urls[id] = v?.url ? `/api/board/avatar-image/${id}` : null;
+        }
         if (cancelled) return;
         setAvatars(urls as Partial<Record<BoardChannelId, string | null>>);
         try {

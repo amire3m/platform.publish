@@ -226,6 +226,17 @@ export function AppShell({
           </div>
         </header>
         <main className="flex-1 p-4 sm:p-6">{children}</main>
+        {!pathname?.startsWith("/board") && (
+          <Link
+            href="/board"
+            className="fixed bottom-4 left-4 z-40 flex min-h-[44px] items-center gap-2 rounded-full bg-tg-accent py-2.5 pl-3 pr-4 text-sm font-bold text-tg-accent-fg shadow-lg transition hover:brightness-110"
+            aria-label="گزارش جامع پروژه (نسخه آزمایشی)"
+          >
+            <FileText className="h-4 w-4" />
+            گزارش پروژه
+            <span className="rounded-full bg-black/20 px-2 py-0.5 text-[10px] font-medium">آزمایشی</span>
+          </Link>
+        )}
         {showNotifications && (
           <div className="fixed inset-0 z-50 flex justify-end bg-black/20" onClick={() => setShowNotifications(false)}>
             <div

@@ -1,25 +1,39 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 import { Card } from "@/components/ui";
 import type { ChannelProfile } from "@/lib/board/types";
 import { DemoBadge, MissingBadge, fmt } from "@/components/board/badges";
 
-export function ChannelCard({ channel, stats }: {
+export function ChannelCard({ channel, stats, imageUrl }: {
   channel: ChannelProfile;
   stats?: { views: number; subs: number; videos: number; demo: boolean };
+  imageUrl?: string | null;
 }) {
+  const [imgOk, setImgOk] = useState(true);
+  const showImage = Boolean(imageUrl) && imgOk;
   return (
     <Card className="space-y-3 overflow-hidden">
       <div className="-mx-5 -mt-5 h-1.5" style={{ backgroundColor: channel.color }} aria-hidden="true" />
       <div className="flex items-start gap-3">
-        <span
-          className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl text-lg font-black text-white"
-          style={{ backgroundColor: channel.color }}
-          aria-hidden="true"
-        >
-          {channel.monogram}
-        </span>
+        {showImage ? (
+          <img
+            src={imageUrl as string}
+            alt={`تصویر کانال ${channel.nameFa}`}
+            onError={() => setImgOk(false)}
+            className="h-12 w-12 shrink-0 rounded-xl object-cover"
+            loading="lazy"
+          />
+        ) : (
+          <span
+            className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl text-lg font-black text-white"
+            style={{ backgroundColor: channel.color }}
+            aria-hidden="true"
+          >
+            {channel.monogram}
+          </span>
+        )}
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="font-bold text-tg-text">{channel.nameFa}</h3>

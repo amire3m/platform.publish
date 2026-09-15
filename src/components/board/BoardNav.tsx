@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
 
 const ITEMS: Array<{ id: string; label: string }> = [
   { id: "overview", label: "نمای کلی پروژه" },
@@ -21,13 +21,19 @@ const ITEMS: Array<{ id: string; label: string }> = [
 ];
 
 export function BoardNav() {
-  const pathname = usePathname();
+  const [hash, setHash] = useState("overview");
+  useEffect(() => {
+    const update = () => setHash(window.location.hash.replace(/^#/, "") || "overview");
+    update();
+    window.addEventListener("hashchange", update);
+    return () => window.removeEventListener("hashchange", update);
+  }, []);
   return (
-    <nav aria-label="بخش‌های گزارش پروژه" className="rounded-xl border border-tg-border bg-tg-surface p-1.5">
+    <nav aria-label="بخش‌های گزارش پروژه" className="sticky top-2 z-30 rounded-xl border border-tg-border bg-tg-surface p-1.5 shadow-sm">
       <div className="flex flex-wrap gap-1">
         {ITEMS.map((t) => {
-          const href = `/board/${t.id}`;
-          const active = pathname === href;
+          const href = `/board#${t.id}`;
+          const active = hash === t.id;
           return (
             <Link
               key={t.id}

@@ -1,6 +1,7 @@
 import type { Asset, AssetFilters, AssetType, AssetVersion } from "./types";
 import { generateEntityId } from "@/lib/ids";
 import { buildTelegramMediaUrl } from "@/lib/media/telegram-url";
+import { isChannelHidden } from "@/lib/channels";
 
 function nowIso(): string {
   return new Date().toISOString();
@@ -48,22 +49,6 @@ function seedAssets(): Asset[] {
       ],
     },
     {
-      id: "AST-1405-000003",
-      telegramFileId: "sample_file_cover_1",
-      type: "cover",
-      filename: "cover_shock.jpg",
-      size: 1_800_000,
-      mime: "image/jpeg",
-      createdAt: new Date(Date.now() - 1000 * 60 * 60 * 12).toISOString(),
-      channelId: "shock",
-      tags: ["کاور", "شوک"],
-      version: 1,
-      thumbnailUrl: null,
-      versions: [
-        { version: 1, telegramFileId: "sample_file_cover_1", createdAt: new Date(Date.now() - 1000 * 60 * 60 * 12).toISOString(), size: 1_800_000, mime: "image/jpeg", filename: "cover_shock.jpg" },
-      ],
-    },
-    {
       id: "AST-1405-000004",
       telegramFileId: "sample_file_video_2",
       type: "video",
@@ -77,22 +62,6 @@ function seedAssets(): Asset[] {
       thumbnailUrl: null,
       versions: [
         { version: 1, telegramFileId: "sample_file_video_2", createdAt: new Date(Date.now() - 1000 * 60 * 30).toISOString(), size: 68_000_000, mime: "video/mp4", filename: "highlight_zaviye_no.mp4" },
-      ],
-    },
-    {
-      id: "AST-1405-000005",
-      telegramFileId: "sample_file_image_2",
-      type: "image",
-      filename: "tinazh_doc_cover.png",
-      size: 3_100_000,
-      mime: "image/png",
-      createdAt: new Date(Date.now() - 1000 * 60 * 60 * 5).toISOString(),
-      channelId: "tinazh",
-      tags: ["مستند", "کاور"],
-      version: 1,
-      thumbnailUrl: null,
-      versions: [
-        { version: 1, telegramFileId: "sample_file_image_2", createdAt: new Date(Date.now() - 1000 * 60 * 60 * 5).toISOString(), size: 3_100_000, mime: "image/png", filename: "tinazh_doc_cover.png" },
       ],
     },
     {
@@ -249,7 +218,8 @@ async function getAllAssets(): Promise<Asset[]> {
 }
 
 function applyFilters(assets: Asset[], filters: AssetFilters): Asset[] {
-  let result = [...assets];
+  // Hidden channels are never listed to any viewer.
+  let result = assets.filter((a) => !a.channelId || !isChannelHidden(a.channelId));
   if (filters.query) {
     const q = filters.query.toLowerCase().trim();
     if (q) {

@@ -1,7 +1,8 @@
 import { jsonError, jsonOk } from "@/lib/api-helpers";
 import { getCurrentUser } from "@/lib/auth";
 import { hasPermission, type Permission } from "@/lib/permissions";
-import { CHANNELS, CONTENT_STATUSES, PRODUCT_TYPES } from "@/lib/content-room/repository";
+import { CONTENT_STATUSES, PRODUCT_TYPES } from "@/lib/content-room/repository";
+import { VISIBLE_CHANNEL_IDS, isChannelHidden } from "@/lib/channels";
 import { deriveProgramProgress } from "@/lib/workflow/progress";
 import type { ProductionStatus, PublicationStatus } from "@/lib/workflow/types";
 
@@ -386,6 +387,8 @@ export async function handleDashboardSummaryRequest(
   }
 
   // --- content_products aggregates ---
+  // Hidden channels are never shown to any viewer.
+  products = products.filter((p) => !isChannelHidden(p.channel));
   const totalProducts = products.length;
 
   const byStatus: Record<string, number> = {};
@@ -393,7 +396,7 @@ export async function handleDashboardSummaryRequest(
   const byProductType: Record<string, number> = {};
   for (const t of PRODUCT_TYPES) byProductType[t] = 0;
   const byChannel: Record<string, number> = {};
-  for (const c of CHANNELS) byChannel[c] = 0;
+  for (const c of VISIBLE_CHANNEL_IDS) byChannel[c] = 0;
 
   let overdueCount = 0;
   const overdueProducts: Array<{ id: string; title: string; dueAt: string | null; status: string }> = [];
@@ -406,7 +409,6 @@ export async function handleDashboardSummaryRequest(
     else byProductType[p.productType] = (byProductType[p.productType] ?? 0) + 1;
 
     if (p.channel in byChannel) byChannel[p.channel] = (byChannel[p.channel] ?? 0) + 1;
-    else byChannel[p.channel] = (byChannel[p.channel] ?? 0) + 1;
 
     if (p.dueAt) {
       const dueTime = p.dueAt instanceof Date ? p.dueAt.getTime() : new Date(p.dueAt as string).getTime();

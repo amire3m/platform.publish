@@ -1,7 +1,7 @@
 import type { ContentRoomProductSummary, ContentRoomFilters } from "./types";
 import { CONTENT_STATUS_ORDER, contentStatusPresentation } from "@/lib/content-room/presentation";
 import type { ContentStatus } from "@/lib/content-room/presentation";
-import { CHANNELS } from "@/lib/channels";
+import { VISIBLE_CHANNELS } from "@/lib/channels";
 import { UNKNOWN_LABEL_FA } from "@/lib/presentation-fa";
 
 export const PRODUCT_TYPE_LABELS: Record<string, string> = {
@@ -37,7 +37,7 @@ export const REQUIRED_FOR_SEND: readonly string[] = [
   "cover_ready",
 ] as const;
 
-export const CHANNEL_LABELS: Record<string, string> = Object.fromEntries(CHANNELS.map((c) => [c.id, c.labelFa]));
+export const CHANNEL_LABELS: Record<string, string> = Object.fromEntries(VISIBLE_CHANNELS.map((c) => [c.id, c.labelFa]));
 
 export const productTypeLabelFa = (value: string) => PRODUCT_TYPE_LABELS[value] ?? UNKNOWN_LABEL_FA;
 export const channelLabelFa = (value: string) => CHANNEL_LABELS[value] ?? UNKNOWN_LABEL_FA;

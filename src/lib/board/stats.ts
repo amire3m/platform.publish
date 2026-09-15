@@ -5,8 +5,12 @@ export interface RangeFilter {
   to: string;
 }
 
+/** Board channel names/ids that must never appear in any report surface. */
+const HIDDEN_BOARD_CHANNELS = new Set(["shock", "tinazh", "شوک", "تیناژ"]);
+
 export function filterRows(rows: CsvRow[], opts: { channels?: string[]; range?: RangeFilter | null; program?: string; query?: string }): CsvRow[] {
   return rows.filter((r) => {
+    if (HIDDEN_BOARD_CHANNELS.has(r.channel)) return false;
     if (opts.channels?.length && !opts.channels.includes(r.channel)) return false;
     if (opts.range?.from && r.date < opts.range.from) return false;
     if (opts.range?.to && r.date > opts.range.to) return false;

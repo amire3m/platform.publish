@@ -1,5 +1,6 @@
 import { generateEntityId } from "@/lib/ids";
 import { PART_ACTIVITIES, REQUIRED_FOR_SEND, deriveProductStatusFromParts, planPartsReconciliation } from "./activities";
+import { HIDDEN_CHANNEL_IDS, isChannelHidden } from "@/lib/channels";
 
 // ---------------------------------------------------------------------------
 // Constants & types
@@ -253,6 +254,8 @@ export class InMemoryContentRoomPort implements ContentRoomDatabasePort {
 
   async listProducts(filters?: ProductFilters): Promise<ContentProductRecord[]> {
     let result = [...this.products];
+    // Hidden channels are never listed to any viewer.
+    result = result.filter((p) => !isChannelHidden(p.channel));
     if (!filters?.includeArchived) {
       result = result.filter((p) => !p.archivedAt);
     }
@@ -513,8 +516,10 @@ export function createDrizzleContentRoomPort(): ContentRoomDatabasePort {
     async listProducts(filters) {
       const db = await getDb();
       const { contentProducts } = await import("@/db/schema");
-      const { eq, and, sql, isNull, gte, lte, desc, asc } = await import("drizzle-orm");
+      const { eq, and, sql, isNull, gte, lte, desc, asc, notInArray } = await import("drizzle-orm");
       const conditions: unknown[] = [];
+      // Hidden channels are never listed to any viewer.
+      conditions.push(notInArray(contentProducts.channel, [...HIDDEN_CHANNEL_IDS]));
       if (!filters?.includeArchived) {
         conditions.push(isNull(contentProducts.archivedAt));
       }

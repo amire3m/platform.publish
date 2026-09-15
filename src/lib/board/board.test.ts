@@ -52,6 +52,16 @@ describe("stats", () => {
     const f = filterRows(rows, { range: { from: "2026-06-01", to: "2026-06-30" } });
     expect(f.every((r) => r.date >= "2026-06-01" && r.date <= "2026-06-30")).toBe(true);
   });
+  it("never surfaces hidden channels", () => {
+    const hidden = [
+      { ...rows[0], channel: "shock" },
+      { ...rows[0], channel: "tinazh" },
+      { ...rows[0], channel: "شوک" },
+      { ...rows[0], channel: "تیناژ" },
+    ];
+    expect(filterRows([...rows, ...hidden], {})).toHaveLength(rows.length);
+    expect(filterRows(hidden, {})).toHaveLength(0);
+  });
   it("builds time series, shares and tops", () => {
     expect(viewsOverTime(rows).length).toBeGreaterThan(0);
     const share = programShare(rows.filter((r) => r.channel === "زاویه نو"));

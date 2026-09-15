@@ -46,6 +46,17 @@ describe("content room repository", () => {
     expect(byStatus).toHaveLength(2);
   });
 
+  it("never lists hidden-channel products to any viewer", async () => {
+    const port = new InMemoryContentRoomPort();
+    const repo = createContentRoomRepository(port);
+    await repo.createProduct({ title: "پنهان", productType: "film", channel: "shock", partsCount: 1, actorUserId: "u1" });
+    await repo.createProduct({ title: "آشکار", productType: "film", channel: "tamashin", partsCount: 1, actorUserId: "u1" });
+    const all = await repo.listProducts({});
+    expect(all.map((p) => p.title)).toEqual(["آشکار"]);
+    expect(await repo.listProducts({ channel: "shock" })).toHaveLength(0);
+    expect(await repo.listProducts({ channel: "tinazh" })).toHaveLength(0);
+  });
+
   it("getProduct returns detail with parts", async () => {
     const port = new InMemoryContentRoomPort();
     const repo = createContentRoomRepository(port);

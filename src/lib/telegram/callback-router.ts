@@ -582,10 +582,10 @@ async function handleLinkNewType(typeRaw: string, fromTelegramId: string, botMes
   const gate = await requireNewProductPending(fromTelegramId);
   if ("error" in gate) return { ok: false, message: gate.error };
   const { setPendingNewProduct } = await import("@/lib/content-room/pending-new-product");
-  const { getChannelLabelFa, CHANNEL_IDS } = await import("@/lib/channels");
+  const { getChannelLabelFa, VISIBLE_CHANNEL_IDS } = await import("@/lib/channels");
   setPendingNewProduct(fromTelegramId, { messageId: gate.pending.messageId, productType: type });
   const rows: unknown[][] = [];
-  const ids = [...(CHANNEL_IDS as readonly string[])];
+  const ids = [...(VISIBLE_CHANNEL_IDS as readonly string[])];
   for (let i = 0; i < ids.length; i += 2) {
     rows.push(ids.slice(i, i + 2).map((c) => ({ text: getChannelLabelFa(c), callback_data: `link_new_channel:${c}` })));
   }

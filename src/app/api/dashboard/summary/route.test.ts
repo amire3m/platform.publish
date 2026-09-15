@@ -56,7 +56,8 @@ describe("GET /api/dashboard/summary", () => {
       { id: "CPR-1", title: "سریال 1", productType: "serial", channel: "zed_revayat", status: "imported", dueAt: new Date("2026-08-10T00:00:00Z"), createdBy: "u1" },
       { id: "CPR-2", title: "سریال 2", productType: "documentary", channel: "zaviye_no", status: "cover_ready", dueAt: new Date("2026-08-25T00:00:00Z"), createdBy: "u1" },
       { id: "CPR-3", title: "سریال 3", productType: "serial", channel: "zed_revayat", status: "ready_to_send", dueAt: new Date("2026-08-10T00:00:00Z"), createdBy: "u2" }, // overdue but ready_to_send should NOT count
-      { id: "CPR-4", title: "سریال 4", productType: "film", channel: "shock", status: "editing_youtube", dueAt: null, createdBy: "u2" },
+      { id: "CPR-4", title: "سریال 4", productType: "film", channel: "tamashin", status: "editing_youtube", dueAt: null, createdBy: "u2" },
+      { id: "CPR-5", title: "مخفی", productType: "film", channel: "shock", status: "imported", dueAt: null, createdBy: "u2" }, // hidden channel: must be invisible everywhere
     ];
     const deps = makeDeps({
       fetchContentProducts: vi.fn().mockResolvedValue(products as never),
@@ -106,7 +107,11 @@ describe("GET /api/dashboard/summary", () => {
     // byChannel
     expect(data.byChannel.zed_revayat).toBe(2);
     expect(data.byChannel.zaviye_no).toBe(1);
-    expect(data.byChannel.shock).toBe(1);
+    expect(data.byChannel.tamashin).toBe(1);
+    // hidden channels never appear
+    expect(data.byChannel).not.toHaveProperty("shock");
+    expect(data.byChannel).not.toHaveProperty("tinazh");
+    expect(data.kpis.contentProductsTotal).toBe(4);
 
     // overdue: only CPR-1 (CPR-3 is ready_to_send, excluded)
     expect(data.kpis.contentProductsOverdue).toBe(1);

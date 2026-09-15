@@ -7,7 +7,7 @@ import Link from "next/link";
 import { AlertTriangle, BarChart3, Clock3, Eye, Mail, Package, TrendingUp, XCircle } from "lucide-react";
 import { Card, EmptyState, ErrorState, Select, Skeleton } from "@/components/ui";
 import { fetchWorkflowApi } from "@/lib/workflow/client";
-import { CHANNELS, getChannelLabelFa } from "@/lib/channels";
+import { VISIBLE_CHANNELS, getChannelLabelFa } from "@/lib/channels";
 import { formatJalaliDateTime } from "@/lib/date/jalali";
 import { InstagramIcon, YoutubeIcon } from "@/components/brand-icons";
 import { platformLabelFa, statusLabelFa, UNKNOWN_LABEL_FA } from "@/lib/presentation-fa";
@@ -210,9 +210,9 @@ function DashboardContent() {
   for (const [k, v] of Object.entries(data.byStatus)) if (!(k in orderedByStatus)) orderedByStatus[k] = v;
 
   const channelLabels: Record<string, string> = {};
-  for (const c of CHANNELS) channelLabels[c.id] = getChannelLabelFa(c.id);
+  for (const c of VISIBLE_CHANNELS) channelLabels[c.id] = getChannelLabelFa(c.id);
   const orderedByChannel: Record<string, number> = {};
-  for (const c of CHANNELS) orderedByChannel[c.id] = data.byChannel[c.id] ?? 0;
+  for (const c of VISIBLE_CHANNELS) orderedByChannel[c.id] = data.byChannel[c.id] ?? 0;
 
   return (
     <div className="space-y-6" dir="rtl">

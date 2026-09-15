@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { jsonError, jsonInternalError, jsonOk, requirePermission } from "@/lib/api-helpers";
-import { CHANNEL_IDS, CHANNELS, getChannelConfig } from "@/lib/channels";
+import { CHANNEL_IDS, VISIBLE_CHANNELS, getChannelConfig } from "@/lib/channels";
 import { mergeChannelOverrides, readChannelOverrides, saveChannelOverride } from "@/lib/channel-accounts";
 import { hasPermission } from "@/lib/permissions";
 
@@ -9,7 +9,7 @@ export async function GET() {
   if (!user) return response!;
 
   try {
-    const channels = mergeChannelOverrides(CHANNELS, await readChannelOverrides());
+    const channels = mergeChannelOverrides(VISIBLE_CHANNELS, await readChannelOverrides());
     return jsonOk({ channels });
   } catch (error) {
     return jsonInternalError(error, "api/channels GET");

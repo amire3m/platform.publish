@@ -2,6 +2,7 @@
  * Channel to Social Account mapping.
  * 6 channels enum stored in content_products.channel.
  * Each channel may be linked to YouTube/Instagram accounts and Telegram topic.
+ * shock/tinazh are hidden from all viewers (see HIDDEN_CHANNEL_IDS).
  */
 
 export const CHANNEL_IDS = [
@@ -38,6 +39,26 @@ export const CHANNEL_GROUPS = [
   { id: "emro" as const, labelFa: "کانال‌های موسسه امام روح‌الله", channels: CHANNELS.filter((channel) => channel.organization === "emro") },
   { id: "sana" as const, labelFa: "کانال‌های سنا", channels: CHANNELS.filter((channel) => channel.organization === "sana") },
 ];
+
+/**
+ * Channels permanently hidden from every viewer surface (pickers, lists,
+ * summaries, bots, reports). Rows stay in the database but are never
+ * returned to any user.
+ */
+export const HIDDEN_CHANNEL_IDS = ["shock", "tinazh"] as const;
+export type HiddenChannelId = (typeof HIDDEN_CHANNEL_IDS)[number];
+
+export function isChannelHidden(channelId: string): boolean {
+  return (HIDDEN_CHANNEL_IDS as readonly string[]).includes(channelId);
+}
+
+/** Visible-only variants — every user-facing surface must use these. */
+export const VISIBLE_CHANNELS: ChannelConfig[] = CHANNELS.filter((c) => !isChannelHidden(c.id));
+export const VISIBLE_CHANNEL_IDS: string[] = VISIBLE_CHANNELS.map((c) => c.id);
+export const VISIBLE_CHANNEL_GROUPS = CHANNEL_GROUPS.map((g) => ({
+  ...g,
+  channels: g.channels.filter((c) => !isChannelHidden(c.id)),
+})).filter((g) => g.channels.length > 0);
 
 export function getChannelConfig(channelId: string): ChannelConfig | undefined {
   return CHANNELS.find((c) => c.id === channelId);
@@ -109,11 +130,11 @@ export async function getChannelAccountsFromDb(channelId: string): Promise<Chann
 }
 
 /**
- * For API enrichment: return channels with account linkage status.
- * Client-safe: does not import DB.
+ * For API enrichment: return VISIBLE channels with account linkage status.
+ * Client-safe: does not import DB. Hidden channels are never included.
  */
 export async function getChannelsWithAccountStatus(): Promise<Array<ChannelConfig & { linked: { youtube: boolean; instagram: boolean; telegram: boolean } }>> {
-  return CHANNELS.map((c) => ({
+  return VISIBLE_CHANNELS.map((c) => ({
     ...c,
     linked: {
       youtube: Boolean(c.youtubeAccountId),

@@ -6,7 +6,7 @@ import useSWR from "swr";
 import { Button, Card, EmptyState, Input, Label, Modal, Select, Skeleton, StatusBadge } from "@/components/ui";
 import { useToast } from "@/components/providers";
 import { ROLE_LABELS_FA, type Role } from "@/lib/permissions";
-import { CHANNEL_GROUPS } from "@/lib/channels";
+import { VISIBLE_CHANNEL_GROUPS } from "@/lib/channels";
 import { fetchWorkflowApi } from "@/lib/workflow/client";
 import { formatJalaliDateTime } from "@/lib/date/jalali";
 import { roleLabelFa } from "@/lib/presentation-fa";
@@ -248,7 +248,7 @@ export default function UsersPage() {
                     })}
                     <td className="p-2">
                       <fieldset disabled={isChannelDisabled(u)} className="space-y-2" aria-label={`کانال‌های مجاز ${u.name}`}>
-                        {CHANNEL_GROUPS.map((group) => (
+                        {VISIBLE_CHANNEL_GROUPS.map((group) => (
                           <div key={group.id}>
                             <p className="mb-1 text-[10px] font-semibold text-tg-secondary">{group.labelFa}</p>
                             <div className="flex flex-wrap gap-1.5">

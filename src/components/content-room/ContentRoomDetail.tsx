@@ -545,6 +545,33 @@ function PartUploadCard({
   const [coverPreviewUrl, setCoverPreviewUrl] = useState<string | null>(null);
   const [highlightPreviewUrl, setHighlightPreviewUrl] = useState<string | null>(null);
   const [reelPreviewUrl, setReelPreviewUrl] = useState<string | null>(null);
+  const [playFailed, setPlayFailed] = useState(false);
+  const [preparing, setPreparing] = useState(false);
+  const [prepareError, setPrepareError] = useState<string | null>(null);
+  const [playKey, setPlayKey] = useState(0);
+
+  async function handlePrepareVideo() {
+    if (!part.fileRef) return;
+    setPreparing(true);
+    setPrepareError(null);
+    try {
+      const res = await fetch("/api/media/warm", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fileId: part.fileRef }),
+      });
+      const body = await res.json().catch(() => null);
+      if (!res.ok || !body?.ok) throw new Error(body?.error ?? "آماده‌سازی ناموفق بود.");
+      setPlayFailed(false);
+      setPlayKey((k) => k + 1);
+      onToast("ویدیو آماده شد.");
+      await onRefresh();
+    } catch (e) {
+      setPrepareError(e instanceof Error ? e.message : "آماده‌سازی ناموفق بود.");
+    } finally {
+      setPreparing(false);
+    }
+  }
 
   const hasVideo = Boolean(part.fileRef);
   const hasCover = Boolean(part.coverFileRef);
@@ -879,12 +906,29 @@ function PartUploadCard({
 
       {part.playbackUrl && (
         <DedicatedPlayer
+          key={playKey}
           src={part.mirrorUrl ?? part.playbackUrl}
           fallbackSrc={part.mirrorUrl ? part.playbackUrl : undefined}
           poster={part.coverUrl ?? undefined}
           title={`قسمت ${part.partNumber} — ویدیو کامل`}
           className="aspect-video w-full"
+          onError={() => setPlayFailed(true)}
         />
+      )}
+      {playFailed && (
+        <div className="flex flex-col items-center gap-1.5 rounded-lg border border-tg-border bg-black p-3 text-center">
+          <p className="text-[11px] text-white">پخش مستقیم برای این فایل ممکن نشد.</p>
+          {prepareError && (
+            <p className="text-[11px] text-rose-300" role="alert">
+              {prepareError}
+            </p>
+          )}
+          {part.fileRef && !part.fileRef.startsWith("tg_msg_") && (
+            <Button size="sm" onClick={handlePrepareVideo} disabled={preparing} className="min-h-[32px] text-xs">
+              {preparing ? "در حال آماده‌سازی..." : "آماده‌سازی ویدیو"}
+            </Button>
+          )}
+        </div>
       )}
       {part.coverFileRef && (
         <div className="space-y-1">

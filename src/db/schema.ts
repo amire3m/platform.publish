@@ -765,6 +765,16 @@ export const channelAccounts = pgTable("channel_accounts", {
 });
 
 // ---------------------------------------------------------------------------
+// Media retention: last-access tracking for Bot API volume cache sweeping.
+// ---------------------------------------------------------------------------
+export const mediaAccess = pgTable("media_access", {
+  filePath: text("file_path").primaryKey(),
+  lastAccess: timestamp("last_access", { withTimezone: true }).notNull().defaultNow(),
+  accessCount: integer("access_count").notNull().default(1),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// ---------------------------------------------------------------------------
 // Media mirrors (e.g. vids.st): fast playback/publish copies of Telegram files.
 // Telegram file_id stays canonical; rows here are best-effort cache entries.
 // ---------------------------------------------------------------------------

@@ -18,6 +18,10 @@ vi.mock("@/lib/workflow/notifications", () => ({
 vi.mock("@/lib/mirrors/reconcile", () => ({
   reconcileMirrors: vi.fn().mockResolvedValue({ checked: 0, completed: 0, failed: 0 }),
 }));
+
+vi.mock("@/lib/media/retention", () => ({
+  runMediaSweep: vi.fn().mockResolvedValue({ scanned: 0, deleted: 0, freedBytes: 0, errors: 0, ttlDays: 7, diskPct: 10 }),
+}));
 vi.mock("@/lib/api-helpers", () => ({
   jsonError: (message: string, status = 400) =>
     Response.json({ ok: false, error: message }, { status }),
@@ -31,6 +35,7 @@ import { reconcileWorkflowTargets } from "@/lib/workflow/reconciliation";
 import { runSchedulerTick } from "@/lib/workflow/notification-scheduler";
 import { runWorkflowNotificationDelivery } from "@/lib/workflow/notifications";
 import { reconcileMirrors } from "@/lib/mirrors/reconcile";
+import { runMediaSweep } from "@/lib/media/retention";
 
 describe("/api/cron/tick", () => {
   beforeEach(() => {
@@ -153,5 +158,15 @@ describe("/api/cron/tick", () => {
     const body = await response.json();
     expect(reconcileMirrors).toHaveBeenCalledOnce();
     expect(body.data.mirrors).toEqual({ ok: true, value: { checked: 0, completed: 0, failed: 0 } });
+  });
+
+  it("runs the media sweep on every tick", async () => {
+    const response = await POST(new Request("http://localhost/api/cron/tick", {
+      method: "POST",
+      headers: { "x-cron-secret": "cron-secret" },
+    }));
+    const body = await response.json();
+    expect(runMediaSweep).toHaveBeenCalledOnce();
+    expect(body.data.sweep.ok).toBe(true);
   });
 });

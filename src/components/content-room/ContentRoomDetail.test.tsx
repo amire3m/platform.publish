@@ -276,4 +276,65 @@ describe("panel group media", () => {
 
     global.fetch = originalFetch;
   });
+
+  it("offers video prepare after player failure and warms the file", async () => {
+    const originalFetch = global.fetch;
+    const calls: Array<{ url: string; init?: RequestInit }> = [];
+    global.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : (input as Request).url;
+      calls.push({ url, init });
+      if (typeof url === "string" && url.includes("/api/media/warm")) {
+        return { ok: true, json: async () => ({ ok: true, data: { warmed: true } }) } as unknown as Response;
+      }
+      if (typeof url === "string" && url.includes("/api/channels")) {
+        return { ok: true, json: async () => ({ ok: true, data: { channels: [] } }) } as unknown as Response;
+      }
+      return { ok: true, json: async () => ({ ok: true, data: {} }) } as unknown as Response;
+    }) as unknown as typeof fetch;
+
+    const { ContentRoomDetail } = await import("./ContentRoomDetail");
+    const product = {
+      id: "p1",
+      title: "t1",
+      status: "draft",
+      productType: "episode",
+      channel: "youtube",
+      partsCount: 1,
+      version: 1,
+      notes: null,
+      parts: [
+        {
+          id: "part-1",
+          partNumber: 1,
+          fileRef: "file-abc",
+          coverFileRef: null,
+          highlightFileRef: null,
+          reelFileRef: null,
+          playbackUrl: "https://example.com/v.mp4",
+          coverUrl: null,
+          highlightUrl: null,
+          reelUrl: null,
+          isActive: true,
+          status: "draft",
+          version: 1,
+        },
+      ],
+    } as unknown as never;
+
+    render(<ContentRoomDetail product={product as never} onRefresh={vi.fn()} />);
+
+    const filesTab = await screen.findByRole("button", { name: /فایل‌ها/ });
+    filesTab.click();
+
+    await screen.findByText("قسمت 1");
+    fireEvent.error(document.querySelector("video")!);
+    const prepareBtn = await screen.findByRole("button", { name: "آماده‌سازی ویدیو" });
+    prepareBtn.click();
+
+    await waitFor(() => {
+      expect(calls.some((c) => c.url.includes("/api/media/warm") && c.init?.method === "POST")).toBe(true);
+    });
+
+    global.fetch = originalFetch;
+  });
 });

@@ -338,7 +338,10 @@ export class TelegramClient {
       for (const p of [hostPath, fp]) {
         try {
           const buf = await fs.readFile(p);
-          if (buf.length > 0) return buf as unknown as Buffer;
+          if (buf.length > 0) {
+            void import("@/lib/media/retention").then((m) => m.touchMediaAccess(p).catch(() => {}));
+            return buf as unknown as Buffer;
+          }
         } catch {}
       }
     }
@@ -367,6 +370,7 @@ export class TelegramClient {
           const size = stat.size;
           // If file exists locally and is large, serve directly
           if (size > 0) {
+            void import("@/lib/media/retention").then((m) => m.touchMediaAccess(p).catch(() => {}));
             let start = 0;
             let end = size - 1;
             let status = 200;

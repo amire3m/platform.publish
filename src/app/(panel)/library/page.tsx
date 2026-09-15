@@ -1,6 +1,6 @@
 "use client";
 import { useMemo, useState } from "react";
-import useSWR from "swr";
+import useSWR, { useSWRConfig } from "swr";
 import {
   Search, Film, Image as ImageIcon, Scissors, Smartphone, ChevronDown, ChevronLeft,
   FolderOpen, Folder, Package, Tv, Users, Play,
@@ -22,6 +22,7 @@ interface FileItem {
   type: "full_video" | "highlight" | "reel" | "cover" | string;
   playbackUrl: string;
   mirrorUrl?: string | null;
+  fileId?: string | null;
   createdAt: string;
   telegramLink?: string;
 }
@@ -60,8 +61,34 @@ const TYPE_META: Record<string, { label: string; icon: typeof Film; cls: string 
   cover: { label: "کاور", icon: ImageIcon, cls: "bg-sky-500/15 text-sky-700 dark:text-sky-400" },
 };
 
-function FilePreview({ item }: { item: FileItem }) {
+export function FilePreview({ item, onRefresh }: { item: FileItem; onRefresh?: () => void }) {
   const [failed, setFailed] = useState(false);
+  const [preparing, setPreparing] = useState(false);
+  const [prepareError, setPrepareError] = useState<string | null>(null);
+  const [retryKey, setRetryKey] = useState(0);
+
+  async function handlePrepare() {
+    if (!item.fileId) return;
+    setPreparing(true);
+    setPrepareError(null);
+    try {
+      const res = await fetch("/api/media/warm", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fileId: item.fileId }),
+      });
+      const body = await res.json().catch(() => null);
+      if (!res.ok || !body?.ok) throw new Error(body?.error ?? "آماده‌سازی ناموفق بود.");
+      onRefresh?.();
+      setFailed(false);
+      setRetryKey((k) => k + 1);
+    } catch (e) {
+      setPrepareError(e instanceof Error ? e.message : "آماده‌سازی ناموفق بود.");
+    } finally {
+      setPreparing(false);
+    }
+  }
+
   if (item.type === "cover") {
     return (
       <div className="w-52 overflow-hidden rounded-lg border border-tg-border bg-black">
@@ -73,14 +100,30 @@ function FilePreview({ item }: { item: FileItem }) {
   return (
     <div className="w-96 max-w-full overflow-hidden rounded-lg border border-tg-border bg-black">
       {failed ? (
-        <div className="flex h-36 flex-col items-center justify-center gap-1 p-3 text-white">
+        <div className="flex min-h-36 flex-col items-center justify-center gap-1.5 p-3 text-white">
           <p className="text-[11px]">پخش مستقیم برای این فایل ممکن نشد.</p>
+          {prepareError && (
+            <p className="text-[11px] text-rose-300" role="alert">
+              {prepareError}
+            </p>
+          )}
+          {item.fileId && !item.fileId.startsWith("tg_msg_") && (
+            <button
+              type="button"
+              onClick={handlePrepare}
+              disabled={preparing}
+              className="rounded bg-tg-accent px-3 py-1 text-[11px] font-medium disabled:opacity-50"
+            >
+              {preparing ? "در حال آماده‌سازی..." : "آماده‌سازی ویدیو"}
+            </button>
+          )}
           {item.telegramLink && (
             <a href={item.telegramLink} target="_blank" rel="noopener noreferrer" className="rounded bg-tg-accent px-2 py-0.5 text-[11px]">مشاهده در تلگرام</a>
           )}
         </div>
       ) : (
         <DedicatedPlayer
+          key={retryKey}
           src={item.mirrorUrl ?? item.playbackUrl}
           fallbackSrc={item.mirrorUrl ? item.playbackUrl : undefined}
           title={item.filename}
@@ -94,6 +137,10 @@ function FilePreview({ item }: { item: FileItem }) {
 
 function FileRow({ item }: { item: FileItem }) {
   const [open, setOpen] = useState(false);
+  const { mutate } = useSWRConfig();
+  const refreshLibrary = () => {
+    void mutate((key) => typeof key === "string" && key.startsWith("/api/library"));
+  };
   const meta = TYPE_META[item.type] ?? TYPE_META.full_video;
   const Icon = meta.icon;
   return (
@@ -106,12 +153,12 @@ function FileRow({ item }: { item: FileItem }) {
         <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] ${meta.cls}`}>{meta.label}</span>
         {open ? <ChevronDown className="h-4 w-4 shrink-0 text-tg-secondary" /> : <Play className="h-3.5 w-3.5 shrink-0 text-tg-secondary" />}
       </button>
-      {open && (
-        <div className="border-t border-tg-border p-2">
-          <FilePreview item={item} />
-          <p className="mt-1 text-[10px] text-tg-secondary">{new Date(item.createdAt).toLocaleString("fa-IR", { dateStyle: "short", timeStyle: "short" })}</p>
-        </div>
-      )}
+          {open && (
+            <div className="border-t border-tg-border p-2">
+              <FilePreview item={item} onRefresh={refreshLibrary} />
+              <p className="mt-1 text-[10px] text-tg-secondary">{new Date(item.createdAt).toLocaleString("fa-IR", { dateStyle: "short", timeStyle: "short" })}</p>
+            </div>
+          )}
     </div>
   );
 }

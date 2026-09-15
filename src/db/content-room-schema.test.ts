@@ -5,7 +5,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 
-import { contentPartActivities, contentParts, contentProducts, partTranscripts, channelAccounts, mediaMirrors } from "./schema";
+import { contentPartActivities, contentParts, contentProducts, partTranscripts, channelAccounts, mediaMirrors, mediaAccess } from "./schema";
 import { PART_ACTIVITIES } from "@/lib/content-room/activities";
 import { PART_ACTIVITIES as VALIDATION_PART_ACTIVITIES, PRODUCT_TYPES as VALIDATION_PRODUCT_TYPES } from "@/lib/content-room/validation";
 import { CONTENT_STATUS_ORDER } from "@/lib/content-room/presentation";
@@ -186,5 +186,15 @@ describe("media_mirrors table", () => {
       expect.arrayContaining(["id", "partId", "fileId", "provider", "remoteId", "remoteTaskId", "remoteUrl", "status"]),
     );
     expect(columns.fileId.notNull).toBe(true);
+  });
+});
+
+describe("media_access table", () => {
+  it("tracks last access per cached file path", () => {
+    const columns = getTableColumns(mediaAccess);
+    expect(Object.keys(columns)).toEqual(
+      expect.arrayContaining(["filePath", "lastAccess", "accessCount"]),
+    );
+    expect(columns.filePath.notNull).toBe(true);
   });
 });

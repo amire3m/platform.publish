@@ -1,9 +1,9 @@
 "use client";
 
-export function DemoBadge() {
+export function DemoBadge({ label = "داده نمایشی" }: { label?: string }) {
   return (
     <span className="rounded-full bg-amber-500/15 px-2.5 py-0.5 text-[11px] font-medium text-amber-700 dark:text-amber-300">
-      داده نمایشی
+      {label}
     </span>
   );
 }

@@ -8,6 +8,7 @@ export interface ChannelProfile {
   softBg: string;
   monogram: string;
   youtubeUrl?: string | null;
+  imageUrl?: string | null;
   contentTypes: string[];
   status: string[];
   progressNote: string;

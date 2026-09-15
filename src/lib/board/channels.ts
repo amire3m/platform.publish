@@ -9,6 +9,7 @@ export const BOARD_CHANNELS: ChannelProfile[] = [
     softBg: "bg-teal-500/10",
     monogram: "ز",
     youtubeUrl: "https://www.youtube.com/@zaviye_no",
+    imageUrl: "/board-avatars/zaviye_no.jpg",
     contentTypes: ["برنامه‌های تلویزیونی مؤسسه", "گفت‌وگوها", "موضوعات اجتماعی", "مسائل روز", "برنامه‌های تحلیلی"],
     status: [
       "نزدیک‌ترین کانال به فعال شدن مانیتایز",
@@ -26,6 +27,7 @@ export const BOARD_CHANNELS: ChannelProfile[] = [
     softBg: "bg-rose-500/10",
     monogram: "ض",
     youtubeUrl: "https://www.youtube.com/@ZedRevayat",
+    imageUrl: "/board-avatars/zed_revayat.jpg",
     contentTypes: ["مستند", "محتوای آموزشی", "روایت‌های اجتماعی", "پرونده‌های موضوعی"],
     status: [
       "حدود نیمی از حداقل‌های رشد و مانیتایز",
@@ -43,6 +45,7 @@ export const BOARD_CHANNELS: ChannelProfile[] = [
     softBg: "bg-amber-500/10",
     monogram: "ت",
     youtubeUrl: "https://www.youtube.com/@tamashin_official",
+    imageUrl: "/board-avatars/tamashin.jpg",
     contentTypes: ["فیلم", "سریال", "فیلم کوتاه", "تولیدات سینمایی و نمایشی"],
     status: [
       "«مشاور ۱» حدود ۹۰٪ آماده؛ انتشار منوط به تأیید صداوسیما و حذف از کانال‌های دیگر",
@@ -59,6 +62,7 @@ export const BOARD_CHANNELS: ChannelProfile[] = [
     softBg: "bg-blue-500/10",
     monogram: "IF",
     youtubeUrl: "https://www.youtube.com/@IranianFrame",
+    imageUrl: "/board-avatars/iranian_frame.jpg",
     contentTypes: ["محتوای تصویری و سینمایی", "آثار منتخب بین‌المللی", "فیلم و تولیدات نمایشی", "برندینگ بین‌المللی"],
     status: ["نمایش زبان محتوا، زیرنویس و وضعیت انتشار بین‌المللی", "تمرکز بر مخاطب هدف خارجی"],
     progressNote: "مسیر بین‌المللی",

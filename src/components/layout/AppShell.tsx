@@ -147,7 +147,7 @@ export function AppShell({
           <img
             src="/brand/imam-logo.png"
             alt="لوگوی مؤسسه امام روح‌الله"
-            className="h-9 w-9 shrink-0 rounded-full bg-white object-contain"
+            className="h-12 w-12 shrink-0 rounded-full bg-white object-contain"
           />
           <div>
             <p className="text-sm font-bold text-tg-text">YouTube EmRo</p>

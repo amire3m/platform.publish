@@ -4,6 +4,11 @@
 // rather than a separate container in this deployment).
 let instrumentationRunning = false;
 
+// Throttles for the heavier background jobs so the 60s publish loop is
+// never starved: mirrors every 5 min, retention sweep every 30 min.
+let lastMirrorRun = 0;
+let lastSweepRun = 0;
+
 async function safeRun(name: string, fn: () => Promise<unknown>) {
   if (instrumentationRunning) return;
   try {
@@ -110,8 +115,10 @@ export async function register() {
         }
       })(),
       (async () => {
-        // vids.st mirrors: resume uploading + process queued (bounded budget per tick).
+        // vids.st mirrors: resume uploading + process queued (bounded budget per run).
         try {
+          if (Date.now() - lastMirrorRun < 5 * 60 * 1000) return null;
+          lastMirrorRun = Date.now();
           const { reconcileMirrors } = await import("@/lib/mirrors/reconcile");
           return reconcileMirrors({ maxItems: 3, poll: { tries: 2, intervalMs: 15000 } });
         } catch (err) {
@@ -122,6 +129,8 @@ export async function register() {
       (async () => {
         // Media retention sweep (dry-run unless MEDIA_SWEEP_DRY_RUN=0).
         try {
+          if (Date.now() - lastSweepRun < 30 * 60 * 1000) return null;
+          lastSweepRun = Date.now();
           const { runMediaSweep } = await import("@/lib/media/retention");
           return runMediaSweep();
         } catch (err) {

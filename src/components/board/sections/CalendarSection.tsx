@@ -64,16 +64,19 @@ export default function BoardCalendarPage() {
             <p key={w} className="py-1 text-[11px] font-bold text-tg-secondary">{w}</p>
           ))}
           {cells.map((c, i) => (
-            <div key={i} className="min-h-14 rounded-lg border border-tg-border/50 p-1">
+            <div key={i} className="min-h-11 overflow-hidden rounded-lg border border-tg-border/50 p-1 sm:min-h-14">
               {c && (
                 <>
                   <p className="text-[11px] tabular-nums text-tg-secondary">{c.day}</p>
                   {(byDate.get(c.date) ?? []).slice(0, 2).map((p) => (
-                    <p key={p.id} className="truncate rounded bg-tg-accent/15 px-1 text-[10px] text-tg-text" title={p.project}>
+                    <p key={p.id} className="hidden truncate rounded bg-tg-accent/15 px-1 text-[10px] text-tg-text sm:block" title={p.project}>
                       {p.project}
                     </p>
                   ))}
-                  {(byDate.get(c.date)?.length ?? 0) > 2 && <p className="text-[10px] text-tg-secondary">+{byDate.get(c.date)!.length - 2}</p>}
+                  {(byDate.get(c.date)?.length ?? 0) > 0 && (
+                    <span className="mx-auto mt-0.5 block h-1.5 w-1.5 rounded-full bg-tg-accent sm:hidden" aria-hidden="true" />
+                  )}
+                  {(byDate.get(c.date)?.length ?? 0) > 2 && <p className="hidden text-[10px] text-tg-secondary sm:block">+{byDate.get(c.date)!.length - 2}</p>}
                 </>
               )}
             </div>

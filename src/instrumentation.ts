@@ -109,6 +109,26 @@ export async function register() {
           return { enqueued: [] as string[] };
         }
       })(),
+      (async () => {
+        // vids.st mirrors: resume uploading + process queued (bounded budget per tick).
+        try {
+          const { reconcileMirrors } = await import("@/lib/mirrors/reconcile");
+          return reconcileMirrors({ maxItems: 3, poll: { tries: 2, intervalMs: 15000 } });
+        } catch (err) {
+          console.error("[mirrors] reconcile tick failed:", (err as Error).message);
+          return { checked: 0, completed: 0, failed: 0, enqueued: 0 };
+        }
+      })(),
+      (async () => {
+        // Media retention sweep (dry-run unless MEDIA_SWEEP_DRY_RUN=0).
+        try {
+          const { runMediaSweep } = await import("@/lib/media/retention");
+          return runMediaSweep();
+        } catch (err) {
+          console.error("[media] sweep tick failed:", (err as Error).message);
+          return { scanned: 0, deleted: 0, freedBytes: 0, errors: 0 };
+        }
+      })(),
     ]).finally(() => {
       instrumentationRunning = false;
     });

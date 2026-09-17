@@ -67,7 +67,7 @@ export function MirrorStatusBox() {
       <button onClick={() => setOpen((v) => !v)} className="flex w-full items-center gap-2 text-right" aria-expanded={open}>
         {open ? <ChevronDown className="h-4 w-4 shrink-0 text-tg-secondary" /> : <ChevronLeft className="h-4 w-4 shrink-0 text-tg-secondary" />}
         <CloudUpload className="h-4 w-4 shrink-0 text-tg-accent" />
-        <span className="text-sm font-bold text-tg-text">وضعیت آینه‌ها (vids.st)</span>
+        <span className="text-sm font-bold text-tg-text">وضعیت آینه‌ها</span>
         {counts && (
           <span className="mr-auto flex flex-wrap gap-1">
             {(Object.keys(counts) as Array<keyof MirrorCounts>).map((s) => (
@@ -109,11 +109,6 @@ export function MirrorStatusBox() {
                 <span className="min-w-0 flex-1 truncate text-tg-text" title={m.productTitle ?? m.fileId}>
                   {m.productTitle ?? m.fileId}
                 </span>
-                {m.remoteUrl && (
-                  <a href={m.remoteUrl} target="_blank" rel="noreferrer" className="shrink-0 text-tg-accent hover:underline">
-                    پخش
-                  </a>
-                )}
                 {m.status === "error" && (
                   <button
                     type="button"

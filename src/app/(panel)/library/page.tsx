@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { Card, Input, Select, EmptyState, Skeleton } from "@/components/ui";
 import { ChannelOptions } from "@/components/ChannelOptions";
+import { MirrorStatusBox } from "@/components/library/MirrorStatus";
 import { DedicatedPlayer } from "@/components/media/DedicatedPlayer";
 
 const fetcher = async (url: string) => {
@@ -264,6 +265,8 @@ export default function LibraryPage() {
         <h1 className="text-xl font-bold text-tg-text">کتابخانه</h1>
         <p className="text-sm text-tg-secondary">ساختار درختی: کانال ← محصول ← قسمت ← ویدیو کامل، برش‌ها و ریلزها</p>
       </div>
+
+      <MirrorStatusBox />
 
       <Card className="space-y-3">
         <div className="grid gap-3 md:grid-cols-2">

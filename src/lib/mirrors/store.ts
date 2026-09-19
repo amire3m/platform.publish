@@ -83,7 +83,7 @@ export async function upsertQueuedMirror(partId: string | null, fileId: string, 
     } as never)
     .onConflictDoUpdate({
       target: [mediaMirrors.provider, mediaMirrors.fileId],
-      set: { partId, status: "queued", error: null, updatedAt: now } as never,
+      set: { partId, status: "queued", remoteId: null, remoteTaskId: null, remoteUrl: null, error: null, updatedAt: now } as never,
     })
     .returning();
   return mapRow(row as unknown as Record<string, unknown>);
@@ -117,6 +117,33 @@ export async function listPendingMirrors(limit = 20, provider = MIRROR_PROVIDER)
     .where(and(eq(mediaMirrors.provider, provider), inArray(mediaMirrors.status, ["queued", "uploading"])))
     .limit(limit)) as unknown as Array<Record<string, unknown>>;
   return rows.map(mapRow);
+}
+
+/** Stale "uploading" rows whose remote task died server-side go back to queued for a fresh upload. */
+export async function requeueStaleUploading(maxAgeMs = 6 * 3600 * 1000, provider = MIRROR_PROVIDER): Promise<number> {
+  const cutoff = new Date(Date.now() - maxAgeMs);
+  const stale = (await db
+    .select({ fileId: mediaMirrors.fileId })
+    .from(mediaMirrors)
+    .where(
+      and(
+        eq(mediaMirrors.provider, provider),
+        eq(mediaMirrors.status, "uploading"),
+        sql`${mediaMirrors.updatedAt} < ${cutoff}`,
+      ),
+    )) as unknown as Array<{ fileId: string }>;
+  if (!stale.length) return 0;
+  await db
+    .update(mediaMirrors)
+    .set({ status: "queued", remoteTaskId: null, error: null, updatedAt: new Date() } as never)
+    .where(
+      and(
+        eq(mediaMirrors.provider, provider),
+        eq(mediaMirrors.status, "uploading"),
+        sql`${mediaMirrors.updatedAt} < ${cutoff}`,
+      ) as never,
+    );
+  return stale.length;
 }
 
 export async function deleteMirrorsByPartIds(partIds: string[]): Promise<void> {

@@ -12,6 +12,7 @@ export interface ReconcileStore {
   discoverUnmirrored: () => Promise<Array<{ partId: string; fileId: string }>>;
   enqueue: (partId: string, fileId: string) => Promise<void>;
   listReadyWithoutUrl: () => Promise<MirrorRow[]>;
+  requeueStale?: () => Promise<number>;
 }
 
 export interface ReconcileInput {
@@ -25,12 +26,12 @@ export interface ReconcileInput {
  * Cron sweep: resume uploading mirrors and process queued ones.
  * No-ops without a mirror key. Never throws.
  */
-export async function reconcileMirrors(input: ReconcileInput = {}): Promise<{ checked: number; completed: number; failed: number; enqueued: number }> {
-  const result = { checked: 0, completed: 0, failed: 0, enqueued: 0 };
+export async function reconcileMirrors(input: ReconcileInput = {}): Promise<{ checked: number; completed: number; failed: number; enqueued: number; requeued: number }> {
+  const result = { checked: 0, completed: 0, failed: 0, enqueued: 0, requeued: 0 };
   try {
     if (!(process.env.VIDS_API_KEY ?? "").trim()) return result;
     const { getVidsClient } = await import("./vids");
-    const { listPendingMirrors, setMirrorUploading, setMirrorReady, setMirrorError, listUnmirroredVideoFiles, upsertQueuedMirror, listReadyWithoutUrl } = await import("./store");
+    const { listPendingMirrors, setMirrorUploading, setMirrorReady, setMirrorError, listUnmirroredVideoFiles, upsertQueuedMirror, listReadyWithoutUrl, requeueStaleUploading } = await import("./store");
     const client = input.client ?? getVidsClient();
     const maxItems = input.maxItems ?? 5;
     const poll = input.poll ?? { tries: 4, intervalMs: 15000 };
@@ -51,14 +52,29 @@ export async function reconcileMirrors(input: ReconcileInput = {}): Promise<{ ch
       discoverUnmirrored: () => listUnmirroredVideoFiles(maxItems),
       enqueue: (partId, fileId) => upsertQueuedMirror(partId, fileId).then(() => {}),
       listReadyWithoutUrl: () => listReadyWithoutUrl(),
+      requeueStale: () => requeueStaleUploading(),
     };
+    // Stale uploading rows (remote task gone server-side) go back to queued first.
+    try {
+      if (store.requeueStale) result.requeued = await store.requeueStale();
+    } catch {}
     const pending = await store.listPending();
     for (const row of pending.slice(0, maxItems)) {
       result.checked++;
       try {
         if (row.status === "uploading" && row.remoteTaskId) {
           // resume: single status poll, no re-upload
-          const st = await client.uploadStatus(row.remoteTaskId);
+          let st;
+          try {
+            st = await client.uploadStatus(row.remoteTaskId);
+          } catch {
+            // Task gone server-side (or transient): back to queued for a fresh upload.
+            try {
+              await store.enqueue(row.partId ?? "", row.fileId);
+            } catch {}
+            result.requeued++;
+            continue;
+          }
           const state = String(st.status ?? "").toLowerCase();
           if (state === "done" || state === "completed" || state === "finished") {
             const remoteId = String(st.file_id ?? row.remoteTaskId);

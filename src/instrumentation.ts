@@ -120,10 +120,14 @@ export async function register() {
           if (Date.now() - lastMirrorRun < 5 * 60 * 1000) return null;
           lastMirrorRun = Date.now();
           const { reconcileMirrors } = await import("@/lib/mirrors/reconcile");
-          return reconcileMirrors({ maxItems: 3, poll: { tries: 2, intervalMs: 15000 } });
+          const out = await reconcileMirrors({ maxItems: 3, poll: { tries: 2, intervalMs: 15000 } });
+          if (out.checked || out.enqueued || out.failed || out.requeued) {
+            console.log("[mirrors] tick:", JSON.stringify(out));
+          }
+          return out;
         } catch (err) {
           console.error("[mirrors] reconcile tick failed:", (err as Error).message);
-          return { checked: 0, completed: 0, failed: 0, enqueued: 0 };
+          return { checked: 0, completed: 0, failed: 0, enqueued: 0, requeued: 0 };
         }
       })(),
       (async () => {

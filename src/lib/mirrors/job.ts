@@ -60,7 +60,9 @@ export async function mirrorFile(input: MirrorJobInput): Promise<"ready" | "pend
     }
     return "pending";
   } catch (error) {
-    await store.setError(fileId, error instanceof Error ? error.message : "خطای آینه‌سازی").catch(() => {});
+    const msg = error instanceof Error ? error.message : "خطای آینه‌سازی";
+    console.error("[mirrors] job failed:", fileId, msg);
+    await store.setError(fileId, msg).catch(() => {});
     return "error";
   }
 }
@@ -93,35 +95,28 @@ export function createDbMirrorJobStore(): MirrorJobStore {
 const MIRRORABLE_KINDS = new Set(["video", "highlight", "reel"]);
 
 /**
- * Fire-and-forget entry after a part file is linked. Only video kinds with a
- * real Telegram file_id are mirrored, and only when a mirror key is set.
- * Never throws — linking must never fail because mirroring did.
+ * Fire-and-forget entry after a part file is linked. Only enqueues video kinds
+ * with a real Telegram file_id; the cron reconcile owns all uploads serially
+ * (upstream allows a single concurrent remote-upload, so link-time uploads
+ * would race the cron and die server-side). Never throws — linking must never
+ * fail because mirroring did.
  */
 export async function maybeMirrorAfterLink(input: {
   partId: string;
   kind: string;
   fileId: string | null;
-  sourceUrl: string | null;
-  run?: (job: { partId: string; fileId: string; sourceUrl: string }) => Promise<unknown>;
+  sourceUrl?: string | null;
+  run?: (job: { partId: string; fileId: string }) => Promise<unknown>;
 }): Promise<void> {
   try {
     if (!MIRRORABLE_KINDS.has(input.kind)) return;
-    if (!input.fileId || !input.sourceUrl) return;
+    if (!input.fileId || input.fileId.startsWith("tg_msg_") || input.fileId.startsWith("sample_")) return;
     if (!(process.env.VIDS_API_KEY ?? "").trim()) return;
     if (input.run) {
-      await input.run({ partId: input.partId, fileId: input.fileId, sourceUrl: input.sourceUrl });
+      await input.run({ partId: input.partId, fileId: input.fileId });
       return;
     }
     const { upsertQueuedMirror } = await import("./store");
-    const { getVidsClient } = await import("./vids");
     await upsertQueuedMirror(input.partId, input.fileId);
-    await mirrorFile({
-      client: getVidsClient(),
-      store: createDbMirrorJobStore(),
-      partId: input.partId,
-      fileId: input.fileId,
-      sourceUrl: input.sourceUrl,
-      poll: { tries: 40, intervalMs: 15000 },
-    });
   } catch {}
 }

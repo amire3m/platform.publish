@@ -37,7 +37,17 @@ export class VidsClient {
     } else {
       for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
     }
-    const res = await fetch(url.toString(), init);
+    let res: Response;
+    try {
+      res = await fetch(url.toString(), init);
+    } catch (err) {
+      // Surface the underlying cause (e.g. TLS "unable to verify the first
+      // certificate") instead of a bare "fetch failed".
+      const cause = (err as { cause?: { message?: string }; message?: string })?.cause?.message
+        ?? (err as Error)?.message
+        ?? "network error";
+      throw new Error(`vids.st request failed (${action}): ${cause}`);
+    }
     const data = (await res.json().catch(() => null)) as { status?: number; message?: string; result?: T } | null;
     if (!res.ok || !data || data.status !== 200) {
       throw new Error(data?.message || `vids.st request failed (${action}, http ${res.status})`);

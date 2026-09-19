@@ -69,6 +69,7 @@ export async function reconcileMirrors(input: ReconcileInput = {}): Promise<{ ch
             st = await client.uploadStatus(row.remoteTaskId);
           } catch {
             // Task gone server-side (or transient): back to queued for a fresh upload.
+            console.error("[mirrors] task gone, requeued:", row.fileId);
             try {
               await store.enqueue(row.partId ?? "", row.fileId);
             } catch {}

@@ -13,6 +13,8 @@ export function buildMirrorSourceUrl(fileId: string | null | undefined): string 
   const secret = process.env.JWT_SECRET || "dev-only-insecure-jwt-secret-change-me";
   const base = (process.env.APP_BASE_URL || "").replace(/\/$/, "");
   if (!base) return null;
-  const token = jwt.sign({ fileId, purpose: "mirror" }, secret, { expiresIn: "6h" });
+  // Long expiry: upstream has a single remote-upload slot, so a task's actual
+  // download may lag submission by days while the backlog drains.
+  const token = jwt.sign({ fileId, purpose: "mirror" }, secret, { expiresIn: "7d" });
   return `${base}/api/media/telegram/${token}`;
 }

@@ -48,6 +48,16 @@ describe("VidsClient", () => {
     await expect(client.remoteUpload("https://example.com/v.mp4")).rejects.toThrow("denied");
   });
 
+  it("surfaces the network cause (e.g. TLS) instead of a bare fetch failure", async () => {
+    const err = new TypeError("fetch failed") as TypeError & { cause: Error };
+    err.cause = new Error("unable to verify the first certificate");
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(err));
+    const client = new VidsClient("https://vids.st/api/index.php", "key");
+    await expect(client.remoteUpload("https://example.com/v.mp4")).rejects.toThrow(
+      "unable to verify the first certificate",
+    );
+  });
+
   it("fake client completes tasks without network", async () => {
     const fake = new FakeVidsClient();
     const taskId = await fake.remoteUpload("https://example.com/v.mp4");

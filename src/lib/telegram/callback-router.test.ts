@@ -103,6 +103,23 @@ describe("link_existing", () => {
     expect(lastRow[0].callback_data).toMatch(/^link_(pick_product|existing):123/);
   });
 
+  it("kind picker offers the clean version alongside video/cover/highlight/reel", async () => {
+    const { TelegramClient } = await import("./client");
+    const mockEdit = vi.fn().mockResolvedValue({});
+    vi.mocked(TelegramClient.fromEnv as unknown as () => unknown).mockReturnValueOnce({
+      editMessageText: mockEdit,
+      sendMessage: vi.fn().mockResolvedValue({ message_id: 102 }),
+      getFile: vi.fn(),
+      answerCallbackQuery: vi.fn().mockResolvedValue({}),
+      editMessageReplyMarkup: vi.fn().mockResolvedValue({}),
+    } as never);
+    const { routeCallback } = await import("./callback-router");
+    await routeCallback("link_pick_part", "123:CPP-1", "999", 100);
+    const kb = mockEdit.mock.calls[0][2] as { replyMarkup: { inline_keyboard: Array<Array<{ text: string; callback_data?: string }>> } };
+    const kinds = kb.replyMarkup.inline_keyboard.flat().map((b) => b.callback_data?.split(":").pop());
+    expect(kinds).toEqual(expect.arrayContaining(["video", "cover", "highlight", "reel", "clean"]));
+  });
+
   it("links file via link_pick_kind", async () => {
     const { routeCallback } = await import("./callback-router");
     const res = await routeCallback("link_pick_kind", "123:CPP-1:highlight", "999");

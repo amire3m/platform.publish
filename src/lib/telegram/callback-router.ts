@@ -200,6 +200,9 @@ async function handleLinkPickPart(contentId: string, botMessageId?: number): Pro
         { text: "✂️ برش", callback_data: `link_pick_kind:${messageId}:${partId}:highlight` },
         { text: "🎞️ ریلز", callback_data: `link_pick_kind:${messageId}:${partId}:reel` },
       ],
+      [
+        { text: "🎞️ نسخه کلین", callback_data: `link_pick_kind:${messageId}:${partId}:clean` },
+      ],
     ],
   };
   // back to the previous step: part list when the product is known, else product list

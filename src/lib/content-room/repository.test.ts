@@ -6,6 +6,7 @@ import {
   PRODUCT_TYPES,
   CHANNELS,
   CONTENT_STATUSES,
+  isLinkedFileRef,
 } from "./repository";
 
 describe("content room repository", () => {
@@ -284,5 +285,26 @@ describe("content room repository", () => {
     port.products.find((p) => p.id === b.id)!.createdAt = new Date("2026-02-01T00:00:00.000Z");
     expect((await repo.listProducts({})).map((p) => p.id)).toEqual([b.id, a.id]);
     expect((await repo.listProducts({ sort: "oldest" })).map((p) => p.id)).toEqual([a.id, b.id]);
+  });
+
+  it("isLinkedFileRef accepts only real telegram file ids", () => {
+    expect(isLinkedFileRef("BQACAgQAAyE")).toBe(true);
+    expect(isLinkedFileRef(null)).toBe(false);
+    expect(isLinkedFileRef(undefined)).toBe(false);
+    expect(isLinkedFileRef("")).toBe(false);
+    expect(isLinkedFileRef("tg_msg_123")).toBe(false);
+    expect(isLinkedFileRef("sample_x")).toBe(false);
+  });
+
+  it("listProducts enriches per-product video-link counts", async () => {
+    const port = new InMemoryContentRoomPort();
+    const repo = createContentRoomRepository(port);
+    const created = await repo.createProduct({ title: "سریال", productType: "serial", channel: "zed_revayat", partsCount: 3, actorUserId: "u1" });
+    const parts = [...port.parts].sort((a, b) => a.partNumber - b.partNumber);
+    parts[0].fileRef = "BQACAgQAAyE-real";
+    parts[1].fileRef = "tg_msg_99";
+    const [listed] = await repo.listProducts({});
+    expect(listed.linkTotal).toBe(3);
+    expect(listed.linkedParts).toBe(1);
   });
 });

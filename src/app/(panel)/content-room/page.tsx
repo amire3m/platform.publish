@@ -48,6 +48,7 @@ export default function ContentRoomPage() {
     dateTo: "",
     includeArchived: false,
     sort: "",
+    onlyUnlinked: false,
   });
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [archiveBusy, setArchiveBusy] = useState<string | null>(null);
@@ -221,7 +222,7 @@ export default function ContentRoomPage() {
 
               <div className="flex gap-2 pt-2">
                 <Button className="flex-1 min-h-[44px]" onClick={() => setDrawerOpen(false)}>اعمال</Button>
-                <Button variant="secondary" className="flex-1 min-h-[44px]" onClick={() => setFilters({ query: "", productType: "", channel: "", status: "", dateFrom: "", dateTo: "", includeArchived: false, sort: "" })}>پاک کردن</Button>
+                <Button variant="secondary" className="flex-1 min-h-[44px]" onClick={() => setFilters({ query: "", productType: "", channel: "", status: "", dateFrom: "", dateTo: "", includeArchived: false, sort: "", onlyUnlinked: false })}>پاک کردن</Button>
               </div>
 
               <div className="rounded-lg bg-tg-hover/40 p-3 text-xs text-tg-secondary">
@@ -274,7 +275,7 @@ export default function ContentRoomPage() {
             <Button
               variant="secondary"
               className="min-h-[44px]"
-              onClick={() => setFilters({ query: "", productType: "", channel: "", status: "", dateFrom: "", dateTo: "", includeArchived: false, sort: "" })}
+              onClick={() => setFilters({ query: "", productType: "", channel: "", status: "", dateFrom: "", dateTo: "", includeArchived: false, sort: "", onlyUnlinked: false })}
             >
               پاک کردن فیلترها
             </Button>

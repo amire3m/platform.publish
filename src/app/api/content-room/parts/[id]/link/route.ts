@@ -9,8 +9,8 @@ import { TelegramClient } from "@/lib/telegram/client";
 
 export const runtime = "nodejs";
 
-const ALLOWED_KINDS = new Set(["video", "cover", "highlight", "reel"] as const);
-type Kind = "video" | "cover" | "highlight" | "reel";
+const ALLOWED_KINDS = new Set(["video", "cover", "highlight", "reel", "clean"] as const);
+type Kind = "video" | "cover" | "highlight" | "reel" | "clean";
 
 export interface LinkRouteDependencies {
   getCurrentUser: typeof getCurrentUser;
@@ -135,7 +135,7 @@ export async function handleLinkRequest(
     const nextVersion = currentVersion + 1;
     const actorUserId = (user as unknown as { id?: string }).id ?? null;
 
-    if (kind === "highlight" || kind === "reel") {
+    if (kind === "highlight" || kind === "reel" || kind === "clean") {
       const assetId = generateEntityId("CPP");
       const [asset] = await deps.db
         .insert(contentPartAssets)

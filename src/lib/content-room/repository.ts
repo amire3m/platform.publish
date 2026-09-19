@@ -86,6 +86,15 @@ export interface ContentProductRecord {
   notes: string | null;
   archivedAt: Date | null;
   isCold?: boolean;
+  /** Active parts with a real linked video file (list enrichment). */
+  linkedParts?: number;
+  /** Active parts total (list enrichment). */
+  linkTotal?: number;
+}
+
+/** A part counts as video-linked only with a real Telegram file_id (not empty, not a tg_msg_/sample_ placeholder). */
+export function isLinkedFileRef(ref: string | null | undefined): boolean {
+  return !!ref && !ref.startsWith("tg_msg_") && !ref.startsWith("sample_");
 }
 
 export interface ContentPartRecord {
@@ -183,6 +192,7 @@ export interface ContentRoomDatabasePort {
   getProduct(id: string): Promise<ContentProductRecord | null>;
   getProductDetail?(id: string): Promise<ContentProductDetail | null>;
   listPartsForProduct(productId: string): Promise<ContentPartRecord[]>;
+  listPartsForProducts(productIds: string[]): Promise<ContentPartRecord[]>;
   transactCreateProduct(
     product: ContentProductRecord,
     parts: ContentPartRecord[],
@@ -306,6 +316,16 @@ export class InMemoryContentRoomPort implements ContentRoomDatabasePort {
   async listPartsForProduct(productId: string): Promise<ContentPartRecord[]> {
     const arr = this.partsByProduct.get(productId) ?? [];
     return [...arr].sort((a, b) => a.partNumber - b.partNumber).map((p) => this.enrichPart(p));
+  }
+
+  async listPartsForProducts(productIds: string[]): Promise<ContentPartRecord[]> {
+    const wanted = new Set(productIds);
+    const out: ContentPartRecord[] = [];
+    for (const [pid, arr] of this.partsByProduct) {
+      if (!wanted.has(pid)) continue;
+      for (const p of arr) out.push(this.enrichPart(p));
+    }
+    return out;
   }
 
   async transactCreateProduct(
@@ -625,6 +645,19 @@ export function createDrizzleContentRoomPort(): ContentRoomDatabasePort {
         for (const a of PART_ACTIVITIES) acts[a] = activitiesByPart[mapped.id]?.[a] ?? false;
         return { ...mapped, activities: acts };
       });
+    },
+
+    async listPartsForProducts(productIds) {
+      const db = await getDb();
+      const { contentParts } = await import("@/db/schema");
+      const { asc, inArray } = await import("drizzle-orm");
+      if (!productIds.length) return [];
+      const rows = await db
+        .select()
+        .from(contentParts)
+        .where(inArray(contentParts.productId, [...productIds]))
+        .orderBy(asc(contentParts.partNumber));
+      return (rows as unknown as Array<Record<string, unknown>>).map((r) => mapPartRow(r));
     },
 
     async transactCreateProduct(product, parts, event) {
@@ -1142,7 +1175,26 @@ export function createContentRoomRepository(port?: ContentRoomDatabasePort): Con
 
   return {
     async listProducts(filters, scope) {
-      return dbPort.listProducts(filters, scope);
+      const products = await dbPort.listProducts(filters, scope);
+      if (!products.length) return products;
+      // Single extra query: per-product video-link counts for the list badges.
+      try {
+        const parts = await dbPort.listPartsForProducts(products.map((p) => p.id));
+        const byProduct = new Map<string, { total: number; linked: number }>();
+        for (const part of parts) {
+          if (part.isActive === false) continue;
+          const agg = byProduct.get(part.productId) ?? { total: 0, linked: 0 };
+          agg.total++;
+          if (isLinkedFileRef(part.fileRef)) agg.linked++;
+          byProduct.set(part.productId, agg);
+        }
+        return products.map((p) => {
+          const agg = byProduct.get(p.id) ?? { total: 0, linked: 0 };
+          return { ...p, linkTotal: agg.total, linkedParts: agg.linked };
+        });
+      } catch {
+        return products;
+      }
     },
 
     async getProduct(id) {

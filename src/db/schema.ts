@@ -628,7 +628,7 @@ export const contentPartAssets = pgTable(
     partId: text("part_id")
       .notNull()
       .references(() => contentParts.id, { onDelete: "cascade" }),
-    kind: text("kind").notNull(), // highlight | reel
+    kind: text("kind").notNull(), // highlight | reel | clean
     fileRef: text("file_ref").notNull(),
     fileName: text("file_name"),
     createdBy: text("created_by"),

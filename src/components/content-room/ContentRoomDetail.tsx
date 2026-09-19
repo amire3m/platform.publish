@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import useSWR from "swr";
-import { Pencil, UploadCloud, Film, Image as ImageIcon, Scissors, Smartphone, Hash, X, Play } from "lucide-react";
+import { Pencil, UploadCloud, Film, Image as ImageIcon, Scissors, Smartphone, Clapperboard, Hash, X, Play } from "lucide-react";
 import { Button, Card, ConfirmModal, Input } from "@/components/ui";
 import { DedicatedPlayer } from "@/components/media/DedicatedPlayer";
 import { fetchContentRoomApi, ContentRoomApiError } from "@/lib/content-room/client";
@@ -542,7 +542,8 @@ function PartUploadCard({
   const [coverFile, setCoverFile] = useState<File | null>(null);
   const [highlightFile, setHighlightFile] = useState<File | null>(null);
   const [reelFile, setReelFile] = useState<File | null>(null);
-  const [uploading, setUploading] = useState<"video" | "cover" | "highlight" | "reel" | null>(null);
+  const [cleanFile, setCleanFile] = useState<File | null>(null);
+  const [uploading, setUploading] = useState<"video" | "cover" | "highlight" | "reel" | "clean" | null>(null);
   const [uploadProgress, setUploadProgress] = useState<number>(0);
   const [uploadLoaded, setUploadLoaded] = useState<number>(0);
   const [uploadTotal, setUploadTotal] = useState<number>(0);
@@ -552,6 +553,7 @@ function PartUploadCard({
   const [coverPreviewUrl, setCoverPreviewUrl] = useState<string | null>(null);
   const [highlightPreviewUrl, setHighlightPreviewUrl] = useState<string | null>(null);
   const [reelPreviewUrl, setReelPreviewUrl] = useState<string | null>(null);
+  const [cleanPreviewUrl, setCleanPreviewUrl] = useState<string | null>(null);
   const [playFailed, setPlayFailed] = useState(false);
   const [preparing, setPreparing] = useState(false);
   const [prepareError, setPrepareError] = useState<string | null>(null);
@@ -592,9 +594,11 @@ function PartUploadCard({
   );
   const highlights = assetsData?.data?.assets?.filter((a) => a.kind === "highlight") ?? [];
   const reels = assetsData?.data?.assets?.filter((a) => a.kind === "reel") ?? [];
+  const cleans = assetsData?.data?.assets?.filter((a) => a.kind === "clean") ?? [];
   // keep legacy single-ref badge for migrated rows that haven't been moved
   const hasHighlight = highlights.length > 0 || Boolean(part.highlightFileRef);
   const hasReel = reels.length > 0 || Boolean(part.reelFileRef);
+  const hasClean = cleans.length > 0;
 
   const { data: groupMediaData, mutate: mutateGroupMedia } = useSWR<{
     ok: boolean;
@@ -634,12 +638,12 @@ function PartUploadCard({
   const [linking, setLinking] = useState<string | null>(null);
   // Two-mode attach state: paste link / await reply (with TTL countdown)
   const [attachMode, setAttachMode] = useState<"idle" | "link" | "reply">("idle");
-  const [attachKind, setAttachKind] = useState<"video" | "cover" | "highlight" | "reel">("video");
+  const [attachKind, setAttachKind] = useState<"video" | "cover" | "highlight" | "reel" | "clean">("video");
   const [tgLink, setTgLink] = useState("");
   const [awaitTtl, setAwaitTtl] = useState(0);
   const [conflict, setConflict] = useState<{ partId: string; partNumber: number; kind: string; ttlSeconds: number } | null>(null);
 
-  function startAttach(kind: "video" | "cover" | "highlight" | "reel") {
+  function startAttach(kind: "video" | "cover" | "highlight" | "reel" | "clean") {
     if (attachMode === "reply") {
       void cancelAwaitReply({ silent: true });
     }
@@ -756,7 +760,7 @@ function PartUploadCard({
 
   async function handleLinkGroupMedia(
     item: { messageId: string; fileId: string | null; fileName: string | null },
-    kind: "video" | "cover" | "highlight" | "reel",
+    kind: "video" | "cover" | "highlight" | "reel" | "clean",
   ) {
     const key = `${item.messageId}:${kind}`;
     setLinking(key);
@@ -769,7 +773,7 @@ function PartUploadCard({
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok || !(body as { ok?: boolean }).ok) throw new Error((body as { error?: string }).error ?? `خطا در لینک (${res.status})`);
-      const label = kind === "video" ? "ویدیو کامل" : kind === "cover" ? "کاور" : kind === "highlight" ? "برش" : "ریلز";
+      const label = kind === "video" ? "ویدیو کامل" : kind === "cover" ? "کاور" : kind === "highlight" ? "برش" : kind === "reel" ? "ریلز" : "نسخه کلین";
       onToast(`«${item.fileName ?? "ویدیوی گروه"}» به عنوان ${label} لینک شد.`);
       setTimeout(() => onToast(null), 3000);
       await mutateAssets();
@@ -781,8 +785,8 @@ function PartUploadCard({
     }
   }
 
-  async function upload(type: "video" | "cover" | "highlight" | "reel") {
-    const file = type === "video" ? videoFile : type === "cover" ? coverFile : type === "highlight" ? highlightFile : reelFile;
+  async function upload(type: "video" | "cover" | "highlight" | "reel" | "clean") {
+    const file = type === "video" ? videoFile : type === "cover" ? coverFile : type === "highlight" ? highlightFile : type === "reel" ? reelFile : cleanFile;
     if (!file) {
       onError("لطفاً ابتدا فایل را انتخاب کنید.");
       return;
@@ -847,7 +851,7 @@ function PartUploadCard({
         throw new Error(body.error ?? "خطا در آپلود");
       }
       const successMsg =
-        type === "video" ? `ویدیو کامل قسمت ${part.partNumber} با موفقیت آپلود شد.` : type === "cover" ? `کاور قسمت ${part.partNumber} با موفقیت آپلود شد.` : type === "highlight" ? `برش قسمت ${part.partNumber} با موفقیت آپلود شد.` : `ریلز قسمت ${part.partNumber} با موفقیت آپلود شد.`;
+        type === "video" ? `ویدیو کامل قسمت ${part.partNumber} با موفقیت آپلود شد.` : type === "cover" ? `کاور قسمت ${part.partNumber} با موفقیت آپلود شد.` : type === "highlight" ? `برش قسمت ${part.partNumber} با موفقیت آپلود شد.` : type === "reel" ? `ریلز قسمت ${part.partNumber} با موفقیت آپلود شد.` : `نسخه کلین قسمت ${part.partNumber} با موفقیت آپلود شد.`;
       onToast(successMsg);
       setTimeout(() => onToast(null), 3000);
       if (type === "video") {
@@ -859,12 +863,15 @@ function PartUploadCard({
       } else if (type === "highlight") {
         setHighlightFile(null);
         setHighlightPreviewUrl(null);
-      } else {
+      } else if (type === "reel") {
         setReelFile(null);
         setReelPreviewUrl(null);
+      } else {
+        setCleanFile(null);
+        setCleanPreviewUrl(null);
       }
       await onRefresh();
-      if (type === "highlight" || type === "reel") await mutateAssets();
+      if (type === "highlight" || type === "reel" || type === "clean") await mutateAssets();
     } catch (err) {
       const message = err instanceof Error ? err.message : "خطا در آپلود فایل";
       // لغو را به‌عنوان خطا نمایش نده اگر کاربر خودش لغو کرده
@@ -875,7 +882,7 @@ function PartUploadCard({
         onError(message);
         if (message.includes("نسخه قدیمی") || message.includes("409")) {
           await onRefresh();
-          if (type === "highlight" || type === "reel") await mutateAssets();
+          if (type === "highlight" || type === "reel" || type === "clean") await mutateAssets();
         }
       }
     } finally {
@@ -935,6 +942,9 @@ function PartUploadCard({
           </span>
           <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${hasReel ? "bg-violet-500/15 text-violet-700" : "bg-slate-500/10 text-slate-500"}`}>
             {hasReel ? "ریلز ✓" : "بدون ریلز"}
+          </span>
+          <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${hasClean ? "bg-teal-500/15 text-teal-700 dark:text-teal-400" : "bg-slate-500/10 text-slate-500"}`}>
+            {hasClean ? "نسخه کلین ✓" : "بدون کلین"}
           </span>
         </div>
       </div>
@@ -1123,6 +1133,42 @@ function PartUploadCard({
         {reelPreviewUrl && (
           <DedicatedPlayer src={reelPreviewUrl} title={reelFile?.name} className="aspect-video w-full" />
         )}
+
+        <UploadZone
+          icon={Clapperboard}
+          title="نسخه کلین"
+          hint="نسخه تمیز هر قسمت — هر کدام حداکثر ۲ گیگابایت"
+          accept="video/mp4,video/quicktime,video/webm,video/*"
+          file={cleanFile}
+          onSelect={(f) => { setCleanFile(f); setCleanPreviewUrl(f ? URL.createObjectURL(f) : null); }}
+          onClear={() => { setCleanFile(null); setCleanPreviewUrl(null); }}
+          onUpload={() => upload("clean")}
+          actionLabel="افزودن نسخه کلین"
+          accentBg="bg-teal-500/10 text-teal-600"
+          accentText="text-teal-600 dark:text-teal-400"
+          accentBorder="border-teal-500/20"
+          isUploading={uploading === "clean"}
+          progress={uploadProgress}
+          loaded={uploadLoaded}
+          total={uploadTotal}
+          speed={uploadSpeed}
+          onCancel={handleCancel}
+        >
+          {cleans.length > 0 && (
+            <div className="space-y-1">
+              {cleans.map((a) => (
+                <div key={a.id} className="flex items-center justify-between rounded bg-tg-surface px-2 py-1 text-[11px]">
+                  <span className="truncate" title={a.fileName ?? a.fileRef}>{a.fileName ?? a.fileRef.slice(0, 24)}</span>
+                  <button onClick={() => handleDeleteAsset(a.id)} className="mr-2 text-rose-600 hover:underline">حذف</button>
+                </div>
+              ))}
+              <p className="text-[11px] text-emerald-600">{cleans.length} نسخه کلین ثبت شده</p>
+            </div>
+          )}
+        </UploadZone>
+        {cleanPreviewUrl && (
+          <DedicatedPlayer src={cleanPreviewUrl} title={cleanFile?.name} className="aspect-video w-full" />
+        )}
       </div>
 
       <div className="rounded-xl border border-tg-border bg-tg-surface/50 p-3">
@@ -1130,12 +1176,13 @@ function PartUploadCard({
 
         {/* Kind selector */}
         {attachMode === "idle" ? (
-          <div className="mt-2 grid grid-cols-4 gap-1.5">
+          <div className="mt-2 grid grid-cols-5 gap-1.5">
             {([
               { kind: "video" as const, label: "ویدیو کامل", cls: "hover:border-rose-500/50 hover:text-rose-600" },
               { kind: "cover" as const, label: "کاور", cls: "hover:border-sky-500/50 hover:text-sky-600" },
               { kind: "highlight" as const, label: "برش", cls: "hover:border-amber-500/50 hover:text-amber-600" },
               { kind: "reel" as const, label: "ریلز", cls: "hover:border-violet-500/50 hover:text-violet-600" },
+              { kind: "clean" as const, label: "نسخه کلین", cls: "hover:border-teal-500/50 hover:text-teal-600" },
             ]).map(({ kind, label, cls }) => (
               <button
                 key={kind}
@@ -1152,7 +1199,7 @@ function PartUploadCard({
             {attachMode === "link" && (
               <div className="space-y-2 rounded-lg border border-tg-border p-2.5">
                 <p className="text-[11px] font-semibold text-tg-text">
-                  لینک پیام تلگرام را برای «{attachKind === "video" ? "ویدیو کامل" : attachKind === "cover" ? "کاور" : attachKind === "highlight" ? "برش" : "ریلز"}» وارد کنید:
+                  لینک پیام تلگرام را برای «{attachKind === "video" ? "ویدیو کامل" : attachKind === "cover" ? "کاور" : attachKind === "highlight" ? "برش" : attachKind === "reel" ? "ریلز" : "نسخه کلین"}» وارد کنید:
                 </p>
                 <Input
                   value={tgLink}
@@ -1177,7 +1224,7 @@ function PartUploadCard({
                   ⏱ منتظر ریپلای شما — {Math.floor(awaitTtl / 60)}:{String(awaitTtl % 60).padStart(2, "0")} مانده
                 </p>
                 <p className="text-[11px] leading-relaxed text-tg-secondary">
-                  در گروه تلگرام، روی ویدیو <b>ریپلای</b> کنید و بنویسید <code className="rounded bg-tg-hover px-1">لینک</code> — همان ویدیو به‌عنوان «{attachKind === "video" ? "ویدیو کامل" : attachKind === "cover" ? "کاور" : attachKind === "highlight" ? "برش" : "ریلز"}» به قسمت {part.partNumber} لینک می‌شود.
+                  در گروه تلگرام، روی ویدیو <b>ریپلای</b> کنید و بنویسید <code className="rounded bg-tg-hover px-1">لینک</code> — همان ویدیو به‌عنوان «{attachKind === "video" ? "ویدیو کامل" : attachKind === "cover" ? "کاور" : attachKind === "highlight" ? "برش" : attachKind === "reel" ? "ریلز" : "نسخه کلین"}» به قسمت {part.partNumber} لینک می‌شود.
                 </p>
                 <div className="h-1 w-full overflow-hidden rounded-full bg-tg-hover">
                   <div className="h-full bg-amber-500 transition-all duration-1000" style={{ width: `${(awaitTtl / 300) * 100}%` }} />

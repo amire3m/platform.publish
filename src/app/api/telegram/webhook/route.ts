@@ -270,7 +270,7 @@ async function tryHandlePendingReply(msg: { chat: { id: number }; from?: { id: n
         await client.sendMessage(html, undefined, { parseMode: "HTML", replyToMessageId: msg.message_id }).catch(() => {});
       }
     };
-    const kindLabel = pending.kind === "video" ? "ویدیو کامل" : pending.kind === "cover" ? "کاور" : pending.kind === "highlight" ? "برش" : "ریلز";
+    const kindLabel = pending.kind === "video" ? "ویدیو کامل" : pending.kind === "cover" ? "کاور" : pending.kind === "highlight" ? "برش" : pending.kind === "reel" ? "ریلز" : "نسخه کلین";
 
     try {
       const { db } = await import("@/db");

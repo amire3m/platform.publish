@@ -57,6 +57,15 @@ describe("filterProducts", () => {
   it("trims query case-insensitively", () => {
     expect(filterProducts(rows, contentRoomFilters({ query: "  فرات  " }))).toHaveLength(1);
   });
+  it("filters to video-unlinked products only when onlyUnlinked", () => {
+    const mixed: ContentRoomProductSummary[] = [
+      summary({ id: "full", linkedParts: 3, linkTotal: 3, partsCount: 3 }),
+      summary({ id: "half", linkedParts: 1, linkTotal: 3, partsCount: 3 }),
+      summary({ id: "none", linkedParts: 0, linkTotal: 2, partsCount: 2 }),
+    ];
+    expect(filterProducts(mixed, contentRoomFilters({ onlyUnlinked: true })).map((r) => r.id)).toEqual(["half", "none"]);
+    expect(filterProducts(mixed, contentRoomFilters({}))).toHaveLength(3);
+  });
 });
 
 describe("getProductProgress", () => {

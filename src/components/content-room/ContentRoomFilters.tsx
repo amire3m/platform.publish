@@ -21,8 +21,7 @@ export function ContentRoomFilters({ value, onChange }: Props) {
         <div className="flex flex-col gap-1">
           <label htmlFor="cr-q" className="text-xs font-semibold text-tg-secondary">
             جست‌وجو
-          </label>
-          <Input
+          </label>          <Input
             id="cr-q"
             placeholder="عنوان محصول..."
             value={value.query}
@@ -91,9 +90,19 @@ export function ContentRoomFilters({ value, onChange }: Props) {
             <option value="reel_done">ریلز ساخته شد</option>
             <option value="cover_ready">کاور آماده</option>
             <option value="ready_to_send">آماده ارسال</option>
-          </Select>
+            </Select>
+          </div>
         </div>
-      </div>
+      <label className="mt-3 flex items-center gap-2 text-sm text-tg-text">
+        <input
+          type="checkbox"
+          checked={!!value.onlyUnlinked}
+          onChange={(e) => patch({ onlyUnlinked: e.target.checked })}
+          className="h-4 w-4 rounded border-tg-border"
+          aria-label="فقط لینک‌نشده‌ها"
+        />
+        فقط لینک‌نشده‌ها
+      </label>
     </div>
   );
 }

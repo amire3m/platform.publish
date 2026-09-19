@@ -73,6 +73,11 @@ export function filterProducts(
     if (productType && p.productType !== productType) return false;
     if (channel && p.channel !== channel) return false;
     if (status && p.status !== status) return false;
+    if (filters.onlyUnlinked) {
+      const total = p.linkTotal ?? p.partsCount ?? 0;
+      const linked = p.linkedParts ?? 0;
+      if (linked >= total) return false;
+    }
     return true;
   });
 }
@@ -87,6 +92,7 @@ export function contentRoomFilters(overrides: Partial<ContentRoomFilters> = {}):
     dateTo: overrides.dateTo ?? "",
     includeArchived: overrides.includeArchived ?? false,
     sort: overrides.sort ?? "",
+    onlyUnlinked: overrides.onlyUnlinked ?? false,
   };
 }
 

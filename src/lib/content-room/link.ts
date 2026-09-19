@@ -5,7 +5,7 @@ import { db } from "@/db";
 import { contentParts, contentPartAssets, workflowEvents } from "@/db/schema";
 import { generateEntityId } from "@/lib/ids";
 
-export type PartMediaKind = "video" | "cover" | "highlight" | "reel";
+export type PartMediaKind = "video" | "cover" | "highlight" | "reel" | "clean";
 
 export interface LinkPartMediaOptions {
   partId: string;
@@ -33,7 +33,7 @@ export async function linkPartMedia(opts: LinkPartMediaOptions): Promise<LinkPar
   const currentVersion = (part as unknown as { version?: number }).version ?? 1;
   const nextVersion = currentVersion + 1;
 
-  if (kind === "highlight" || kind === "reel") {
+  if (kind === "highlight" || kind === "reel" || kind === "clean") {
     const assetId = generateEntityId("CPP");
     await db.insert(contentPartAssets).values({
       id: assetId,

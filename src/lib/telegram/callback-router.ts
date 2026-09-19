@@ -18,8 +18,8 @@ const PERMISSION_MAP: Record<string, string> = {
 };
 
 const PAGE_SIZE = 10;
-const ALLOWED_KINDS = new Set(["video", "cover", "highlight", "reel"] as const);
-type LinkKind = "video" | "cover" | "highlight" | "reel";
+const ALLOWED_KINDS = new Set(["video", "cover", "highlight", "reel", "clean"] as const);
+type LinkKind = "video" | "cover" | "highlight" | "reel" | "clean";
 
 function escapeHtml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -31,6 +31,7 @@ function kindLabel(kind: string): string {
     case "cover": return "کاور";
     case "highlight": return "برش";
     case "reel": return "ریلز";
+    case "clean": return "نسخه کلین";
     default: return kind;
   }
 }
@@ -349,7 +350,7 @@ async function handleLinkPickKind(contentId: string, actorUserId: string, actorT
     const currentVersion = (part as unknown as { version?: number }).version ?? 1;
     const nextVersion = currentVersion + 1;
 
-    if (kind === "highlight" || kind === "reel") {
+    if (kind === "highlight" || kind === "reel" || kind === "clean") {
       const assetId = generateEntityId("CPP");
       try {
         await db.insert(contentPartAssets).values({

@@ -5,6 +5,7 @@ import { Card } from "@/components/ui";
 import type { ContentRoomProductSummary } from "./types";
 import { channelLabelFa, productTypeLabelFa, getProductProgress, getNextAction } from "./room-model";
 import { contentStatusPresentation } from "@/lib/content-room/presentation";
+import { LinkBadge } from "./LinkBadge";
 
 interface Props {
   products: readonly ContentRoomProductSummary[];
@@ -24,6 +25,7 @@ export function ContentRoomTable({ products, onArchive, onUnarchive }: Props) {
                 <th className="px-3 py-3 text-right font-semibold">نوع</th>
                 <th className="px-3 py-3 text-right font-semibold">کانال</th>
                 <th className="px-3 py-3 text-center font-semibold">تعداد قسمت</th>
+                <th className="px-3 py-3 text-center font-semibold">فایل</th>
                 <th className="px-3 py-3 text-right font-semibold">وضعیت</th>
                 <th className="px-3 py-3 text-right font-semibold">پیشرفت</th>
                 <th className="px-3 py-3 text-right font-semibold">اقدام بعدی</th>
@@ -45,6 +47,9 @@ export function ContentRoomTable({ products, onArchive, onUnarchive }: Props) {
                     <td className="px-3 py-3 text-tg-text">{productTypeLabelFa(p.productType)}</td>
                     <td className="px-3 py-3 text-tg-text">{channelLabelFa(p.channel)}</td>
                     <td className="px-3 py-3 text-center text-tg-text">{p.partsCount}</td>
+                    <td className="px-3 py-3 text-center">
+                      <LinkBadge product={p} />
+                    </td>
                     <td className="px-3 py-3">
                       <span
                         className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${

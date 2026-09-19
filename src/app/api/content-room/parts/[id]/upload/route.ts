@@ -74,14 +74,14 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
 
   if (!(file instanceof File)) return jsonError("فایل ارسال نشده است.", 400, "FILE_REQUIRED");
   const type = typeof typeRaw === "string" ? typeRaw : "";
-  if (type !== "video" && type !== "cover" && type !== "highlight" && type !== "reel") {
+  if (type !== "video" && type !== "cover" && type !== "highlight" && type !== "reel" && type !== "clean") {
     return jsonError("نوع فایل نامعتبر است.", 400, "INVALID_TYPE");
   }
 
   // Validate size and mime
   const mime = file.type || "";
   const size = file.size;
-  const isVideoType = type === "video" || type === "highlight" || type === "reel";
+  const isVideoType = type === "video" || type === "highlight" || type === "reel" || type === "clean";
 
   if (isVideoType) {
     if (size > MAX_VIDEO_BYTES) {
@@ -190,14 +190,14 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   // For cover we store telegram file id, for video we store file_id; optionally prefix with type
   const storedRef = fileId;
 
-  // Update DB with version bump — for highlight/reel (برش/ریلز) create multi-asset rows
+  // Update DB with version bump — for highlight/reel/clean create multi-asset rows
   try {
     const now = new Date();
     const currentVersion = (part as unknown as { version?: number }).version ?? 1;
     const nextVersion = currentVersion + 1;
 
-    if (type === "highlight" || type === "reel") {
-      const kind = type === "highlight" ? "highlight" : "reel";
+    if (type === "highlight" || type === "reel" || type === "clean") {
+      const kind = type;
       const { contentPartAssets } = await import("@/db/schema");
       const assetId = generateEntityId("CPP");
       const [asset] = await db

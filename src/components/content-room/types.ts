@@ -36,6 +36,10 @@ export interface ContentRoomProductSummary {
   notes?: string | null;
   archivedAt?: string | Date | null;
   isCold?: boolean | null;
+  /** Active parts with a real linked video file (list enrichment). */
+  linkedParts?: number | null;
+  /** Active parts total (list enrichment). */
+  linkTotal?: number | null;
 }
 
 export interface ContentPart {
@@ -73,4 +77,6 @@ export interface ContentRoomFilters {
   dateTo?: string;
   includeArchived?: boolean;
   sort?: string;
+  /** List only products with at least one video-unlinked part. */
+  onlyUnlinked?: boolean;
 }

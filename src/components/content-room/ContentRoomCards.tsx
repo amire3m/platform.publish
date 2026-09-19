@@ -5,6 +5,7 @@ import { Card } from "@/components/ui";
 import type { ContentRoomProductSummary } from "./types";
 import { channelLabelFa, productTypeLabelFa, getProductProgress, getNextAction } from "./room-model";
 import { contentStatusPresentation } from "@/lib/content-room/presentation";
+import { LinkBadge } from "./LinkBadge";
 
 interface Props {
   products: readonly ContentRoomProductSummary[];
@@ -54,6 +55,9 @@ export function ContentRoomCards({ products, onArchive, onUnarchive }: Props) {
                 <div className="h-full rounded-full bg-tg-accent" style={{ width: `${progress.percent}%` }} />
               </div>
               <p className="mt-1 text-[11px] text-tg-secondary">{p.partsCount} قسمت</p>
+              <p className="mt-1">
+                <LinkBadge product={p} />
+              </p>
             </div>
 
             <div className="grid grid-cols-2 gap-2 text-xs">

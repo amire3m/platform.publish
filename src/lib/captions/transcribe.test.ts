@@ -4,9 +4,9 @@ import { buildCaptionPrompt, runTranscription } from "./transcribe";
 
 function stubDeps(overrides: Record<string, unknown> = {}) {
   return {
-    downloadFile: vi.fn().mockResolvedValue(Buffer.from("video-bytes")),
+    mediaPath: vi.fn().mockResolvedValue("/tmp/video.mp4"),
     probeDuration: vi.fn().mockResolvedValue(1300),
-    extractWav: vi.fn().mockImplementation(async (_b: Buffer, start: number, end: number) => Buffer.from(`wav:${start}-${end}`)),
+    extractWav: vi.fn().mockImplementation(async (_p: string, start: number, end: number) => Buffer.from(`wav:${start}-${end}`)),
     stt: {
       transcribe: vi.fn().mockImplementation(async (wav: Buffer) => {
         const label = wav.toString();

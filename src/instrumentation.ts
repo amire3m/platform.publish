@@ -136,7 +136,9 @@ export async function register() {
           if (Date.now() - lastSweepRun < 30 * 60 * 1000) return null;
           lastSweepRun = Date.now();
           const { runMediaSweep } = await import("@/lib/media/retention");
-          return runMediaSweep();
+          const out = await runMediaSweep();
+          console.log(`[media] sweep: disk=${out.diskPct}% ttl=${out.ttlDays}d deleted=${out.deleted} freed=${Math.round(out.freedBytes / 1048576)}MB errors=${out.errors}`);
+          return out;
         } catch (err) {
           console.error("[media] sweep tick failed:", (err as Error).message);
           return { scanned: 0, deleted: 0, freedBytes: 0, errors: 0 };

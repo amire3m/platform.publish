@@ -327,8 +327,15 @@ export class TelegramClient {
     return filePath.replace(/^\/+/, "");
   }
 
+  /** Files above this size are never buffered in RAM — use downloadToTempFile. */
+  static readonly BUFFER_LIMIT_BYTES = 200 * 1024 * 1024;
+
   async downloadFile(fileId: string): Promise<Buffer> {
     const info = await this.getFile(fileId);
+    const size = Number((info as unknown as { file_size?: number }).file_size ?? 0);
+    if (size > TelegramClient.BUFFER_LIMIT_BYTES) {
+      throw Object.assign(new Error("فایل حجیم است؛ دانلود باید استریمی انجام شود."), { code: "FILE_TOO_LARGE_TO_BUFFER" });
+    }
     if (!info.file_path) throw new Error("مسیر فایل در تلگرام یافت نشد (احتمالاً فایل قدیمی یا حجیم است).");
     // Direct volume fallback first for large files
     if ((info.file_path as string).startsWith("/")) {
@@ -352,6 +359,55 @@ export class TelegramClient {
       return Buffer.from(arrayBuffer);
     }
     throw new Error("دریافت فایل از تلگرام ناموفق بود.");
+  }
+
+  /**
+   * Stream a Telegram file to a temp file on disk (never buffered in RAM).
+   * Returns the path plus a cleanup that deletes the temp copy. When the file
+   * already lives in the local Bot API volume the cache path is returned
+   * directly (zero-copy, no cleanup).
+   */
+  async downloadToTempFile(fileId: string): Promise<{ path: string; size: number; cleanup: () => Promise<void> }> {
+    const noop = async () => {};
+    const info = await this.getFile(fileId);
+    const size = Number((info as unknown as { file_size?: number }).file_size ?? 0);
+    if (info.file_path && (info.file_path as string).startsWith("/")) {
+      const fp = info.file_path as string;
+      const hostPath = `/var/lib/docker/volumes/tg-bot-api-data/_data${fp.substring("/var/lib/telegram-bot-api".length)}`;
+      const fsp = await import("fs/promises");
+      for (const p of [hostPath, fp]) {
+        try {
+          const st = await fsp.stat(p);
+          if (st.size > 0) {
+            void import("@/lib/media/retention").then((m) => m.touchMediaAccess(p).catch(() => {}));
+            console.log(`[telegram] using cached file ${p} size=${st.size}`);
+            return { path: p, size: st.size, cleanup: noop };
+          }
+        } catch {}
+      }
+    }
+    if (!info.file_path) throw new Error("مسیر فایل در تلگرام یافت نشد (احتمالاً فایل قدیمی یا حجیم است).");
+    const cleanPath = this.normalizeFilePath(info.file_path);
+    const res = await fetch(`${API_ROOT}/file/bot${this.cfg.botToken}/${cleanPath}`);
+    if (!res.ok || !res.body) throw new Error("دریافت فایل از تلگرام ناموفق بود.");
+    const os = await import("node:os");
+    const pathMod = await import("node:path");
+    const { pipeline } = await import("node:stream/promises");
+    const tmpPath = pathMod.join(os.tmpdir(), `tg-${Date.now()}-${Math.floor(Math.random() * 1e6)}.bin`);
+    const fs = await import("node:fs");
+    console.log(`[telegram] streaming download to ${tmpPath} size~=${size}`);
+    await pipeline(res.body as unknown as NodeJS.ReadableStream, fs.createWriteStream(tmpPath));
+    const fsp = await import("fs/promises");
+    const st = await fsp.stat(tmpPath);
+    return {
+      path: tmpPath,
+      size: st.size,
+      cleanup: async () => {
+        try {
+          await fsp.unlink(tmpPath);
+        } catch {}
+      },
+    };
   }
 
   async downloadFileResponse(fileId: string, range?: string | null): Promise<Response> {

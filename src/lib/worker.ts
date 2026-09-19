@@ -37,6 +37,8 @@ import { formatJalaliDateTime, nowUtcIso } from "./date/jalali";
 import jwt from "jsonwebtoken";
 import type { PersistedPlatformTarget } from "./content-targets";
 import { reflectTargetState } from "./workflow/target-adapter";
+import { runBigJob } from "./media/big-job";
+import { cleanupPayload, payloadSize, type MediaPayload } from "./media/payload";
 
 const LEASE_MS = 5 * 60 * 1000; // 5 minutes
 const MAX_RETRY = 5;
@@ -150,8 +152,21 @@ async function tryReflectWorkflowTarget(target: PersistedPlatformTarget): Promis
   }
 }
 
-async function getMediaBytes(client: TelegramClient, fileId: string): Promise<Buffer> {
-  return client.downloadFile(fileId);
+/**
+ * Fetch the primary media exactly once per content, inside the global big-job
+ * mutex. Large files stream to a temp file on disk (never RAM); the payload
+ * is shared by all platform targets and cleaned up afterwards.
+ */
+async function getMediaPayload(client: TelegramClient, fileId: string): Promise<MediaPayload> {
+  return runBigJob(`publish-download:${fileId.slice(0, 16)}`, async () => {
+    const info = await client.getFile(fileId);
+    const size = Number((info as unknown as { file_size?: number }).file_size ?? 0);
+    if (size > TelegramClient.BUFFER_LIMIT_BYTES) {
+      const dl = await client.downloadToTempFile(fileId);
+      return { kind: "file", path: dl.path, size: dl.size, cleanup: dl.cleanup } as MediaPayload;
+    }
+    return { kind: "buffer", buffer: await client.downloadFile(fileId) } as MediaPayload;
+  });
 }
 
 function buildMediaProxyUrl(fileId: string): string {
@@ -188,7 +203,13 @@ async function processContent(row: typeof content.$inferSelect, opts?: { force?:
   const publishResults: Record<string, unknown>[] = Array.isArray(row.publishResults) ? [...row.publishResults] : [];
   let anySuccess = false;
   let anyFailure = false;
+  let payload: MediaPayload | null = null;
+  const ensurePayload = async (): Promise<MediaPayload> => {
+    if (!payload) payload = await getMediaPayload(client as TelegramClient, primaryMedia?.telegram_file_id as string);
+    return payload;
+  };
 
+  try {
   for (const target of targets) {
     if (target.status === "published") {
       updatedTargets.push(target); // idempotent: never republish a success
@@ -249,7 +270,10 @@ async function processContent(row: typeof content.$inferSelect, opts?: { force?:
     }
 
     try {
-      const fileBuffer = await getMediaBytes(client, primaryMedia.telegram_file_id);
+      const media = await ensurePayload();
+      const fileBuffer = media.kind === "buffer" ? media.buffer : Buffer.alloc(0);
+      const filePath = media.kind === "file" ? media.path : null;
+      const fileSize = payloadSize(media);
       const isMock = account.connectionStatus !== "connected";
 
       const result = isMock
@@ -257,6 +281,8 @@ async function processContent(row: typeof content.$inferSelect, opts?: { force?:
             accountExternalId: account.externalAccountId ?? "",
             credentialPayload,
             fileBuffer,
+            filePath,
+            fileSize,
             fileName: primaryMedia.file_name ?? "media",
             mimeType: primaryMedia.mime_type ?? "application/octet-stream",
             contentType: (target.content_type as string) ?? "",
@@ -272,6 +298,8 @@ async function processContent(row: typeof content.$inferSelect, opts?: { force?:
               accountExternalId: account.externalAccountId ?? "",
               credentialPayload,
               fileBuffer,
+              filePath,
+              fileSize,
               fileName: primaryMedia.file_name ?? "media.mp4",
               mimeType: primaryMedia.mime_type ?? "video/mp4",
               contentType: (target.content_type as string) ?? "",
@@ -287,6 +315,8 @@ async function processContent(row: typeof content.$inferSelect, opts?: { force?:
                 accountExternalId: account.externalAccountId ?? "",
                 credentialPayload,
                 fileBuffer,
+                filePath,
+                fileSize,
                 fileName: primaryMedia.file_name ?? "media",
                 mimeType: primaryMedia.mime_type ?? "image/jpeg",
                 contentType: (target.content_type as string) ?? "",
@@ -360,6 +390,10 @@ async function processContent(row: typeof content.$inferSelect, opts?: { force?:
         }
       }
     }
+  }
+
+  } finally {
+    if (payload) await cleanupPayload(payload);
   }
 
   const allDone = updatedTargets.every((t) => ["published", "failed", "cancelled"].includes(t.status as string));

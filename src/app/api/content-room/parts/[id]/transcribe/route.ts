@@ -26,19 +26,13 @@ async function canEdit(): Promise<{ ok: boolean; userId: string; response?: Resp
   return { ok: true, userId: u.id ?? "unknown" };
 }
 
-async function downloadTelegramFile(fileRef: string | null): Promise<Buffer> {
+async function downloadToLocalPath(fileRef: string | null): Promise<{ path: string; cleanup: () => Promise<void> }> {
   if (!fileRef || fileRef.startsWith("tg_msg_")) {
     throw Object.assign(new Error("فایل قابل دانلود نیست؛ ابتدا فایل را از تلگرام لینک کنید."), { code: "NO_FILE" });
   }
+  // Stream to disk (or reuse the local Bot API cache) — never buffer whole videos in RAM.
   const client = TelegramClient.fromEnv();
-  const f = (await client.getFile(fileRef)) as unknown as { file_path?: string; filePath?: string };
-  const path = f?.file_path ?? f?.filePath;
-  if (!path) throw Object.assign(new Error("شناسه فایل تلگرام نامعتبر است."), { code: "NO_FILE" });
-  const token = process.env.TELEGRAM_BOT_TOKEN ?? "";
-  const apiBase = (process.env.TELEGRAM_API_BASE ?? "https://api.telegram.org").replace(/\/$/, "");
-  const res = await fetch(`${apiBase}/file/bot${token}/${path}`);
-  if (!res.ok) throw Object.assign(new Error("دانلود فایل از تلگرام ناموفق بود."), { code: "DOWNLOAD_FAILED" });
-  return Buffer.from(await res.arrayBuffer());
+  return client.downloadToTempFile(fileRef);
 }
 
 function errorMessage(error: unknown): string {
@@ -47,25 +41,32 @@ function errorMessage(error: unknown): string {
 }
 
 async function runJob(partId: string, fileRef: string | null): Promise<void> {
-  await setTranscriptStatus(partId, "processing");
-  try {
-    const video = await downloadTelegramFile(fileRef);
-    const { stt } = getProviders();
-    const maxMinutes = Number(process.env.TRANSCRIBE_MAX_MINUTES ?? 60);
-    await runTranscription(
-      {
-        downloadFile: async () => video,
-        probeDuration,
-        extractWav,
-        stt,
-        saveProgress: (s) => setTranscriptStatus(partId, s as "processing"),
-        persist: (r) => saveTranscriptResult(partId, r),
-      },
-      { maxMinutes: Number.isFinite(maxMinutes) && maxMinutes > 0 ? maxMinutes : 60 },
-    );
-  } catch (error) {
-    await setTranscriptStatus(partId, "error", errorMessage(error)).catch(() => {});
-  }
+  // Serialized globally: only one transcription holds ffmpeg/temp-disk at a time.
+  const { runBigJob } = await import("@/lib/media/big-job");
+  await runBigJob(`transcribe:${partId}`, async () => {
+    await setTranscriptStatus(partId, "processing");
+    let local: { path: string; cleanup: () => Promise<void> } | null = null;
+    try {
+      local = await downloadToLocalPath(fileRef);
+      const { stt } = getProviders();
+      const maxMinutes = Number(process.env.TRANSCRIBE_MAX_MINUTES ?? 60);
+      await runTranscription(
+        {
+          mediaPath: async () => (local as { path: string }).path,
+          probeDuration,
+          extractWav,
+          stt,
+          saveProgress: (s) => setTranscriptStatus(partId, s as "processing"),
+          persist: (r) => saveTranscriptResult(partId, r),
+        },
+        { maxMinutes: Number.isFinite(maxMinutes) && maxMinutes > 0 ? maxMinutes : 60 },
+      );
+    } catch (error) {
+      await setTranscriptStatus(partId, "error", errorMessage(error)).catch(() => {});
+    } finally {
+      if (local) await local.cleanup().catch(() => {});
+    }
+  }).catch(() => {});
 }
 
 export async function POST(_request: Request, ctx: { params: Promise<{ id: string }> }): Promise<Response> {

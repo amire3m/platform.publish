@@ -19,7 +19,10 @@ export async function POST(request: Request): Promise<Response> {
   }
   try {
     const client = TelegramClient.fromEnv();
-    await client.downloadFile(fileId);
+    // Single-byte range: warms the Bot API cache without pulling the whole
+    // file into this process's RAM.
+    const upstream = await client.downloadFileResponse(fileId, "bytes=0-0");
+    await upstream.body?.cancel().catch(() => {});
     return jsonOk({ warmed: true });
   } catch (error) {
     const message = error instanceof Error ? error.message : "خطای نامشخص";

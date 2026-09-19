@@ -22,14 +22,14 @@ function req(body: unknown): Request {
 describe("POST /api/media/warm", () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it("warms the cache by downloading the file", async () => {
-    const downloadFile = vi.fn().mockResolvedValue(Buffer.from("bytes"));
-    vi.mocked(TelegramClient.fromEnv as unknown as () => unknown).mockReturnValue({ downloadFile } as never);
+  it("warms the cache with a single-byte range (no full download)", async () => {
+    const downloadFileResponse = vi.fn().mockResolvedValue(new Response("x"));
+    vi.mocked(TelegramClient.fromEnv as unknown as () => unknown).mockReturnValue({ downloadFileResponse } as never);
     const res = await POST(req({ fileId: "file-1" }) as never);
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body).toEqual({ ok: true, data: { warmed: true } });
-    expect(downloadFile).toHaveBeenCalledWith("file-1");
+    expect(downloadFileResponse).toHaveBeenCalledWith("file-1", "bytes=0-0");
   });
 
   it("rejects missing fileId (422)", async () => {
@@ -38,8 +38,8 @@ describe("POST /api/media/warm", () => {
   });
 
   it("maps download failures to 502", async () => {
-    const downloadFile = vi.fn().mockRejectedValue(new Error("boom"));
-    vi.mocked(TelegramClient.fromEnv as unknown as () => unknown).mockReturnValue({ downloadFile } as never);
+    const downloadFileResponse = vi.fn().mockRejectedValue(new Error("boom"));
+    vi.mocked(TelegramClient.fromEnv as unknown as () => unknown).mockReturnValue({ downloadFileResponse } as never);
     const res = await POST(req({ fileId: "file-1" }) as never);
     expect(res.status).toBe(502);
   });

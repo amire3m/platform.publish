@@ -6,6 +6,7 @@
 // If not configured, callers should fall back to the mock provider — this
 // module never fabricates a successful upload.
 import { google } from "googleapis";
+import { createReadStream } from "node:fs";
 import { Readable } from "node:stream";
 import type { Provider, PublishInput, PublishResult } from "./types";
 
@@ -58,7 +59,8 @@ async function publish(input: PublishInput): Promise<PublishResult> {
         },
       },
       media: {
-        body: Readable.from(input.fileBuffer),
+        // Stream from disk for large files — never buffer multi-GB videos in RAM.
+        body: input.filePath ? createReadStream(input.filePath) : Readable.from(input.fileBuffer),
       },
     });
 

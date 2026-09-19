@@ -7,7 +7,16 @@ import type { PublishInput, PublishResult } from "./types";
 
 export async function mockPublish(platform: "youtube" | "instagram", input: PublishInput): Promise<PublishResult> {
   // Simulate basic validation so obviously broken uploads still fail in mock mode.
-  if (input.fileBuffer.length === 0) {
+  if (input.filePath) {
+    const { statSync } = await import("node:fs");
+    try {
+      if (statSync(input.filePath).size === 0) {
+        return { ok: false, errorCode: "EMPTY_FILE", message: "فایل خالی است.", retryable: false };
+      }
+    } catch {
+      return { ok: false, errorCode: "EMPTY_FILE", message: "فایل یافت نشد.", retryable: false };
+    }
+  } else if (input.fileBuffer.length === 0) {
     return { ok: false, errorCode: "EMPTY_FILE", message: "فایل خالی است.", retryable: false };
   }
   const fakeId = `mock_${platform}_${Date.now()}_${Math.floor(Math.random() * 1000)}`;

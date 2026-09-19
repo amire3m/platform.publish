@@ -2,6 +2,9 @@ export interface PublishInput {
   accountExternalId: string;
   credentialPayload: Record<string, unknown> | null;
   fileBuffer: Buffer;
+  /** Large-file path: when set, providers stream from disk instead of RAM. */
+  filePath?: string | null;
+  fileSize?: number | null;
   fileName: string;
   mimeType: string;
   contentType: string; // video|short|image|carousel|reel

@@ -8,6 +8,7 @@ import {
   BarChart3,
   Bell,
   CalendarDays,
+  Compass,
   FileText,
   FolderOpen,
   Images,
@@ -122,6 +123,7 @@ export function AppShell({
   const contentRoomNavItem = { href: "/content-room", label: "اتاق محتوا", icon: Package } as const;
   const assetsNavItem = { href: "/library", label: "کتابخانه", icon: Images } as const;
   const liveNavItem = { href: "/live", label: "لایو", icon: Radio } as const;
+  const radarNavItem = { href: "/radar", label: "رادار", icon: Compass } as const;
   const withWorkflow = canViewWorkflow
     ? ([NAV_ITEMS[0], workflowNavItem, ...NAV_ITEMS.slice(1)] as typeof NAV_ITEMS)
     : NAV_ITEMS;
@@ -134,7 +136,8 @@ export function AppShell({
   const withLive = canManageLive
     ? ([withAssets[0], liveNavItem, ...withAssets.slice(1)] as typeof NAV_ITEMS)
     : withAssets;
-  const visibleNavItems = canViewMail ? ([...withLive.slice(0, 2), mailNavItem, ...withLive.slice(2)] as typeof NAV_ITEMS) : withLive;
+  const withRadar = [...withLive.slice(0, 2), radarNavItem, ...withLive.slice(2)] as typeof NAV_ITEMS;
+  const visibleNavItems = canViewMail ? ([...withRadar.slice(0, 2), mailNavItem, ...withRadar.slice(2)] as typeof NAV_ITEMS) : withRadar;
 
   return (
     <div className="flex min-h-screen">

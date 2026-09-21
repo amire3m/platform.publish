@@ -176,6 +176,32 @@ export async function register() {
           return { ok: false };
         }
       })(),
+      (async () => {
+        // Radar weekly run: Sunday 06:00 Asia/Tehran
+        try {
+          const now = new Date();
+          const tehran = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Tehran", weekday: "short", hour: "2-digit" }).format(now);
+          const isSunday = tehran.startsWith("Sun");
+          const hour = Number(new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Tehran", hour: "2-digit", hour12: false }).format(now));
+          if (!isSunday || hour !== 6) return null;
+          // Run once per week: check if a run already exists for this week
+          const { db } = await import("@/db");
+          const { radarRuns } = await import("@/db/schema");
+          const { desc } = await import("drizzle-orm");
+          const [last] = (await db.select().from(radarRuns).orderBy(desc(radarRuns.createdAt)).limit(1)) as unknown as Array<{ weekStart: Date }>;
+          if (last) {
+            const diff = now.getTime() - new Date(last.weekStart).getTime();
+            if (diff < 6 * 86400000) return null;
+          }
+          const { runRadarOnce } = await import("@/lib/radar/run");
+          const out = await runRadarOnce();
+          console.log(`[radar] weekly run: ${out.items} items, run ${out.runId}`);
+          return out;
+        } catch (err) {
+          console.error("[radar] weekly tick failed:", (err as Error).message);
+          return { runId: "", items: 0 };
+        }
+      })(),
     ]).finally(() => {
       instrumentationRunning = false;
     });

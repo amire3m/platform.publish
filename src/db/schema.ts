@@ -253,7 +253,46 @@ export const appSettings = pgTable("app_settings", {
 });
 
 // ---------------------------------------------------------------------------
+// Radar: weekly similar-content snapshots (YouTube + Instagram, fa+en)
+// ---------------------------------------------------------------------------
+export const radarRuns = pgTable("radar_runs", {
+  id: text("id").primaryKey(),
+  weekStart: date("week_start").notNull(),
+  status: text("status").notNull().default("done"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const radarItems = pgTable(
+  "radar_items",
+  {
+    id: text("id").primaryKey(),
+    runId: text("run_id")
+      .notNull()
+      .references(() => radarRuns.id, { onDelete: "cascade" }),
+    source: text("source").notNull(),
+    queryLang: text("query_lang").notNull(),
+    query: text("query").notNull(),
+    similarToPartId: text("similar_to_part_id"),
+    similarToTitle: text("similar_to_title"),
+    externalId: text("external_id").notNull(),
+    title: text("title").notNull(),
+    channel: text("channel"),
+    views: bigint("views", { mode: "number" }),
+    publishedAt: timestamp("published_at", { withTimezone: true }),
+    similarityScore: doublePrecision("similarity_score").notNull().default(0),
+    thumbUrl: text("thumb_url"),
+    permalink: text("permalink"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    runIdx: index("radar_items_run_idx").on(t.runId),
+    similarityIdx: index("radar_items_similarity_idx").on(t.similarityScore),
+  }),
+);
+
+// ---------------------------------------------------------------------------
 // Content workflow (PostgreSQL-authoritative; not rebuilt from Telegram)
+
 // ---------------------------------------------------------------------------
 export const workflowPrograms = pgTable(
   "workflow_programs",

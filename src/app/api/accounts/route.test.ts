@@ -67,6 +67,7 @@ const allowedPublicDto = {
   publishJitterMin: 0,
   instantPost: false,
   publishedTodayCount: 0,
+  hasBrowserSession: false,
 };
 
 function dependencies(user: { role: string; allowedAccountIds?: string[] | null }): AccountsRouteDependencies {
@@ -128,6 +129,7 @@ describe("GET /api/accounts", () => {
       publishJitterMin: 0,
       instantPost: false,
       publishedTodayCount: 0,
+      hasBrowserSession: false,
     });
   });
 });

@@ -18,6 +18,7 @@ export interface PublicAccountDto {
   publishJitterMin: number;
   instantPost: boolean;
   publishedTodayCount: number;
+  hasBrowserSession: boolean;
 }
 
 export interface PublicAccountSource extends Record<string, unknown> {
@@ -40,6 +41,7 @@ export interface PublicAccountSource extends Record<string, unknown> {
   publishJitterMin?: number | null;
   instantPost?: boolean | null;
   publishedTodayCount?: number | null;
+  hasBrowserSession?: boolean | null;
 }
 
 export function toPublicAccountDto(account: PublicAccountSource): PublicAccountDto {
@@ -63,5 +65,6 @@ export function toPublicAccountDto(account: PublicAccountSource): PublicAccountD
     publishJitterMin: account.publishJitterMin ?? 0,
     instantPost: account.instantPost ?? false,
     publishedTodayCount: account.publishedTodayCount ?? 0,
+    hasBrowserSession: Boolean((account.capabilities as Record<string, unknown>)?.browserSession || account.hasBrowserSession),
   };
 }

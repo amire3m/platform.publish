@@ -7,6 +7,7 @@ import { InstagramIcon, YoutubeIcon } from "@/components/brand-icons";
 import { Button, Card, ConfirmModal, EmptyState, Label, Modal, Select, Skeleton, StatusBadge } from "@/components/ui";
 import { useToast } from "@/components/providers";
 import { PublishScheduleForm } from "@/components/accounts/PublishScheduleForm";
+import { InstagramBrowserSessionForm } from "@/components/accounts/InstagramBrowserSessionForm";
 import { formatJalaliDateTime } from "@/lib/date/jalali";
 import type { PublicAccountDto } from "@/lib/accounts/public";
 import { oauthErrorMessageFa } from "@/lib/presentation-fa";
@@ -195,6 +196,9 @@ export default function AccountsPage() {
               <p className="mt-3 rounded-lg bg-fuchsia-500/10 px-2 py-1 text-[11px] text-fuchsia-600 dark:text-fuchsia-400">
                 این حساب آزمایشی است و انتشار واقعی در آن انجام نمی‌شود.
               </p>
+            )}
+            {a.platform === "instagram" && (
+              <InstagramBrowserSessionForm account={a} onChanged={() => mutate()} />
             )}
             <PublishScheduleForm account={a} onSaved={() => mutate()} />
             <div className="mt-4 flex justify-end">

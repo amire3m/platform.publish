@@ -304,8 +304,9 @@ async function processContent(row: typeof content.$inferSelect, opts?: { force?:
       const fileSize = payloadSize(media);
       const isMock = account.connectionStatus !== "connected";
 
-      const result = isMock
-        ? await mockPublish(target.platform as "youtube" | "instagram", {
+      let result: Awaited<ReturnType<typeof mockPublish>>;
+      if (isMock) {
+        result = await mockPublish(target.platform as "youtube" | "instagram", {
             accountExternalId: account.externalAccountId ?? "",
             credentialPayload,
             fileBuffer,
@@ -320,9 +321,9 @@ async function processContent(row: typeof content.$inferSelect, opts?: { force?:
             hashtags: row.hashtags as string[],
             privacyStatus: (target.fields?.privacyStatus as string) ?? "private",
             publishAtUtc: target.publish_at_utc ?? null,
-          })
-        : target.platform === "youtube"
-          ? await youtubeProvider.publish({
+          });
+      } else if (target.platform === "youtube") {
+        result = await youtubeProvider.publish({
               accountExternalId: account.externalAccountId ?? "",
               credentialPayload,
               fileBuffer,
@@ -337,8 +338,38 @@ async function processContent(row: typeof content.$inferSelect, opts?: { force?:
               privacyStatus: (target.fields?.privacyStatus as string) ?? "private",
               madeForKids: Boolean(target.fields?.madeForKids),
               publishAtUtc: target.publish_at_utc ?? null,
-            })
-          : await instagramProvider.publishWithUrl(
+            });
+      } else {
+        const caps = (account.capabilities ?? {}) as Record<string, unknown>;
+        const hasBrowser = caps.browserSession === true;
+        const isReel = (target.content_type as string) === "reel" || !target.content_type;
+        if (hasBrowser && isReel) {
+          let browserPath = filePath;
+          let browserCleanup: (() => Promise<void>) | null = null;
+          if (!browserPath) {
+            const dl = await (client as TelegramClient).downloadToTempFile(primaryMedia.telegram_file_id as string);
+            browserPath = dl.path;
+            browserCleanup = dl.cleanup;
+          }
+          const { instagramBrowserPublish } = await import("./providers/instagram-browser");
+          result = await instagramBrowserPublish(
+              {
+                accountExternalId: account.externalAccountId ?? "",
+                credentialPayload: null,
+                fileBuffer: Buffer.alloc(0),
+                filePath: browserPath,
+                fileSize,
+                fileName: primaryMedia.file_name ?? "media.mp4",
+                mimeType: primaryMedia.mime_type ?? "video/mp4",
+                contentType: "reel",
+                caption: row.caption,
+                hashtags: row.hashtags as string[],
+              },
+              account.id,
+            );
+          if (browserCleanup) await browserCleanup().catch(() => {});
+        } else {
+          result = await instagramProvider.publishWithUrl(
               {
                 accountExternalId: account.externalAccountId ?? "",
                 credentialPayload,
@@ -353,6 +384,8 @@ async function processContent(row: typeof content.$inferSelect, opts?: { force?:
               },
               await resolvePublishUrl(primaryMedia.telegram_file_id),
             );
+        }
+      }
 
       publishResults.push({
         platform: target.platform,

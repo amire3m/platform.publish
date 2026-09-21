@@ -5,11 +5,19 @@ import { requirePermission, jsonError, jsonOk } from "@/lib/api-helpers";
 import { appendAuditEvent } from "@/lib/telegram/tgdb";
 import { z } from "zod";
 
+const HHMM = /^([01]\d|2[0-3]):([0-5]\d)$/;
+
 const accountUpdateSchema = z.object({
   organization: z.enum(["emro", "sana"]).nullable().optional(),
   topicId: z.string().nullable().optional(),
   topicMessageThreadId: z.number().int().nullable().optional(),
   topicLabel: z.string().nullable().optional(),
+  publishDailyCap: z.number().int().min(0).max(50).nullable().optional(),
+  publishCooldownMin: z.number().int().min(0).max(1440).nullable().optional(),
+  publishWindowStart: z.string().regex(HHMM).nullable().optional(),
+  publishWindowEnd: z.string().regex(HHMM).nullable().optional(),
+  publishJitterMin: z.number().int().min(0).max(120).optional(),
+  instantPost: z.boolean().optional(),
 }).strict();
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {

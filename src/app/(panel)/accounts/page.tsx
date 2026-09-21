@@ -6,6 +6,7 @@ import { Plus, Trash2 } from "lucide-react";
 import { InstagramIcon, YoutubeIcon } from "@/components/brand-icons";
 import { Button, Card, ConfirmModal, EmptyState, Label, Modal, Select, Skeleton, StatusBadge } from "@/components/ui";
 import { useToast } from "@/components/providers";
+import { PublishScheduleForm } from "@/components/accounts/PublishScheduleForm";
 import { formatJalaliDateTime } from "@/lib/date/jalali";
 import type { PublicAccountDto } from "@/lib/accounts/public";
 import { oauthErrorMessageFa } from "@/lib/presentation-fa";
@@ -195,6 +196,7 @@ export default function AccountsPage() {
                 این حساب آزمایشی است و انتشار واقعی در آن انجام نمی‌شود.
               </p>
             )}
+            <PublishScheduleForm account={a} onSaved={() => mutate()} />
             <div className="mt-4 flex justify-end">
               <Button variant="ghost" size="sm" onClick={() => setDeleteTarget(a)}>
                 <Trash2 className="h-3.5 w-3.5" />

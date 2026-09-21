@@ -60,6 +60,13 @@ const allowedPublicDto = {
   topicLabel: "Allowed topic",
   lastSyncAt: "2026-08-21T08:00:00.000Z",
   capabilities: { analytics: true },
+  publishDailyCap: null,
+  publishCooldownMin: null,
+  publishWindowStart: null,
+  publishWindowEnd: null,
+  publishJitterMin: 0,
+  instantPost: false,
+  publishedTodayCount: 0,
 };
 
 function dependencies(user: { role: string; allowedAccountIds?: string[] | null }): AccountsRouteDependencies {
@@ -114,6 +121,13 @@ describe("GET /api/accounts", () => {
       topicLabel: null,
       lastSyncAt: null,
       capabilities: {},
+      publishDailyCap: null,
+      publishCooldownMin: null,
+      publishWindowStart: null,
+      publishWindowEnd: null,
+      publishJitterMin: 0,
+      instantPost: false,
+      publishedTodayCount: 0,
     });
   });
 });

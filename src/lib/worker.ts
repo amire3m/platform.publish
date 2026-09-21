@@ -39,6 +39,7 @@ import type { PersistedPlatformTarget } from "./content-targets";
 import { reflectTargetState } from "./workflow/target-adapter";
 import { runBigJob } from "./media/big-job";
 import { cleanupPayload, payloadSize, type MediaPayload } from "./media/payload";
+import { checkPublishGate, jitterDelayMs, normalizeScheduleSettings, tehranDayKey } from "./publish/schedule";
 
 const LEASE_MS = 5 * 60 * 1000; // 5 minutes
 const MAX_RETRY = 5;
@@ -236,6 +237,33 @@ async function processContent(row: typeof content.$inferSelect, opts?: { force?:
       continue;
     }
 
+    // Per-account publish schedule gate (daily cap / cooldown / window / jitter).
+    // Gate skips never consume attempts — the target stays scheduled.
+    if (!opts?.force) {
+      const now = new Date();
+      const settings = normalizeScheduleSettings(account as unknown as Record<string, unknown>);
+      // Stagger new arrivals with jitter unless instant-post is on: first sight
+      // sets next_retry_at instead of publishing on the tick boundary.
+      if (!target.publish_at_utc && !target.next_retry_at && settings.jitterMin > 0 && !settings.instantPost) {
+        const delayed = new Date(now.getTime() + jitterDelayMs(settings.jitterMin));
+        updatedTargets.push({ ...target, next_retry_at: delayed.toISOString() });
+        continue;
+      }
+      const gate = checkPublishGate(now, settings, {
+        lastPublishedAt: (account.lastPublishedAt ?? null) as Date | string | null,
+        day: (account.publishedDay ?? null) as string | null,
+        count: Number(account.publishedTodayCount ?? 0),
+      });
+      if (!gate.ok) {
+        if (gate.reason === "window") {
+          updatedTargets.push({ ...target });
+        } else {
+          updatedTargets.push({ ...target, next_retry_at: new Date(now.getTime() + gate.retryAfterMs).toISOString() });
+        }
+        continue;
+      }
+    }
+
     let credentialPayload: Record<string, unknown> | null = null;
     if (account.credentialRef) {
       const [cred] = await db.select().from(credentials).where(eq(credentials.id, account.credentialRef)).limit(1);
@@ -345,6 +373,23 @@ async function processContent(row: typeof content.$inferSelect, opts?: { force?:
         };
         updatedTargets.push(reflected);
         anySuccess = true;
+        // Schedule bookkeeping for daily caps + cooldowns (best-effort).
+        try {
+          const now = new Date();
+          const today = tehranDayKey(now);
+          const prevDay = (account.publishedDay ?? null) as string | null;
+          const prevCount = Number(account.publishedTodayCount ?? 0);
+          const count = prevDay === today ? prevCount + 1 : 1;
+          await db
+            .update(socialAccounts)
+            .set({ lastPublishedAt: now, publishedDay: today, publishedTodayCount: count } as never)
+            .where(eq(socialAccounts.id, account.id));
+          (account as unknown as Record<string, unknown>).lastPublishedAt = now;
+          (account as unknown as Record<string, unknown>).publishedDay = today;
+          (account as unknown as Record<string, unknown>).publishedTodayCount = count;
+        } catch (err) {
+          console.error("[worker] schedule bookkeeping failed:", (err as Error).message);
+        }
         // reflect workflow after success
         if (reflected.workflow_publication_id) {
           try {

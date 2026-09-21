@@ -23,6 +23,7 @@ import { sql } from "drizzle-orm";
 import {
   bigint,
   boolean,
+  date,
   doublePrecision,
   index,
   integer,
@@ -101,6 +102,16 @@ export const socialAccounts = pgTable("social_accounts", {
   connectionStatus: text("connection_status").notNull().default("disconnected"), // disconnected|mock|connected|error
   lastSyncAt: timestamp("last_sync_at", { withTimezone: true }),
   lastError: text("last_error"),
+  // Publish scheduling (Phase 1 automation): caps/cooldowns/windows per account.
+  publishDailyCap: integer("publish_daily_cap"), // max successful publishes per Tehran day (null = unlimited)
+  publishCooldownMin: integer("publish_cooldown_min"), // min minutes between two publishes (null = none)
+  publishWindowStart: text("publish_window_start"), // "HH:MM" Asia/Tehran daily window start (null = no window)
+  publishWindowEnd: text("publish_window_end"), // "HH:MM" Asia/Tehran daily window end (null = no window)
+  publishJitterMin: integer("publish_jitter_min").notNull().default(0), // random 0..N min stagger for new arrivals
+  instantPost: boolean("instant_post").notNull().default(false), // publish new arrivals on next tick (skip stagger)
+  lastPublishedAt: timestamp("last_published_at", { withTimezone: true }),
+  publishedDay: date("published_day"), // Tehran day of publishedTodayCount
+  publishedTodayCount: integer("published_today_count").notNull().default(0),
   analyticsSyncLockedAt: timestamp("analytics_sync_locked_at", { withTimezone: true }),
   analyticsSyncLockId: text("analytics_sync_lock_id"),
   analyticsSyncedThrough: timestamp("analytics_synced_through", { withTimezone: true }),

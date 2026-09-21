@@ -8,9 +8,7 @@
 import { createReadStream } from "node:fs";
 import { stat } from "node:fs/promises";
 import type { Provider, PublishInput, PublishResult } from "./types";
-
-const REALISTIC_UA =
-  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
+import { INSTAGRAM_DEVICE } from "@/lib/instagram/session";
 
 function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
@@ -124,10 +122,13 @@ export async function instagramBrowserPublish(
     try {
       context = await browser.newContext({
         storageState,
-        viewport: { width: 1400, height: 1000 },
-        userAgent: REALISTIC_UA,
-        locale: "fa-IR",
-        timezoneId: "Asia/Tehran",
+        viewport: INSTAGRAM_DEVICE.viewport,
+        userAgent: INSTAGRAM_DEVICE.userAgent,
+        locale: INSTAGRAM_DEVICE.locale,
+        timezoneId: INSTAGRAM_DEVICE.timezoneId,
+        isMobile: INSTAGRAM_DEVICE.isMobile,
+        hasTouch: INSTAGRAM_DEVICE.hasTouch,
+        deviceScaleFactor: INSTAGRAM_DEVICE.deviceScaleFactor,
       });
       const page = await context.newPage();
 

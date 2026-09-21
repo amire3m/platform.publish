@@ -4,6 +4,18 @@
 import { mkdir, readFile, stat, unlink, writeFile, chmod } from "node:fs/promises";
 import { join } from "node:path";
 
+// Single Android fingerprint — keep identical across login/verify/touch/publish
+// so a session never sees a device switch (major cause of instant expiry).
+export const INSTAGRAM_DEVICE = {
+  userAgent: "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36",
+  viewport: { width: 412, height: 915 },
+  isMobile: true,
+  hasTouch: true,
+  deviceScaleFactor: 2.75,
+  locale: "fa-IR",
+  timezoneId: "Asia/Tehran",
+} as const;
+
 function sessionRoot(): string {
   // Persistent outside the repo so deploys don't wipe sessions.
   if (process.env.INSTAGRAM_SESSION_ROOT) return process.env.INSTAGRAM_SESSION_ROOT;
@@ -71,10 +83,13 @@ export async function touchBrowserSession(accountId: string): Promise<{ ok: bool
     const browser = await chromium.launch({ headless: true, args: ["--no-sandbox", "--disable-setuid-sandbox"] });
     const ctx = await browser.newContext({
       storageState: p,
-      viewport: { width: 1280, height: 800 },
-      userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-      locale: "fa-IR",
-      timezoneId: "Asia/Tehran",
+      viewport: INSTAGRAM_DEVICE.viewport,
+      userAgent: INSTAGRAM_DEVICE.userAgent,
+      locale: INSTAGRAM_DEVICE.locale,
+      timezoneId: INSTAGRAM_DEVICE.timezoneId,
+      isMobile: INSTAGRAM_DEVICE.isMobile,
+      hasTouch: INSTAGRAM_DEVICE.hasTouch,
+      deviceScaleFactor: INSTAGRAM_DEVICE.deviceScaleFactor,
     });
     const page = await ctx.newPage();
     await page.goto("https://www.instagram.com/", { waitUntil: "domcontentloaded", timeout: 30000 });
@@ -148,10 +163,13 @@ export async function loginWithCredentials(
   const { chromium } = await import("playwright");
   const browser = await chromium.launch({ headless: true, args: ["--no-sandbox", "--disable-setuid-sandbox"] });
   const ctx = await browser.newContext({
-    viewport: { width: 1280, height: 800 },
-    userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-    locale: "fa-IR",
-    timezoneId: "Asia/Tehran",
+    viewport: INSTAGRAM_DEVICE.viewport,
+    userAgent: INSTAGRAM_DEVICE.userAgent,
+    locale: INSTAGRAM_DEVICE.locale,
+    timezoneId: INSTAGRAM_DEVICE.timezoneId,
+    isMobile: INSTAGRAM_DEVICE.isMobile,
+    hasTouch: INSTAGRAM_DEVICE.hasTouch,
+    deviceScaleFactor: INSTAGRAM_DEVICE.deviceScaleFactor,
   });
   const page = await ctx.newPage();
   try {
@@ -223,10 +241,13 @@ export async function verifyBrowserSession(accountId: string): Promise<{ ok: boo
     const browser = await chromium.launch({ headless: true, args: ["--no-sandbox", "--disable-setuid-sandbox"] });
     const ctx = await browser.newContext({
       storageState: p,
-      viewport: { width: 1280, height: 800 },
-      userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-      locale: "fa-IR",
-      timezoneId: "Asia/Tehran",
+      viewport: INSTAGRAM_DEVICE.viewport,
+      userAgent: INSTAGRAM_DEVICE.userAgent,
+      locale: INSTAGRAM_DEVICE.locale,
+      timezoneId: INSTAGRAM_DEVICE.timezoneId,
+      isMobile: INSTAGRAM_DEVICE.isMobile,
+      hasTouch: INSTAGRAM_DEVICE.hasTouch,
+      deviceScaleFactor: INSTAGRAM_DEVICE.deviceScaleFactor,
     });
     const page = await ctx.newPage();
     const target = "https://www.instagram.com/";

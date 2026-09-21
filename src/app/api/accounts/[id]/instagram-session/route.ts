@@ -3,7 +3,7 @@ import { db } from "@/db";
 import { socialAccounts } from "@/db/schema";
 import { jsonError, jsonOk, requirePermission } from "@/lib/api-helpers";
 import { appendAuditEvent } from "@/lib/telegram/tgdb";
-import { hasBrowserSession, removeBrowserSession, saveBrowserSession, verifyBrowserSession } from "@/lib/instagram/session";
+import { hasBrowserSession, loginWithCredentials, removeBrowserSession, saveBrowserSession, saveBrowserSessionFromCookies, verifyBrowserSession } from "@/lib/instagram/session";
 
 export const runtime = "nodejs";
 
@@ -31,29 +31,52 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   }
 
   const ct = req.headers.get("content-type") ?? "";
-  let raw = "";
+  // Multipart = file upload (storageState)
   if (ct.includes("multipart/form-data")) {
     const form = await req.formData();
     const file = form.get("file") as File | null;
     if (!file) return jsonError("فایل storageState.json را آپلود کنید.", 400);
-    raw = await file.text();
+    const raw = await file.text();
+    try { await saveBrowserSession(id, raw); } catch (err) { return jsonError((err as Error).message, 400); }
   } else {
-    try {
-      const body = (await req.json()) as { storageState?: string; raw?: string };
-      raw = body.storageState ?? body.raw ?? "";
-    } catch {
-      return jsonError("درخواست نامعتبر است.", 422);
+    let body: unknown;
+    try { body = await req.json(); } catch { return jsonError("درخواست نامعتبر است.", 422); }
+    const b = body as Record<string, unknown>;
+
+    // Mode: cookies paste
+    if (b.mode === "cookies") {
+      try {
+        await saveBrowserSessionFromCookies(id, {
+          sessionid: String(b.sessionid ?? ""),
+          csrftoken: String(b.csrftoken ?? ""),
+          ds_user_id: String(b.ds_user_id ?? b.dsUserId ?? ""),
+          mid: String(b.mid ?? ""),
+          rur: String(b.rur ?? ""),
+        });
+      } catch (err) { return jsonError((err as Error).message, 400); }
+    } else if (b.mode === "credentials") {
+      // Username/password (+ optional 2FA code) -> Playwright login
+      const username = String(b.username ?? "").trim();
+      const password = String(b.password ?? "");
+      const code = b.code != null ? String(b.code) : undefined;
+      if (!username || !password) return jsonError("نام کاربری و رمز عبور الزامی است.", 400);
+      try {
+        const res = await loginWithCredentials(id, username, password, code);
+        if (!res.ok && res.needCode) {
+          return jsonError(res.detail, 422, "NEED_CODE");
+        }
+        if (!res.ok) return jsonError(res.detail, 400);
+      } catch (err) {
+        return jsonError((err as Error).message.slice(0, 300), 400);
+      }
+    } else {
+      // Default: storageState JSON
+      const raw = String((b.storageState as string) ?? (b.raw as string) ?? "");
+      if (!raw || raw.trim().length < 10) return jsonError("فایل سشن خالی است.", 400);
+      try { await saveBrowserSession(id, raw); } catch (err) { return jsonError((err as Error).message, 400); }
     }
   }
-  if (!raw || raw.trim().length < 10) return jsonError("فایل سشن خالی است.", 400);
 
-  try {
-    await saveBrowserSession(id, raw);
-  } catch (err) {
-    return jsonError((err as Error).message, 400);
-  }
-
-  // Verify live (best-effort, never blocks saving).
   let verify: { ok: boolean; detail: string } | null = null;
   try { verify = await verifyBrowserSession(id); } catch {}
 

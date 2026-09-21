@@ -1,6 +1,6 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
-import { hasBrowserSession, saveBrowserSession, sessionPath } from "./session";
+import { hasBrowserSession, saveBrowserSession, saveBrowserSessionFromCookies, sessionPath } from "./session";
 
 describe("instagram session", () => {
   it("rejects invalid storageState payloads", async () => {
@@ -18,5 +18,17 @@ describe("instagram session", () => {
   it("hasBrowserSession is false when no file exists", async () => {
     const ok = await hasBrowserSession("no-such-account-xyz-999");
     expect(ok).toBe(false);
+  });
+
+  it("builds a valid storageState from pasted cookies", async () => {
+    await saveBrowserSessionFromCookies("test-cookies-acc", { sessionid: "abc123", csrftoken: "tok" });
+    const ok = await hasBrowserSession("test-cookies-acc");
+    expect(ok).toBe(true);
+    const { unlink } = await import("node:fs/promises");
+    await unlink(sessionPath("test-cookies-acc")).catch(() => {});
+  });
+
+  it("rejects empty sessionid in cookies mode", async () => {
+    await expect(saveBrowserSessionFromCookies("x", { sessionid: "" })).rejects.toThrow("sessionid");
   });
 });

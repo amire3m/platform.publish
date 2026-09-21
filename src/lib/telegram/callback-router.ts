@@ -334,20 +334,10 @@ async function handleLinkPickKind(contentId: string, actorUserId: string, actorT
       }
     }
 
-    // also try to validate via TelegramClient.getFile if fileId exists; ignore errors.
-    // Fail-open on slow network: never make linking wait for this check.
-    if (fileId) {
-      try {
-        const client = await getTelegramClientSafe();
-        if (client && (client as unknown as { getFile: (id: string) => Promise<unknown> }).getFile) {
-          const { checkFileIdUsable } = await import("./client");
-          const verdict = await checkFileIdUsable(client as unknown as Pick<import("./client").TelegramClient, "getFile">, fileId);
-          if (verdict === "invalid") {
-            return { ok: false, message: "شناسه فایل نامعتبر است." };
-          }
-        }
-      } catch {}
-    }
+    // Note: no blocking getFile validation here — the file_id either just came
+    // from Telegram (reply flow) or was forward-resolved seconds ago, and the
+    // check used to stall the tap for seconds when the Bot API was slow.
+    // An invalid id surfaces naturally at play/publish time.
 
     const now = new Date();
     const currentVersion = (part as unknown as { version?: number }).version ?? 1;

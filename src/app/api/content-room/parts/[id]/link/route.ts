@@ -85,23 +85,10 @@ export async function handleLinkRequest(
   const fileId = typeof fileIdRaw === "string" && fileIdRaw.trim() !== "" && !fileIdRaw.startsWith("tg_msg_") ? fileIdRaw.trim() : null;
   const fileName = typeof fileNameRaw === "string" && fileNameRaw.trim() !== "" ? fileNameRaw.trim() : null;
 
-  // Optional Telegram validation without re-uploading the 2GB blob — copy file_id.
-  // Fail-open on slow network: never make linking wait more than ~8s for this check.
-  if (fileId) {
-    const client = deps.getTelegramClient?.() ?? null;
-    if (client) {
-      try {
-        const { checkFileIdUsable } = await import("@/lib/telegram/client");
-        const verdict = await checkFileIdUsable(client, fileId);
-        // If file_id is invalid/expired, surface as validation error; if client misconfigured or slow, ignore
-        if (verdict === "invalid") {
-          return jsonError("شناسه فایل تلگرام نامعتبر است.", 400, "INVALID_FILE_ID");
-        }
-      } catch {
-        // non-fatal otherwise
-      }
-    }
-  }
+  // Note: no blocking getFile validation here — the file_id comes from Telegram
+  // directly (group media list) or is forward-resolved below, and the check
+  // used to stall linking for seconds when the Bot API was slow.
+  // An invalid id surfaces naturally at play/publish time.
 
   // Panel link without a real file_id → resolve via temp forward (once per message).
   let effectiveFileId = fileId;

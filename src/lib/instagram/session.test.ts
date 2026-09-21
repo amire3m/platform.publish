@@ -31,4 +31,14 @@ describe("instagram session", () => {
   it("rejects empty sessionid in cookies mode", async () => {
     await expect(saveBrowserSessionFromCookies("x", { sessionid: "" })).rejects.toThrow("sessionid");
   });
+
+  it("reports health for an existing session", async () => {
+    await saveBrowserSessionFromCookies("health-acc", { sessionid: "abc123" });
+    const { getBrowserSessionHealth } = await import("./session");
+    const h = await getBrowserSessionHealth("health-acc");
+    expect(h.exists).toBe(true);
+    expect(h.cookieCount).toBeGreaterThan(0);
+    const { unlink } = await import("node:fs/promises");
+    await unlink(sessionPath("health-acc")).catch(() => {});
+  });
 });

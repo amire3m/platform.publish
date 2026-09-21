@@ -201,6 +201,9 @@ export async function instagramBrowserPublish(
       }
       if (!ok) throw new Error("تأیید انتشار از اینستاگرام دریافت نشد.");
 
+      // Persist refreshed cookies after successful flow (extends session lifetime)
+      try { await context.storageState({ path: storageState }); const { chmod } = await import("node:fs/promises"); await chmod(storageState, 0o600).catch(() => {}); } catch {}
+
       // Success — best-effort screenshot for audit.
       let screenshotB64: string | null = null;
       try {
@@ -222,6 +225,8 @@ export async function instagramBrowserPublish(
         const pages = context?.pages() ?? [];
         if (pages[0]) shot = (await pages[0].screenshot({ fullPage: true })).toString("base64").slice(0, 20000);
       } catch {}
+      // Still refresh storageState if session is still valid (keeps cookies warm)
+      try { if (context) { await context.storageState({ path: storageState }); const { chmod } = await import("node:fs/promises"); await chmod(storageState, 0o600).catch(() => {}); } } catch {}
       return {
         ok: false,
         errorCode: "BROWSER_PUBLISH_FAILED",

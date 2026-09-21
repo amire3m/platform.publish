@@ -5,9 +5,10 @@
 let instrumentationRunning = false;
 
 // Throttles for the heavier background jobs so the 60s publish loop is
-// never starved: mirrors every 5 min, retention sweep every 30 min.
+// never starved: mirrors every 5 min, retention sweep every 30 min, insta keep-alive every 6h.
 let lastMirrorRun = 0;
 let lastSweepRun = 0;
+let lastInstaKeepAlive = 0;
 
 async function safeRun(name: string, fn: () => Promise<unknown>) {
   if (instrumentationRunning) return;
@@ -142,6 +143,37 @@ export async function register() {
         } catch (err) {
           console.error("[media] sweep tick failed:", (err as Error).message);
           return { scanned: 0, deleted: 0, freedBytes: 0, errors: 0 };
+        }
+      })(),
+      (async () => {
+        // Instagram browser session keep-alive: touch each session every 6h
+        // to rotate cookies and prevent idle expiry. Best-effort, never throws.
+        try {
+          if (Date.now() - lastInstaKeepAlive < 6 * 60 * 60 * 1000) return null;
+          lastInstaKeepAlive = Date.now();
+          const { db } = await import("@/db");
+          const { socialAccounts } = await import("@/db/schema");
+          const { eq } = await import("drizzle-orm");
+          const { getBrowserSessionHealth, touchBrowserSession } = await import("@/lib/instagram/session");
+          const rows = await db.select().from(socialAccounts).where(eq(socialAccounts.platform, "instagram"));
+          for (const acc of rows as unknown as Array<{ id: string; capabilities: Record<string, unknown> }>) {
+            if (!(acc.capabilities as Record<string, unknown>)?.browserSession) continue;
+            const health = await getBrowserSessionHealth(acc.id);
+            if (!health.exists) continue;
+            if (!health.needsRefresh) continue;
+            const res = await touchBrowserSession(acc.id);
+            console.log(`[instagram] keep-alive ${acc.id}: ${res.ok ? "refreshed" : "failed"} — ${res.detail}`);
+            if (!res.ok) {
+              // Notify via capabilities flag so UI shows warning
+              try {
+                await db.update(socialAccounts).set({ capabilities: { ...acc.capabilities, browserSessionHealthy: false } } as never).where(eq(socialAccounts.id, acc.id));
+              } catch {}
+            }
+          }
+          return { ok: true };
+        } catch (err) {
+          console.error("[instagram] keep-alive tick failed:", (err as Error).message);
+          return { ok: false };
         }
       })(),
     ]).finally(() => {

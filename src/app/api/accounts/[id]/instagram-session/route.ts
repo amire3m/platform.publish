@@ -3,11 +3,11 @@ import { db } from "@/db";
 import { socialAccounts } from "@/db/schema";
 import { jsonError, jsonOk, requirePermission } from "@/lib/api-helpers";
 import { appendAuditEvent } from "@/lib/telegram/tgdb";
-import { hasBrowserSession, loginWithCredentials, removeBrowserSession, saveBrowserSession, saveBrowserSessionFromCookies, verifyBrowserSession } from "@/lib/instagram/session";
+import { getBrowserSessionHealth, hasBrowserSession, loginWithCredentials, removeBrowserSession, saveBrowserSession, saveBrowserSessionFromCookies, touchBrowserSession, verifyBrowserSession } from "@/lib/instagram/session";
 
 export const runtime = "nodejs";
 
-export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { user, response } = await requirePermission("manage_accounts");
   if (!user) return response;
   const { id } = await params;
@@ -16,8 +16,19 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   if ((acc as unknown as { platform: string }).platform !== "instagram") {
     return jsonError("این حساب اینستاگرام نیست.", 400);
   }
+  const url = new URL(req.url);
+  const action = url.searchParams.get("action");
+  if (action === "health") {
+    const health = await getBrowserSessionHealth(id);
+    return jsonOk(health);
+  }
+  if (action === "touch") {
+    const result = await touchBrowserSession(id);
+    return jsonOk(result);
+  }
   const has = await hasBrowserSession(id);
-  return jsonOk({ hasSession: has });
+  const health = await getBrowserSessionHealth(id);
+  return jsonOk({ hasSession: has, health });
 }
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -84,6 +95,29 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   await appendAuditEvent({ actorTelegramId: user.telegramId, actorUserId: user.id, action: "instagram_session_uploaded", entityType: "social_account", entityId: id, before: null, after: { hasSession: true } as unknown as Record<string, unknown> });
 
   return jsonOk({ ok: true, hasSession: true, verify });
+}
+
+export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { user, response } = await requirePermission("manage_accounts");
+  if (!user) return response;
+  const { id } = await params;
+  const [acc] = await db.select().from(socialAccounts).where(eq(socialAccounts.id, id)).limit(1);
+  if (!acc) return jsonError("حساب یافت نشد.", 404);
+  if ((acc as unknown as { platform: string }).platform !== "instagram") {
+    return jsonError("این حساب اینستاگرام نیست.", 400);
+  }
+  let body: unknown;
+  try { body = await req.json(); } catch { return jsonError("درخواست نامعتبر است.", 422); }
+  const action = (body as Record<string, unknown>).action as string;
+  if (action === "touch" || action === "refresh") {
+    const result = await touchBrowserSession(id);
+    return jsonOk(result);
+  }
+  if (action === "verify") {
+    const result = await verifyBrowserSession(id);
+    return jsonOk(result);
+  }
+  return jsonError("عملیات نامعتبر است.", 400);
 }
 
 export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {

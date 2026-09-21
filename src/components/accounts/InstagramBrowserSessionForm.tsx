@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button, Input } from "@/components/ui";
 import { useToast } from "@/components/providers";
 import type { PublicAccountDto } from "@/lib/accounts/public";
@@ -22,6 +22,14 @@ export function InstagramBrowserSessionForm({ account, onChanged }: Props) {
   const [needCode, setNeedCode] = useState(false);
   const [saving, setSaving] = useState(false);
   const [verify, setVerify] = useState<string | null>(null);
+  const [health, setHealth] = useState<{ detail: string; hoursUntilExpiry: number | null; ageHours: number | null; needsRefresh: boolean } | null>(null);
+
+  useEffect(() => {
+    if (!account.hasBrowserSession) { setHealth(null); return; }
+    fetch(`/api/accounts/${account.id}/instagram-session?action=health`).then((r) => r.json()).then((j) => {
+      if (j.ok) setHealth(j.data);
+    }).catch(() => {});
+  }, [account.id, account.hasBrowserSession]);
 
   function handleVerify(json: { ok: boolean; data?: { verify?: { ok: boolean; detail: string } }; error?: string }) {
     if (!json.ok) {
@@ -73,6 +81,20 @@ export function InstagramBrowserSessionForm({ account, onChanged }: Props) {
     } finally { setSaving(false); }
   }
 
+  async function refresh() {
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/accounts/${account.id}/instagram-session`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "touch" }) });
+      const json = await res.json();
+      if (!json.ok) return showToast(json.error ?? "تازه‌سازی ناموفق بود.", "error");
+      const ok = (json.data as { ok: boolean })?.ok;
+      showToast(ok ? "سشن تازه شد." : (json.data as { detail?: string })?.detail ?? "ناموفق", ok ? "success" : "error");
+      const h = await fetch(`/api/accounts/${account.id}/instagram-session?action=health`).then((r) => r.json()).catch(() => null);
+      if (h?.ok) setHealth(h.data);
+      onChanged();
+    } finally { setSaving(false); }
+  }
+
   async function remove() {
     setSaving(true);
     try {
@@ -80,7 +102,7 @@ export function InstagramBrowserSessionForm({ account, onChanged }: Props) {
       const json = await res.json();
       if (!json.ok) return showToast(json.error ?? "حذف ناموفق بود.", "error");
       showToast("سشن مرورگر حذف شد.", "success");
-      setVerify(null); onChanged();
+      setVerify(null); setHealth(null); onChanged();
     } finally { setSaving(false); }
   }
 
@@ -132,8 +154,14 @@ export function InstagramBrowserSessionForm({ account, onChanged }: Props) {
       )}
 
       <div className="mt-2 flex gap-1.5">
+        {has && <Button size="sm" variant="secondary" onClick={refresh} disabled={saving} className="min-h-[36px] flex-1 text-xs">تازه‌سازی</Button>}
         {has && <Button size="sm" variant="secondary" onClick={remove} disabled={saving} className="min-h-[36px] flex-1 text-xs">حذف سشن</Button>}
       </div>
+      {has && health && (
+        <p className={`mt-1 text-[11px] ${health.needsRefresh ? "text-amber-600" : "text-emerald-600"}`}>
+          سلامت: {health.detail} {health.hoursUntilExpiry !== null ? `· ~${Math.floor(health.hoursUntilExpiry / 24)} روز تا انقضا` : ""} · {health.ageHours !== null ? `${Math.floor(health.ageHours / 24)} روز از آخرین به‌روزرسانی` : ""}
+        </p>
+      )}
       {verify && <p className="mt-1 text-[11px] text-tg-secondary">{verify}</p>}
     </details>
   );

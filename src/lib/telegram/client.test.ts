@@ -1,5 +1,5 @@
-import { describe, expect, it, vi } from "vitest";
-import { contentTypeFromPath } from "./client";
+import { describe, expect, it, vi, afterEach } from "vitest";
+import { contentTypeFromPath, checkFileIdUsable } from "./client";
 
 describe("contentTypeFromPath", () => {
   it("recognizes browser-playable video formats", () => {
@@ -25,5 +25,44 @@ describe("client glass", () => {
     const body = JSON.parse((fetchSpy.mock.calls[0][1] as RequestInit).body as string);
     expect(body.parse_mode).toBe("HTML");
     expect(body.reply_markup.inline_keyboard[0][0].callback_data).toBe("approve:CNT-1");
+    fetchSpy.mockRestore();
+  });
+});
+
+describe("checkFileIdUsable", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("returns ok for a valid file", async () => {
+    const client = { getFile: vi.fn().mockResolvedValue({ file_id: "x" }) } as never;
+    await expect(checkFileIdUsable(client, "x")).resolves.toBe("ok");
+  });
+
+  it("returns invalid when Telegram rejects the id", async () => {
+    const client = { getFile: vi.fn().mockRejectedValue(new Error("Telegram API error (getFile): Bad Request: wrong file_id")) } as never;
+    await expect(checkFileIdUsable(client, "bad")).resolves.toBe("invalid");
+  });
+
+  it("returns unknown (fail open) when validation is slow", async () => {
+    const client = { getFile: vi.fn().mockImplementation(() => new Promise(() => {})) } as never;
+    await expect(checkFileIdUsable(client, "x", 30)).resolves.toBe("unknown");
+  });
+
+  it("returns unknown on telegram timeouts", async () => {
+    const client = { getFile: vi.fn().mockRejectedValue(Object.assign(new Error("Telegram timeout (getFile after 1ms)"), { code: "TELEGRAM_TIMEOUT" })) } as never;
+    await expect(checkFileIdUsable(client, "x")).resolves.toBe("unknown");
+  });
+});
+
+describe("getFile timeout", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("fails fast with a coded error and never leaks the token", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockImplementation((_url: string, init: RequestInit) => new Promise((_res, rej) => {
+      init.signal?.addEventListener("abort", () => rej(Object.assign(new Error("This operation was aborted"), { name: "TimeoutError" })));
+    })));
+    const c = new TelegramClient({botToken:"secret-token-xyz", groupId:"-1001"});
+    const err = await c.getFile("file-1", { timeoutMs: 30 }).catch((e) => e as Error);
+    expect((err as { code?: string }).code).toBe("TELEGRAM_TIMEOUT");
+    expect(String(err)).not.toContain("secret-token-xyz");
   });
 });

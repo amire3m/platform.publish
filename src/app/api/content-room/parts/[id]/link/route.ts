@@ -85,18 +85,19 @@ export async function handleLinkRequest(
   const fileId = typeof fileIdRaw === "string" && fileIdRaw.trim() !== "" && !fileIdRaw.startsWith("tg_msg_") ? fileIdRaw.trim() : null;
   const fileName = typeof fileNameRaw === "string" && fileNameRaw.trim() !== "" ? fileNameRaw.trim() : null;
 
-  // Optional Telegram validation without re-uploading the 2GB blob — copy file_id
+  // Optional Telegram validation without re-uploading the 2GB blob — copy file_id.
+  // Fail-open on slow network: never make linking wait more than ~8s for this check.
   if (fileId) {
     const client = deps.getTelegramClient?.() ?? null;
     if (client) {
       try {
-        await client.getFile(fileId);
-      } catch (err) {
-        // If file_id is invalid/expired, surface as validation error; if client misconfigured, ignore
-        const msg = (err as Error).message ?? "";
-        if (msg.includes("Telegram API error")) {
+        const { checkFileIdUsable } = await import("@/lib/telegram/client");
+        const verdict = await checkFileIdUsable(client, fileId);
+        // If file_id is invalid/expired, surface as validation error; if client misconfigured or slow, ignore
+        if (verdict === "invalid") {
           return jsonError("شناسه فایل تلگرام نامعتبر است.", 400, "INVALID_FILE_ID");
         }
+      } catch {
         // non-fatal otherwise
       }
     }

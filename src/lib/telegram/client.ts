@@ -51,6 +51,33 @@ export class TelegramNotConfiguredError extends Error {
   }
 }
 
+/**
+ * Fast file_id validation for link flows: "ok" (valid), "invalid" (Telegram
+ * says the id is bad), "unknown" (slow network/timeout — callers fail OPEN
+ * and proceed instead of making the user wait; the id is verified on use).
+ */
+export async function checkFileIdUsable(
+  client: Pick<TelegramClient, "getFile">,
+  fileId: string,
+  timeoutMs = 8000,
+): Promise<"ok" | "invalid" | "unknown"> {
+  try {
+    await Promise.race([
+      client.getFile(fileId),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(Object.assign(new Error("validation timeout"), { code: "VALIDATION_TIMEOUT" })), timeoutMs),
+      ),
+    ]);
+    return "ok";
+  } catch (err) {
+    const code = (err as { code?: string })?.code;
+    if (code === "VALIDATION_TIMEOUT" || code === "TELEGRAM_TIMEOUT") return "unknown";
+    const msg = (err as Error)?.message ?? "";
+    if (msg.includes("Telegram API error")) return "invalid";
+    return "unknown";
+  }
+}
+
 export interface TelegramConfig {
   botToken: string;
   groupId: string;
@@ -68,6 +95,7 @@ async function callApi<T = unknown>(
   method: string,
   body?: Record<string, unknown> | FormData,
   attempt = 1,
+  opts?: { timeoutMs?: number },
 ): Promise<T> {
   const url = `${API_ROOT}/bot${botToken}/${method}`;
   const init: RequestInit =
@@ -78,13 +106,23 @@ async function callApi<T = unknown>(
           headers: { "content-type": "application/json" },
           body: JSON.stringify(body ?? {}),
         };
+  if (opts?.timeoutMs && opts.timeoutMs > 0) {
+    try {
+      init.signal = AbortSignal.timeout(opts.timeoutMs);
+    } catch {}
+  }
   let res: Response;
   try {
     res = await fetch(url, init);
   } catch (err) {
     if (attempt < 3) {
       await sleep(400 * attempt);
-      return callApi<T>(botToken, method, body, attempt + 1);
+      return callApi<T>(botToken, method, body, attempt + 1, opts);
+    }
+    // Never leak the bot token in error text. Timeouts carry a code so
+    // callers can fail open (proceed) instead of blocking the user.
+    if ((err as { name?: string })?.name === "TimeoutError") {
+      throw Object.assign(new Error(`Telegram timeout (${method} after ${opts?.timeoutMs}ms)`), { code: "TELEGRAM_TIMEOUT" });
     }
     throw err;
   }
@@ -288,10 +326,10 @@ export class TelegramClient {
     return callApi(this.cfg.botToken, "sendPhoto", form);
   }
 
-  async getFile(fileId: string) {
+  async getFile(fileId: string, opts?: { timeoutMs?: number }) {
     return callApi<{ file_id: string; file_path?: string; file_size?: number }>(this.cfg.botToken, "getFile", {
       file_id: fileId,
-    });
+    }, 1, { timeoutMs: opts?.timeoutMs ?? 12000 });
   }
 
   /**
@@ -305,9 +343,11 @@ export class TelegramClient {
       this.cfg.botToken,
       "forwardMessage",
       { chat_id: this.cfg.groupId, from_chat_id: chatId, message_id: messageId },
+      1,
+      { timeoutMs: 30000 },
     );
     try {
-      await callApi(this.cfg.botToken, "deleteMessage", { chat_id: this.cfg.groupId, message_id: resp.message_id });
+      await callApi(this.cfg.botToken, "deleteMessage", { chat_id: this.cfg.groupId, message_id: resp.message_id }, 1, { timeoutMs: 30000 });
     } catch {
       // temp message cleanup is best-effort
     }

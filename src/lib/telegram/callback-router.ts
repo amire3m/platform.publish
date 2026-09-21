@@ -334,19 +334,19 @@ async function handleLinkPickKind(contentId: string, actorUserId: string, actorT
       }
     }
 
-    // also try to validate via TelegramClient.getFile if fileId exists; ignore errors
+    // also try to validate via TelegramClient.getFile if fileId exists; ignore errors.
+    // Fail-open on slow network: never make linking wait for this check.
     if (fileId) {
       try {
         const client = await getTelegramClientSafe();
         if (client && (client as unknown as { getFile: (id: string) => Promise<unknown> }).getFile) {
-          await (client as unknown as { getFile: (id: string) => Promise<unknown> }).getFile(fileId);
+          const { checkFileIdUsable } = await import("./client");
+          const verdict = await checkFileIdUsable(client as unknown as Pick<import("./client").TelegramClient, "getFile">, fileId);
+          if (verdict === "invalid") {
+            return { ok: false, message: "شناسه فایل نامعتبر است." };
+          }
         }
-      } catch (e) {
-        const msg = (e as Error).message || "";
-        if (msg.includes("Telegram API error")) {
-          return { ok: false, message: "شناسه فایل نامعتبر است." };
-        }
-      }
+      } catch {}
     }
 
     const now = new Date();

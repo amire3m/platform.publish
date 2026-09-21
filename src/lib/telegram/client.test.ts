@@ -53,6 +53,24 @@ describe("checkFileIdUsable", () => {
   });
 });
 
+describe("message call timeouts", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("send/edit/answer carry an abort signal so hung Bot API calls fail fast", async () => {
+    const ok = () => Promise.resolve(new Response(JSON.stringify({ ok: true, result: {} }), { status: 200 }));
+    const fetchSpy = vi.spyOn(global, "fetch").mockImplementation(ok as never);
+    const c = new TelegramClient({ botToken: "t", groupId: "-1001" });
+    await c.sendMessage("hi");
+    await c.editMessageText(1, "hi");
+    await c.answerCallbackQuery("qid");
+    expect(fetchSpy).toHaveBeenCalledTimes(3);
+    for (const call of fetchSpy.mock.calls) {
+      expect((call[1] as RequestInit).signal).toBeInstanceOf(AbortSignal);
+    }
+    fetchSpy.mockRestore();
+  });
+});
+
 describe("getFile timeout", () => {
   afterEach(() => vi.unstubAllGlobals());
 

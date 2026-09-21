@@ -217,12 +217,15 @@ export async function POST(req: Request) {
   const fromTelegramId = String(cq.from?.id ?? "");
 
   let result: { ok: boolean; message: string };
+  const cbStarted = Date.now();
   try {
     const { routeCallback } = await import("@/lib/telegram/callback-router");
     result = await routeCallback(action, contentId, fromTelegramId, cq.message?.message_id, cq.message?.message_thread_id);
   } catch (err) {
     console.error("[webhook] routeCallback failed:", (err as Error).message);
     result = { ok: false, message: "\u062E\u0637\u0627\u06CC \u062F\u0627\u062E\u0644\u06CC \u0631\u062E \u062F\u0627\u062F." };
+  } finally {
+    console.log(`[webhook] callback ${action} handled in ${Date.now() - cbStarted}ms ok=${result!.ok}`);
   }
 
   try {

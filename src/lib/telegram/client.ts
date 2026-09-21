@@ -243,13 +243,13 @@ export class TelegramClient {
     } else if (opts?.replyParameters) {
       (payload as Record<string, unknown>).reply_parameters = opts.replyParameters;
     }
-    return callApi<TgMessage>(this.cfg.botToken, "sendMessage", payload as unknown as Record<string, unknown>);
+    return callApi<TgMessage>(this.cfg.botToken, "sendMessage", payload as unknown as Record<string, unknown>, 1, { timeoutMs: 30000 });
   }
   async editMessageText(messageId:number, text:string, opts?: {parseMode?:string, replyMarkup?:unknown}) {
-    return callApi(this.cfg.botToken, "editMessageText", {chat_id:this.cfg.groupId, message_id:messageId, text, parse_mode:opts?.parseMode, reply_markup:opts?.replyMarkup});
+    return callApi(this.cfg.botToken, "editMessageText", {chat_id:this.cfg.groupId, message_id:messageId, text, parse_mode:opts?.parseMode, reply_markup:opts?.replyMarkup}, 1, { timeoutMs: 30000 });
   }
   async answerCallbackQuery(id:string, text?:string, showAlert=false) {
-    return callApi(this.cfg.botToken, "answerCallbackQuery", {callback_query_id:id, text, show_alert:showAlert});
+    return callApi(this.cfg.botToken, "answerCallbackQuery", {callback_query_id:id, text, show_alert:showAlert}, 1, { timeoutMs: 15000 });
   }
   async answerInlineQuery(inlineQueryId: string, results: unknown[], opts?: { cacheTime?: number; isPersonal?: boolean; switchPmText?: string; switchPmParameter?: string }) {
     return callApi(this.cfg.botToken, "answerInlineQuery", {
@@ -261,7 +261,7 @@ export class TelegramClient {
     });
   }
   async editMessageReplyMarkup(messageId:number, replyMarkup: unknown) {
-    return callApi(this.cfg.botToken, "editMessageReplyMarkup", {chat_id:this.cfg.groupId, message_id:messageId, reply_markup:replyMarkup});
+    return callApi(this.cfg.botToken, "editMessageReplyMarkup", {chat_id:this.cfg.groupId, message_id:messageId, reply_markup:replyMarkup}, 1, { timeoutMs: 15000 });
   }
 
   async sendPrivateMessage(userTelegramId: string | number, text: string, opts?: { parseMode?: string; replyMarkup?: { inline_keyboard: unknown[][] } }) {
@@ -271,7 +271,7 @@ export class TelegramClient {
       parse_mode: opts?.parseMode,
       reply_markup: opts?.replyMarkup,
       disable_web_page_preview: true,
-    } as unknown as Record<string, unknown>);
+    } as unknown as Record<string, unknown>, 1, { timeoutMs: 30000 });
   }
 
   async sendDocument(

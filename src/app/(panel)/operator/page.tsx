@@ -29,7 +29,12 @@ export default function OperatorPage() {
     setBusy(true);
     try {
       const res = await fetch("/api/operator", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "run-now" }) });
-      const j = await res.json(); if (!j.ok) alert(j.error ?? "خطا"); else alert(`برنامه ساخته شد: ${j.data.plan.length} مورد`);
+      const j = await res.json();
+      if (!j.ok) alert(j.error ?? "خطا");
+      else {
+        const ai = j.data.aiUsed ? " (با هوش مصنوعی ✨)" : " (قالب ساده — کلید AI تنظیم نیست)";
+        alert(`برنامه ساخته شد: ${j.data.plan.length} مورد${ai}\n${j.data.plan.map((p: {title:string})=> "• "+p.title).join("\n")}`);
+      }
     } finally { setBusy(false); }
   }
 
@@ -39,7 +44,7 @@ export default function OperatorPage() {
     <div className="space-y-6" dir="rtl">
       <div>
         <h1 className="text-xl font-bold text-tg-text">اپراتور خودکار کانال — نسخه ما</h1>
-        <p className="text-sm text-tg-secondary">هدف و مخاطب را بده، محورها و ریتم هفتگی را تنظیم کن — اپراتور برنامه تحریریه می‌سازد و پیش‌نویس محتوا می‌سازد (منتظر تأیید تو می‌ماند).</p>
+        <p className="text-sm text-tg-secondary">هدف و مخاطب را بده، محورها و ریتم هفتگی را تنظیم کن — اپراتور با هوش مصنوعی برنامه کامل (عنوان سئو، قلاب، توضیحات، تگ/هشتگ) می‌سازد و پیش‌نویس محتوا می‌سازد (منتظر تأیید تو). بدون کلید AI، قالب ساده می‌سازد.</p>
       </div>
 
       {isLoading ? <Skeleton className="h-40" /> : (

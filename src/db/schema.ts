@@ -891,3 +891,41 @@ export const shortsDrafts = pgTable("shorts_drafts", {
   status: text("status").notNull().default("draft"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+export const growthExperiments = pgTable("growth_experiments", {
+  id: text("id").primaryKey(),
+  contentId: text("content_id")
+    .notNull()
+    .references(() => content.id, { onDelete: "cascade" }),
+  status: text("status").notNull().default("draft"),
+  armDurationHours: integer("arm_duration_hours").notNull().default(48),
+  minImpressions: integer("min_impressions").notNull().default(1000),
+  winnerArmId: text("winner_arm_id"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  startedAt: timestamp("started_at", { withTimezone: true }),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
+});
+
+export const growthExperimentArms = pgTable("growth_experiment_arms", {
+  id: text("id").primaryKey(),
+  experimentId: text("experiment_id")
+    .notNull()
+    .references(() => growthExperiments.id, { onDelete: "cascade" }),
+  title: text("title").notNull(),
+  thumbnailUrl: text("thumbnail_url"),
+  isControl: boolean("is_control").notNull().default(false),
+  impressions: integer("impressions").notNull().default(0),
+  clicks: integer("clicks").notNull().default(0),
+  ctr: doublePrecision("ctr").notNull().default(0),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const outcomeSettings = pgTable("outcome_settings", {
+  id: integer("id").primaryKey().default(1),
+  primaryKpi: text("primary_kpi").notNull().default("views"),
+  targetValue: integer("target_value"),
+  targetWindowDays: integer("target_window_days").notNull().default(28),
+  monthlyBudget: integer("monthly_budget"),
+  currency: text("currency").notNull().default("USD"),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});

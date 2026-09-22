@@ -66,6 +66,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         if (existing.approvalRequired && existing.approvalStatus !== "approved") {
           return jsonError("محتوا هنوز تأیید نشده است؛ ابتدا باید تأیید شود.", 400);
         }
+        if (!body.scheduledAtUtc) {
+          const d = new Date(Date.now() + 5 * 60 * 1000);
+          body.scheduledAtUtc = d.toISOString();
+          body.scheduledAtJalali = body.scheduledAtJalali ?? d.toISOString();
+        }
         if (!body.scheduledAtUtc || !body.scheduledAtJalali) {
           return jsonError("زمان انتشار الزامی است.", 400);
         }
@@ -84,6 +89,21 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         return jsonOk(row);
       }
       case "publish-now": {
+        // Phase 1: one-click — publisher/editor auto-approves if still pending
+        if (existing.approvalRequired && existing.approvalStatus !== "approved") {
+          const canApprove = ["owner", "manager", "publisher", "editor"].includes(String((user as unknown as { role?: string }).role ?? ""));
+          if (canApprove) {
+            await updateContentRecord(id, {
+              approvalStatus: "approved",
+              approvedBy: user.id,
+              approvedAt: new Date(),
+              status: existing.scheduledAtUtc ? "scheduled" : "approved",
+            });
+            // refresh existing for publishContentNow lease
+            const [refreshed] = await db.select().from(content).where(eq(content.id, id)).limit(1);
+            if (refreshed) Object.assign(existing, refreshed);
+          }
+        }
         const row = await publishContentNow(id);
         return jsonOk(row);
       }

@@ -181,10 +181,10 @@ export default function ContentDetailPage({ params }: { params: Promise<{ id: st
               لغو زمان‌بندی
             </Button>
           )}
-          {can("publish_now") && ["approved", "scheduled"].includes(row.status) && (
-            <Button onClick={() => setConfirmAction({ action: "publish-now", label: "محتوا هم‌اکنون منتشر شود؟" })} disabled={busy}>
+          {can("publish_now") && ["draft", "uploaded", "in_review", "changes_requested", "approved", "scheduled"].includes(row.status) && (
+            <Button onClick={() => setConfirmAction({ action: "publish-now", label: row.approvalStatus !== "approved" ? "محتوا تأیید و هم‌اکنون منتشر شود؟" : "محتوا هم‌اکنون منتشر شود؟" })} disabled={busy}>
               <Rocket className="h-4 w-4" />
-              انتشار فوری
+              {row.approvalStatus !== "approved" ? "تأیید و انتشار آنی" : "انتشار فوری"}
             </Button>
           )}
           {can("publish_now") && row.status === "failed" && (

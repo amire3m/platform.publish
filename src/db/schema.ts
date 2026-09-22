@@ -1001,3 +1001,18 @@ export const operatorRuns = pgTable("operator_runs", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   completedAt: timestamp("completed_at", { withTimezone: true }),
 });
+
+export const channelPalettes = pgTable("channel_palettes", {
+  accountId: text("account_id")
+    .primaryKey()
+    .references(() => socialAccounts.id, { onDelete: "cascade" }),
+  paper: text("paper").notNull().default("#FFF8F0"),
+  ink: text("ink").notNull().default("#1A1A1A"),
+  primary: text("primary").notNull().default("#E63946"),
+  soft: text("soft").notNull().default("#F1FAEE"),
+  accent: text("accent").notNull().default("#457B9D"),
+  fontHeading: text("font_heading").notNull().default("Vazirmatn"),
+  fontBody: text("font_body").notNull().default("Vazirmatn"),
+  watermarkPath: text("watermark_path"),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});

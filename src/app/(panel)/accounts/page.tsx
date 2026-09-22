@@ -8,6 +8,7 @@ import { Button, Card, ConfirmModal, EmptyState, Label, Modal, Select, Skeleton,
 import { useToast } from "@/components/providers";
 import { PublishScheduleForm } from "@/components/accounts/PublishScheduleForm";
 import { InstagramBrowserSessionForm } from "@/components/accounts/InstagramBrowserSessionForm";
+import { PaletteEditor } from "@/components/covers/PaletteEditor";
 import { formatJalaliDateTime } from "@/lib/date/jalali";
 import type { PublicAccountDto } from "@/lib/accounts/public";
 import { oauthErrorMessageFa } from "@/lib/presentation-fa";
@@ -200,6 +201,7 @@ export default function AccountsPage() {
             {a.platform === "instagram" && (
               <InstagramBrowserSessionForm account={a} onChanged={() => mutate()} />
             )}
+            <PaletteEditor accountId={a.id} />
             <PublishScheduleForm account={a} onSaved={() => mutate()} />
             <div className="mt-4 flex justify-end">
               <Button variant="ghost" size="sm" onClick={() => setDeleteTarget(a)}>

@@ -76,10 +76,15 @@ export function TranscriptPanel({ partId, hasFile, onToast }: { partId: string; 
     }
   }
 
+  const [tone, setTone] = useState<string>("خودکار");
   async function handleCaptions() {
     const r = await callApi(
       () =>
-        fetchContentRoomApi<{ youtube: string; instagram: string }>(`/api/content-room/parts/${partId}/captions`, { method: "POST" }),
+        fetchContentRoomApi<{ youtube: string; instagram: string }>(`/api/content-room/parts/${partId}/captions`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ tone: tone === "خودکار" ? undefined : tone }),
+        }),
       "captions",
     );
     if (r) {
@@ -134,6 +139,9 @@ export function TranscriptPanel({ partId, hasFile, onToast }: { partId: string; 
                 دانلود SRT
               </a>
             ) : null}
+            <select value={tone} onChange={(e) => setTone(e.target.value)} className="min-h-[32px] rounded-lg border border-tg-border bg-tg-surface px-2 text-xs">
+              {["خودکار","صمیمی","رسمی","طنز","انگیزشی","جنجالی","حرفه‌ای","صریح"].map((t) => <option key={t} value={t}>{t}</option>)}
+            </select>
             <Button size="sm" variant="secondary" onClick={handleCaptions} disabled={working !== null}>
               {working === "captions" ? "در حال ساخت..." : "ساخت کپشن"}
             </Button>

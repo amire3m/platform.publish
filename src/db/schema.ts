@@ -1008,6 +1008,7 @@ export const channelPalettes = pgTable("channel_palettes", {
     .references(() => socialAccounts.id, { onDelete: "cascade" }),
   paper: text("paper").notNull().default("#FFF8F0"),
   ink: text("ink").notNull().default("#1A1A1A"),
+  // "primary" is reserved in Postgres — quote it
   primary: text("primary").notNull().default("#E63946"),
   soft: text("soft").notNull().default("#F1FAEE"),
   accent: text("accent").notNull().default("#457B9D"),

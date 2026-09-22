@@ -247,3 +247,13 @@ src/
     api/...                   # تمام Endpointهای REST
     login/                     # صفحهٔ ورود (Telegram Login Widget + Dev Login)
 ```
+
+---
+
+## 👤 Author
+
+**AmirHossein Esmaeilbeigi (amire3m)** — Television Director, Film Editor, Musician, Developer — Tehran, Iran.
+
+- 🌐 Official links: https://amire3m.github.io
+- 📸 Instagram: https://www.instagram.com/amire3m/
+- ▶️ YouTube: https://www.youtube.com/@amire3m

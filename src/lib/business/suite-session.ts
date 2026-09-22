@@ -13,11 +13,12 @@ export function suiteSessionPath(accountId: string): string {
 }
 
 export const SUITE_DEVICE = {
-  userAgent: "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36",
-  viewport: { width: 412, height: 915 },
-  isMobile: true,
-  hasTouch: true,
-  deviceScaleFactor: 2.75,
+  // Business Suite is a desktop tool — use desktop fingerprint (mobile breaks its login form)
+  userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+  viewport: { width: 1366, height: 768 },
+  isMobile: false,
+  hasTouch: false,
+  deviceScaleFactor: 1,
   locale: "fa-IR",
   timezoneId: "Asia/Tehran",
 } as const;
@@ -72,19 +73,30 @@ export async function loginViaBusinessSuite(accountId: string, email: string, pa
   });
   const page = await ctx.newPage();
   try {
-    await page.goto("https://business.facebook.com/", { waitUntil: "domcontentloaded", timeout: 30000 });
+    await page.goto("https://www.facebook.com/login", { waitUntil: "domcontentloaded", timeout: 30000 });
     await page.waitForTimeout(2500);
-    // If already on Business Suite, check if login form exists
-    const emailInput = page.locator('input[name="email"], input[type="email"]').first();
+    // Facebook redirects business.facebook.com to its login — handle both directly and via business
+    if (/business\.facebook\.com/i.test(page.url()) && (await page.locator('input[name="email"]').count()) === 0) {
+      await page.goto("https://www.facebook.com/login", { waitUntil: "domcontentloaded", timeout: 30000 });
+      await page.waitForTimeout(1500);
+    }
+    const emailInput = page.locator('input[name="email"], #email, input[data-testid="royal_email"]').first();
     const hasLogin = (await emailInput.count()) > 0 && (await emailInput.isVisible().catch(() => false));
     if (hasLogin) {
-      await emailInput.fill(e);
-      await page.locator('input[name="pass"], input[type="password"]').first().fill(p);
-      await page.getByRole("button", { name: /Log in|ورود/i }).first().click({ timeout: 5000 }).catch(async () => {
-        await page.locator('button[type="submit"]').first().click({ timeout: 5000 }).catch(() => {});
+      await emailInput.click({ timeout: 5000 }).catch(() => {});
+      await emailInput.fill(e, { timeout: 10000 });
+      const passInput = page.locator('input[name="pass"], input[type="password"], #pass').first();
+      await passInput.click({ timeout: 5000 }).catch(() => {});
+      await passInput.fill(p, { timeout: 10000 });
+      const loginBtn = page.locator('button[name="login"], button[data-testid="royal_login_button"], button[type="submit"]').first();
+      await loginBtn.click({ timeout: 8000 }).catch(async () => {
+        await page.getByRole("button", { name: /Log in|ورود/i }).first().click({ timeout: 5000 }).catch(() => {});
       });
-      await page.waitForTimeout(4000);
-      const codeInput = page.locator('input[name="approvals_code"], input[placeholder*="code" i], input[aria-label*="code" i]').first();
+      await page.waitForTimeout(5000);
+      // Handle "Save Browser" / "Not Now" interstitial that blocks 2FA
+      await page.getByRole("button", { name: /Not Now|بعداً|Not now/i }).first().click({ timeout: 3000 }).catch(() => {});
+      await page.waitForTimeout(1500);
+      const codeInput = page.locator('input[name="approvals_code"], input[id="approvals_code"], input[placeholder*="code" i], input[aria-label*="code" i], input[inputmode="numeric"]').first();
       const hasCodePrompt = (await codeInput.count()) > 0 && (await codeInput.isVisible().catch(() => false));
       if (hasCodePrompt) {
         if (!code?.trim()) { await browser.close(); return { ok: false, needCode: true, detail: "کد تأیید ۲ مرحله‌ای را وارد کنید." }; }
@@ -92,15 +104,24 @@ export async function loginViaBusinessSuite(accountId: string, email: string, pa
         await page.getByRole("button", { name: /Continue|تأیید|Continue/i }).first().click({ timeout: 5000 }).catch(() => {});
         await page.waitForTimeout(4000);
       }
-      const errText = await page.locator('[role="alert"]').first().innerText().catch(() => "");
-      if (errText && /incorrect|اشتباه|wrong/i.test(errText)) throw new Error(errText.slice(0, 160));
-      await page.waitForTimeout(2000);
+      const errText = await page.locator('[role="alert"], div[data-testid="error"], #error_box').first().innerText().catch(() => "");
+      if (errText && /incorrect|اشتباه|wrong|incorrect password|نادرست/i.test(errText)) throw new Error(errText.slice(0, 200));
+      await page.waitForTimeout(2500);
+      // Verify we actually landed on facebook/business
       const url = page.url();
-      const stillLogin = /\/login/i.test(url) || (await page.locator('input[name="email"]').count()) > 0;
-      if (stillLogin) {
-        const body = await page.locator("body").innerText().catch(() => "");
-        if (/challenge|verify|تأیید/i.test(body)) return { ok: false, needCode: true, detail: "کد تأیید لازم است." };
-        throw new Error("ورود ناموفق — ایمیل/رمز را بررسی کنید.");
+      const body = await page.locator("body").innerText().catch(() => "");
+      const stillLogin = /\/login|checkpoint/i.test(url) || (await page.locator('input[name="email"], #email').count()) > 0;
+      if (stillLogin && !/business\.facebook\.com/i.test(url)) {
+        if (/challenge|verify|تأیید|two-factor|approvals_code/i.test(body + url)) return { ok: false, needCode: true, detail: "کد تأیید لازم است — کد ۶ رقمی را وارد کنید." };
+        const snippet = body.slice(0, 300).replace(/\s+/g, " ");
+        throw new Error(`ورود ناموفق — ${snippet || "ایمیل/رمز را بررسی کنید."}`.slice(0, 280));
+      }
+      // Final check: can we reach Business Suite?
+      await page.goto("https://business.facebook.com/", { waitUntil: "domcontentloaded", timeout: 25000 }).catch(() => {});
+      await page.waitForTimeout(2000);
+      if (/\/login/i.test(page.url())) {
+        const b2 = await page.locator("body").innerText().catch(() => "");
+        if (/challenge|verify/i.test(b2)) return { ok: false, needCode: true, detail: "کد تأیید لازم است." };
       }
     }
     const dir = join(suiteRoot(), accountId);

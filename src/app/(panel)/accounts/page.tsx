@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import useSWR from "swr";
 import { Plus, Trash2 } from "lucide-react";
 import { InstagramIcon, YoutubeIcon } from "@/components/brand-icons";
-import { Button, Card, ConfirmModal, EmptyState, Label, Modal, Select, Skeleton, StatusBadge } from "@/components/ui";
+import { Button, Card, ConfirmModal, EmptyState, Input, Label, Modal, Select, Skeleton, StatusBadge } from "@/components/ui";
 import { useToast } from "@/components/providers";
 import { PublishScheduleForm } from "@/components/accounts/PublishScheduleForm";
 import { InstagramBrowserSessionForm } from "@/components/accounts/InstagramBrowserSessionForm";
@@ -31,6 +31,8 @@ export default function AccountsPage() {
   const { showToast } = useToast();
   const [open, setOpen] = useState(false);
   const [platform, setPlatform] = useState<"youtube" | "instagram">("youtube");
+  const [igUsername, setIgUsername] = useState("");
+  const [igDisplayName, setIgDisplayName] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<Account | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [savingTopicId, setSavingTopicId] = useState<string | null>(null);
@@ -51,6 +53,22 @@ export default function AccountsPage() {
     const json = await res.json();
     if (!json.ok) return showToast(json.error, "error");
     window.location.href = json.data.authUrl;
+  }
+
+  async function connectInstagramBrowser() {
+    if (!igUsername.trim()) return showToast("نام کاربری پیج را وارد کنید.", "error");
+    const res = await fetch(`/api/accounts/connect/instagram`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ mode: "browser", username: igUsername.trim(), displayName: igDisplayName.trim() || igUsername.trim() }),
+    });
+    const json = await res.json();
+    if (!json.ok) return showToast(json.error, "error");
+    showToast("پیج اینستاگرام (مرورگری) ساخته شد — حالا سشن را آپلود کنید.", "success");
+    setOpen(false);
+    setIgUsername("");
+    setIgDisplayName("");
+    mutate();
   }
 
   async function deleteAccount() {
@@ -222,15 +240,35 @@ export default function AccountsPage() {
             <Label>پلتفرم</Label>
             <Select value={platform} onChange={(e) => setPlatform(e.target.value as "youtube" | "instagram")}>
               <option value="youtube">یوتیوب</option>
-              <option value="instagram">اینستاگرام</option>
+              <option value="instagram">اینستاگرام (مرورگری — بدون فیسبوک)</option>
             </Select>
           </div>
-          <Button className="w-full" onClick={connectOauth}>
-            اتصال رسمی OAuth
-          </Button>
-          <p className="text-[11px] text-tg-secondary/80">
-            برای ادامه، وارد حساب Google یا Instagram خود می‌شوید و دسترسی لازم را تأیید می‌کنید.
-          </p>
+          {platform === "instagram" ? (
+            <>
+              <div>
+                <Label>نام کاربری پیج (بدون @) *</Label>
+                <Input value={igUsername} onChange={(e) => setIgUsername(e.target.value)} placeholder="my_page" dir="ltr" />
+              </div>
+              <div>
+                <Label>نام نمایشی (اختیاری)</Label>
+                <Input value={igDisplayName} onChange={(e) => setIgDisplayName(e.target.value)} placeholder="پیج اصلی" />
+              </div>
+              <Button className="w-full" onClick={connectInstagramBrowser}>
+                افزودن پیج (بدون OAuth — مرورگری)
+              </Button>
+              <p className="text-[11px] text-fuchsia-600 dark:text-fuchsia-400">این روش بدون نیاز به پیج فیسبوک است — بعد از افزودن، از کارت پیج سشن را (فایل/کوکی/ورود) آپلود کنید.</p>
+              <p className="text-[11px] text-tg-secondary/80">در صورت نیاز به API رسمی (با فیسبوک) از پشتیبانی بخواهید.</p>
+            </>
+          ) : (
+            <>
+              <Button className="w-full" onClick={connectOauth}>
+                اتصال رسمی OAuth
+              </Button>
+              <p className="text-[11px] text-tg-secondary/80">
+                برای ادامه، وارد حساب Google خود می‌شوید و دسترسی لازم را تأیید می‌کنید.
+              </p>
+            </>
+          )}
         </div>
       </Modal>
 

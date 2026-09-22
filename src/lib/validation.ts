@@ -40,9 +40,17 @@ export const updateUserSchema = createUserSchema.partial().extend({
   active: z.boolean().optional(),
 });
 
-export const socialAccountConnectSchema = z.object({
-  mode: z.literal("oauth"),
-}).strict();
+export const socialAccountConnectSchema = z
+  .object({
+    mode: z.enum(["oauth", "browser"]),
+    username: z.string().min(1).max(100).optional(),
+    displayName: z.string().min(1).max(100).optional(),
+  })
+  .strict()
+  .refine((v) => (v.mode === "browser" ? Boolean(v.username?.trim()) : true), {
+    message: "نام کاربری برای حالت مرورگری الزامی است.",
+    path: ["username"],
+  });
 
 export const rescheduleSchema = z.object({
   scheduledAtJalali: z.string().min(1),

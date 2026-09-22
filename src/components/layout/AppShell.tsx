@@ -21,13 +21,11 @@ import {
   Package,
   PlusCircle,
   Radio,
-  Send,
   Settings,
   Sun,
   Tv,
   Users,
 } from "lucide-react";
-import { InstagramIcon, YoutubeIcon } from "@/components/brand-icons";
 import { useTheme, useToast } from "@/components/providers";
 import { roleLabelFa } from "@/lib/presentation-fa";
 import { NotificationCenter } from "@/components/workflow/NotificationCenter";
@@ -39,10 +37,7 @@ const NAV_ITEMS = [
   { href: "/users", label: "کاربران و تیم", icon: Users },
   { href: "/analytics", label: "آنالیز", icon: BarChart3 },
   { href: "/reports", label: "گزارش‌ها", icon: FileText },
-  { href: "/settings/telegram", label: "تنظیمات تلگرام", icon: Send },
-  { href: "/settings/youtube", label: "تنظیمات یوتیوب", icon: YoutubeIcon },
-  { href: "/settings/instagram", label: "تنظیمات اینستاگرام", icon: InstagramIcon },
-  { href: "/settings/general", label: "تنظیمات عمومی", icon: Settings },
+  { href: "/settings", label: "تنظیمات", icon: Settings },
 ];
 
 export function AppShell({

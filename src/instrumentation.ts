@@ -202,6 +202,28 @@ export async function register() {
           return { runId: "", items: 0 };
         }
       })(),
+      (async () => {
+        // Operator autonomous run: daily 06:00 Asia/Tehran if strategy is active and buffer low
+        try {
+          const hour = Number(new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Tehran", hour: "2-digit", hour12: false }).format(new Date()));
+          if (hour !== 6) return null;
+          const { getStrategy } = await import("@/lib/operator");
+          const s = await getStrategy();
+          if (!s || s.status !== "active") return null;
+          const { db } = await import("@/db");
+          const { content } = await import("@/db/schema");
+          const { sql } = await import("drizzle-orm");
+          const [cnt] = (await db.select({ c: sql`count(*)` }).from(content).where(sql`${content.status} IN ('draft','in_review')`)) as unknown as Array<{ c: number }>;
+          if (Number(cnt?.c ?? 0) >= 4) return null;
+          const { runOperatorNow } = await import("@/lib/operator");
+          const out = await runOperatorNow();
+          console.log(`[operator] autonomous run: ${out.plan.length} items, run ${out.runId}`);
+          return out;
+        } catch (err) {
+          console.error("[operator] tick failed:", (err as Error).message);
+          return null;
+        }
+      })(),
     ]).finally(() => {
       instrumentationRunning = false;
     });

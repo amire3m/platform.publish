@@ -128,6 +128,7 @@ export function AppShell({
   const growthNavItem = { href: "/growth", label: "رشد", icon: BarChart3 } as const;
   const engagementNavItem = { href: "/engagement", label: "تعامل", icon: Bell } as const;
   const retentionNavItem = { href: "/retention", label: "نگهداشت", icon: CalendarDays } as const;
+  const operatorNavItem = { href: "/operator", label: "اپراتور", icon: Radio } as const;
   const withWorkflow = canViewWorkflow
     ? ([NAV_ITEMS[0], workflowNavItem, ...NAV_ITEMS.slice(1)] as typeof NAV_ITEMS)
     : NAV_ITEMS;
@@ -145,7 +146,8 @@ export function AppShell({
   const withGrowth = [...withReadiness.slice(0, 4), growthNavItem, ...withReadiness.slice(4)] as typeof NAV_ITEMS;
   const withEngagement = [...withGrowth.slice(0, 5), engagementNavItem, ...withGrowth.slice(5)] as typeof NAV_ITEMS;
   const withRetention = [...withEngagement.slice(0, 6), retentionNavItem, ...withEngagement.slice(6)] as typeof NAV_ITEMS;
-  const visibleNavItems = canViewMail ? ([...withRetention.slice(0, 2), mailNavItem, ...withRetention.slice(2)] as typeof NAV_ITEMS) : withRetention;
+  const withOperator = [...withRetention.slice(0, 7), operatorNavItem, ...withRetention.slice(7)] as typeof NAV_ITEMS;
+  const visibleNavItems = canViewMail ? ([...withOperator.slice(0, 2), mailNavItem, ...withOperator.slice(2)] as typeof NAV_ITEMS) : withOperator;
 
   return (
     <div className="flex min-h-screen">

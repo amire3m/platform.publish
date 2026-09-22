@@ -969,3 +969,35 @@ export const retentionSnapshots = pgTable("retention_snapshots", {
   curve: jsonb("curve").$type<number[]>().notNull().default([]),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+export const operatorStrategies = pgTable("operator_strategies", {
+  id: text("id").primaryKey(),
+  objective: text("objective").notNull(),
+  audience: text("audience").notNull(),
+  pillars: jsonb("pillars").$type<string[]>().notNull().default([]),
+  cadencePerWeek: integer("cadence_per_week").notNull().default(2),
+  videosPerRun: integer("videos_per_run").notNull().default(2),
+  defaultFormat: text("default_format").notNull().default("tutorial"),
+  defaultLength: text("default_length").notNull().default("medium"),
+  primaryKpi: text("primary_kpi").notNull().default("views"),
+  targetValue: integer("target_value"),
+  targetWindowDays: integer("target_window_days").notNull().default(28),
+  monthlyBudget: integer("monthly_budget"),
+  currency: text("currency").notNull().default("USD"),
+  guardrails: jsonb("guardrails").$type<Record<string, unknown>>().notNull().default({}),
+  status: text("status").notNull().default("draft"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const operatorRuns = pgTable("operator_runs", {
+  id: text("id").primaryKey(),
+  strategyId: text("strategy_id")
+    .notNull()
+    .references(() => operatorStrategies.id, { onDelete: "cascade" }),
+  status: text("status").notNull().default("planned"),
+  plan: jsonb("plan").$type<Record<string, unknown>[]>().notNull().default([]),
+  progress: jsonb("progress").$type<Record<string, unknown>>().notNull().default({}),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
+});

@@ -126,6 +126,8 @@ export function AppShell({
   const radarNavItem = { href: "/radar", label: "رادار", icon: Compass } as const;
   const readinessNavItem = { href: "/readiness", label: "آمادگی", icon: AlertTriangle } as const;
   const growthNavItem = { href: "/growth", label: "رشد", icon: BarChart3 } as const;
+  const engagementNavItem = { href: "/engagement", label: "تعامل", icon: Bell } as const;
+  const retentionNavItem = { href: "/retention", label: "نگهداشت", icon: CalendarDays } as const;
   const withWorkflow = canViewWorkflow
     ? ([NAV_ITEMS[0], workflowNavItem, ...NAV_ITEMS.slice(1)] as typeof NAV_ITEMS)
     : NAV_ITEMS;
@@ -141,7 +143,9 @@ export function AppShell({
   const withRadar = [...withLive.slice(0, 2), radarNavItem, ...withLive.slice(2)] as typeof NAV_ITEMS;
   const withReadiness = [...withRadar.slice(0, 3), readinessNavItem, ...withRadar.slice(3)] as typeof NAV_ITEMS;
   const withGrowth = [...withReadiness.slice(0, 4), growthNavItem, ...withReadiness.slice(4)] as typeof NAV_ITEMS;
-  const visibleNavItems = canViewMail ? ([...withGrowth.slice(0, 2), mailNavItem, ...withGrowth.slice(2)] as typeof NAV_ITEMS) : withGrowth;
+  const withEngagement = [...withGrowth.slice(0, 5), engagementNavItem, ...withGrowth.slice(5)] as typeof NAV_ITEMS;
+  const withRetention = [...withEngagement.slice(0, 6), retentionNavItem, ...withEngagement.slice(6)] as typeof NAV_ITEMS;
+  const visibleNavItems = canViewMail ? ([...withRetention.slice(0, 2), mailNavItem, ...withRetention.slice(2)] as typeof NAV_ITEMS) : withRetention;
 
   return (
     <div className="flex min-h-screen">

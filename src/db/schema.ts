@@ -929,3 +929,43 @@ export const outcomeSettings = pgTable("outcome_settings", {
   currency: text("currency").notNull().default("USD"),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+export const engagementComments = pgTable("engagement_comments", {
+  id: text("id").primaryKey(),
+  videoId: text("video_id").notNull(),
+  commentId: text("comment_id").notNull().unique(),
+  author: text("author"),
+  text: text("text").notNull(),
+  sentiment: text("sentiment").notNull().default("neutral"),
+  theme: text("theme"),
+  isSpam: boolean("is_spam").notNull().default(false),
+  isQuestion: boolean("is_question").notNull().default(false),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  syncedAt: timestamp("synced_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const engagementDrafts = pgTable("engagement_drafts", {
+  id: text("id").primaryKey(),
+  commentId: text("comment_id")
+    .notNull()
+    .references(() => engagementComments.commentId, { onDelete: "cascade" }),
+  draftText: text("draft_text").notNull(),
+  status: text("status").notNull().default("pending"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const audienceIdeas = pgTable("audience_ideas", {
+  id: text("id").primaryKey(),
+  title: text("title").notNull(),
+  evidence: jsonb("evidence").$type<string[]>().notNull().default([]),
+  status: text("status").notNull().default("pending"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const retentionSnapshots = pgTable("retention_snapshots", {
+  id: text("id").primaryKey(),
+  videoId: text("video_id").notNull(),
+  kind: text("kind").notNull().default("long"),
+  curve: jsonb("curve").$type<number[]>().notNull().default([]),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});

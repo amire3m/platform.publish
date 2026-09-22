@@ -341,9 +341,55 @@ async function processContent(row: typeof content.$inferSelect, opts?: { force?:
             });
       } else {
         const caps = (account.capabilities ?? {}) as Record<string, unknown>;
-        const hasBrowser = caps.browserSession === true;
+        const hasBusinessSuite = caps.businessSuite === true;
         const isReel = (target.content_type as string) === "reel" || !target.content_type;
-        if (hasBrowser && isReel) {
+        if (hasBusinessSuite) {
+          // Per-account Business Suite — business.facebook.com human path, 5 separate logins
+          let suitePath = filePath;
+          let suiteCleanup: (() => Promise<void>) | null = null;
+          if (!suitePath) {
+            const dl = await (client as TelegramClient).downloadToTempFile(primaryMedia.telegram_file_id as string);
+            suitePath = dl.path;
+            suiteCleanup = dl.cleanup;
+          }
+          const { hasSuiteSession } = await import("./business/suite-session");
+          const hasSession = await hasSuiteSession(account.id);
+          if (!hasSession) {
+            result = { ok: false, errorCode: "NO_BUSINESS_SESSION", message: "سشن Business Suite برای این پیج ذخیره نشده — از business.facebook.com لاگین کنید.", retryable: false } as never;
+          } else {
+            // Reuse Instagram browser publisher but with Business Suite session path
+            // For now, publish via Business Suite uses same flow (instagram.com/create is reachable from business session)
+            const { instagramBrowserPublish } = await import("./providers/instagram-browser");
+            // Temporarily override sessionPath resolution: the browser publisher will look for instagram session;
+            // we ensure business suite session is also present as instagram fallback by symlinking if needed
+            try {
+              const { suiteSessionPath } = await import("./business/suite-session");
+              const { sessionPath } = await import("./instagram/session");
+              const src = suiteSessionPath(account.id);
+              const dst = sessionPath(account.id);
+              const { copyFile, mkdir } = await import("node:fs/promises");
+              const { dirname } = await import("node:path");
+              await mkdir(dirname(dst), { recursive: true });
+              await copyFile(src, dst).catch(() => {});
+            } catch {}
+            result = await instagramBrowserPublish(
+              {
+                accountExternalId: account.externalAccountId ?? "",
+                credentialPayload: null,
+                fileBuffer: Buffer.alloc(0),
+                filePath: suitePath,
+                fileSize,
+                fileName: primaryMedia.file_name ?? "media.mp4",
+                mimeType: primaryMedia.mime_type ?? "video/mp4",
+                contentType: "reel",
+                caption: row.caption,
+                hashtags: row.hashtags as string[],
+              },
+              account.id,
+            );
+          }
+          if (suiteCleanup) await suiteCleanup().catch(() => {});
+        } else if ((caps.browserSession === true) && isReel) {
           let browserPath = filePath;
           let browserCleanup: (() => Promise<void>) | null = null;
           if (!browserPath) {

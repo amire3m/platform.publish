@@ -7,7 +7,7 @@ import { InstagramIcon, YoutubeIcon } from "@/components/brand-icons";
 import { Button, Card, ConfirmModal, EmptyState, Input, Label, Modal, Select, Skeleton, StatusBadge } from "@/components/ui";
 import { useToast } from "@/components/providers";
 import { PublishScheduleForm } from "@/components/accounts/PublishScheduleForm";
-import { InstagramBrowserSessionForm } from "@/components/accounts/InstagramBrowserSessionForm";
+import { BusinessSuiteSessionForm } from "@/components/accounts/BusinessSuiteSessionForm";
 import { PaletteEditor } from "@/components/covers/PaletteEditor";
 import { formatJalaliDateTime } from "@/lib/date/jalali";
 import type { PublicAccountDto } from "@/lib/accounts/public";
@@ -216,9 +216,7 @@ export default function AccountsPage() {
                 این حساب آزمایشی است و انتشار واقعی در آن انجام نمی‌شود.
               </p>
             )}
-            {a.platform === "instagram" && (
-              <InstagramBrowserSessionForm account={a} onChanged={() => mutate()} />
-            )}
+            <BusinessSuiteSessionForm account={a} onChanged={() => mutate()} />
             <PaletteEditor accountId={a.id} />
             <PublishScheduleForm account={a} onSaved={() => mutate()} />
             <div className="mt-4 flex justify-end">

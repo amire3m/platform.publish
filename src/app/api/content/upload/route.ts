@@ -96,20 +96,9 @@ export async function POST(req: Request) {
     }
   }
 
-  // Phase 1: default account if none chosen
   if (!meta.platformTargets.length) {
-    const [fallback] = await db
-      .select()
-      .from(socialAccounts)
-      .where(eq(socialAccounts.platform, "youtube"))
-      .limit(1);
-    if (fallback) {
-      meta.platformTargets = [
-        { platform: "youtube", accountId: fallback.id, contentType: "video", publishAtUtc: new Date(Date.now() + 5 * 60 * 1000).toISOString() } as IncomingTarget,
-      ];
-    }
+    return jsonError("حساب مقصد انتخاب نشده است — لطفاً در همین صفحه یک کانال/پیج مقصد را انتخاب کنید.", 422, "ACCOUNT_REQUIRED");
   }
-  if (!meta.platformTargets.length) return jsonError("حساب مقصد یافت نشد.", 404);
   const primaryTarget = meta.platformTargets[0];
   const [primaryAccount] = await db
     .select()

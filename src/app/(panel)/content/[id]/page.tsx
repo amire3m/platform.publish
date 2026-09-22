@@ -251,9 +251,81 @@ export default function ContentDetailPage({ params }: { params: Promise<{ id: st
         loading={busy}
       />
 
+      <DiscoverabilityPanel contentId={row.id} />
+      <ShortsPanel contentId={row.id} />
+
       <p className="text-xs text-tg-secondary/80">
         ایجاد: {formatJalaliDateTime(row.createdAt)} · آخرین ویرایش: {formatJalaliDateTime(row.updatedAt)}
       </p>
     </div>
+  );
+}
+
+function DiscoverabilityPanel({ contentId }: { contentId: string }) {
+  const { data, mutate } = useSWR<{ ok: boolean; data: { history: Array<{ run: { id: string; createdAt: string }; findings: Array<{ id: string; ruleId: string; severity: string; message: string; dismissed: boolean }> }> } }>(
+    `/api/discoverability?contentId=${contentId}`,
+    fetcher,
+  );
+  const [busy, setBusy] = useState(false);
+  async function audit() {
+    setBusy(true);
+    try {
+      const res = await fetch("/api/discoverability", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "audit", contentId }) });
+      const j = await res.json();
+      if (!j.ok) alert(j.error ?? "خطا");
+      await mutate();
+    } finally { setBusy(false); }
+  }
+  const latest = data?.data?.history?.[0];
+  return (
+    <Card className="p-4">
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-bold text-tg-text">پیش‌پرواز کشف‌پذیری (DarkzSEO bundled)</h3>
+        <Button size="sm" onClick={audit} disabled={busy} className="min-h-[36px] text-xs">{busy ? "در حال بررسی…" : "اجرای بررسی"}</Button>
+      </div>
+      {!latest ? <p className="mt-2 text-xs text-tg-secondary">هنوز بررسی نشده.</p> : (
+        <div className="mt-2 space-y-1">
+          {latest.findings.map((f) => (
+            <div key={f.id} className={`rounded-lg border p-2 text-xs ${f.dismissed ? "opacity-50" : ""} ${f.severity === "fail" ? "border-rose-200 bg-rose-50" : f.severity === "warn" ? "border-amber-200 bg-amber-50" : "border-emerald-200 bg-emerald-50"}`}>
+              <span className="font-mono text-[10px]">{f.ruleId}</span> — {f.message} {f.dismissed ? "(رد شده)" : ""}
+            </div>
+          ))}
+        </div>
+      )}
+    </Card>
+  );
+}
+
+function ShortsPanel({ contentId }: { contentId: string }) {
+  const { data, mutate } = useSWR<{ ok: boolean; data: { drafts: Array<{ id: string; title: string; startSec: number; durationSec: number; layout: string; status: string }> } }>(
+    `/api/discoverability?scope=shorts&contentId=${contentId}`,
+    fetcher,
+  );
+  const [busy, setBusy] = useState(false);
+  async function create() {
+    setBusy(true);
+    try {
+      const res = await fetch("/api/discoverability", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "create-shorts", contentId }) });
+      const j = await res.json();
+      if (!j.ok) alert(j.error ?? "خطا");
+      await mutate();
+    } finally { setBusy(false); }
+  }
+  return (
+    <Card className="p-4">
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-bold text-tg-text">بازسازی شورت‌ها (۳ پیش‌نویس)</h3>
+        <Button size="sm" onClick={create} disabled={busy} className="min-h-[36px] text-xs">{busy ? "در حال ساخت…" : "ساخت ۳ شورت"}</Button>
+      </div>
+      {(data?.data?.drafts?.length ?? 0) === 0 ? <p className="mt-2 text-xs text-tg-secondary">هنوز پیش‌نویسی نیست.</p> : (
+        <div className="mt-2 space-y-1">
+          {data!.data.drafts.map((d) => (
+            <div key={d.id} className="flex items-center justify-between rounded-lg border border-tg-border p-2 text-xs">
+              <span>{d.title} — {d.layout} — {d.startSec}s · {d.status}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </Card>
   );
 }

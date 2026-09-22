@@ -853,3 +853,41 @@ export const mediaMirrors = pgTable(
     providerFileUnique: uniqueIndex("media_mirrors_provider_file_unique").on(t.provider, t.fileId),
   }),
 );
+
+export const discoverabilityRuns = pgTable("discoverability_runs", {
+  id: text("id").primaryKey(),
+  contentId: text("content_id")
+    .notNull()
+    .references(() => content.id, { onDelete: "cascade" }),
+  engineVersion: text("engine_version").notNull().default("1.0.0"),
+  schemaVersion: text("schema_version").notNull().default("1.0.0"),
+  status: text("status").notNull().default("done"),
+  summary: jsonb("summary").$type<Record<string, unknown>>().notNull().default({}),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const discoverabilityFindings = pgTable("discoverability_findings", {
+  id: text("id").primaryKey(),
+  runId: text("run_id")
+    .notNull()
+    .references(() => discoverabilityRuns.id, { onDelete: "cascade" }),
+  ruleId: text("rule_id").notNull(),
+  severity: text("severity").notNull(),
+  message: text("message").notNull(),
+  dismissed: boolean("dismissed").notNull().default(false),
+  dismissReason: text("dismiss_reason"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const shortsDrafts = pgTable("shorts_drafts", {
+  id: text("id").primaryKey(),
+  sourceContentId: text("source_content_id")
+    .notNull()
+    .references(() => content.id, { onDelete: "cascade" }),
+  title: text("title").notNull(),
+  startSec: integer("start_sec").notNull().default(0),
+  durationSec: integer("duration_sec").notNull().default(30),
+  layout: text("layout").notNull().default("center-crop"),
+  status: text("status").notNull().default("draft"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});

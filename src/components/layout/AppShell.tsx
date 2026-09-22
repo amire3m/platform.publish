@@ -124,6 +124,7 @@ export function AppShell({
   const assetsNavItem = { href: "/library", label: "کتابخانه", icon: Images } as const;
   const liveNavItem = { href: "/live", label: "لایو", icon: Radio } as const;
   const radarNavItem = { href: "/radar", label: "رادار", icon: Compass } as const;
+  const readinessNavItem = { href: "/readiness", label: "آمادگی", icon: AlertTriangle } as const;
   const withWorkflow = canViewWorkflow
     ? ([NAV_ITEMS[0], workflowNavItem, ...NAV_ITEMS.slice(1)] as typeof NAV_ITEMS)
     : NAV_ITEMS;
@@ -137,7 +138,8 @@ export function AppShell({
     ? ([withAssets[0], liveNavItem, ...withAssets.slice(1)] as typeof NAV_ITEMS)
     : withAssets;
   const withRadar = [...withLive.slice(0, 2), radarNavItem, ...withLive.slice(2)] as typeof NAV_ITEMS;
-  const visibleNavItems = canViewMail ? ([...withRadar.slice(0, 2), mailNavItem, ...withRadar.slice(2)] as typeof NAV_ITEMS) : withRadar;
+  const withReadiness = [...withRadar.slice(0, 3), readinessNavItem, ...withRadar.slice(3)] as typeof NAV_ITEMS;
+  const visibleNavItems = canViewMail ? ([...withReadiness.slice(0, 2), mailNavItem, ...withReadiness.slice(2)] as typeof NAV_ITEMS) : withReadiness;
 
   return (
     <div className="flex min-h-screen">

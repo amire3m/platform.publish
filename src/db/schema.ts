@@ -156,6 +156,9 @@ export const content = pgTable(
     lockedBy: text("locked_by"),
     lockedAt: timestamp("locked_at", { withTimezone: true }),
     archivedAt: timestamp("archived_at", { withTimezone: true }),
+    generationStage: jsonb("generation_stage").$type<Record<string, unknown>>().notNull().default({}),
+    readinessStatus: text("readiness_status").notNull().default("unknown"),
+    readinessCheckedAt: timestamp("readiness_checked_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -248,6 +251,9 @@ export const appSettings = pgTable("app_settings", {
   capabilityConfig: jsonb("capability_config").$type<Record<string, unknown>>().notNull().default({}),
   lastIndexRebuildAt: timestamp("last_index_rebuild_at", { withTimezone: true }),
   lastAnalyticsRunAt: timestamp("last_analytics_run_at", { withTimezone: true }),
+  readinessLastRunAt: timestamp("readiness_last_run_at", { withTimezone: true }),
+  readinessLastStatus: text("readiness_last_status").notNull().default("unknown"),
+  readinessLastResult: jsonb("readiness_last_result").$type<Record<string, unknown>>().notNull().default({}),
   syncStatus: text("sync_status").notNull().default("unknown"), // ok|degraded|offline|unknown
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });

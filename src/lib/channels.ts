@@ -27,10 +27,10 @@ export interface ChannelConfig {
 }
 
 export const CHANNELS: ChannelConfig[] = [
-  { id: "zed_revayat", labelFa: "ضد روایت", organization: "emro", youtubeAccountId: null, instagramAccountId: null, telegramTopicId: null },
-  { id: "zaviye_no", labelFa: "زاویه نو", organization: "emro", youtubeAccountId: null, instagramAccountId: null, telegramTopicId: null },
-  { id: "tamashin", labelFa: "تماشین", organization: "emro", youtubeAccountId: null, instagramAccountId: null, telegramTopicId: null },
-  { id: "iranian_frame", labelFa: "Iranian Frame", organization: "emro", youtubeAccountId: null, instagramAccountId: null, telegramTopicId: null },
+  { id: "zed_revayat", labelFa: "ضد روایت", organization: "emro", youtubeAccountId: "ACC-1405-688518", instagramAccountId: null, telegramTopicId: null },
+  { id: "zaviye_no", labelFa: "زاویه نو", organization: "emro", youtubeAccountId: "ACC-1405-398046", instagramAccountId: null, telegramTopicId: null },
+  { id: "tamashin", labelFa: "تماشین", organization: "emro", youtubeAccountId: "ACC-1405-724040", instagramAccountId: null, telegramTopicId: null },
+  { id: "iranian_frame", labelFa: "Iranian Frame", organization: "emro", youtubeAccountId: "ACC-1405-941185", instagramAccountId: null, telegramTopicId: null },
   { id: "shock", labelFa: "شوک", organization: "sana", youtubeAccountId: null, instagramAccountId: null, telegramTopicId: null },
   { id: "tinazh", labelFa: "تیناژ", organization: "sana", youtubeAccountId: null, instagramAccountId: null, telegramTopicId: null },
 ];

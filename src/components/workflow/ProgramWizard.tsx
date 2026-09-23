@@ -7,6 +7,7 @@ import { ArrowLeft, ArrowRight, Check, GripVertical, Plus, Trash2 } from "lucide
 import { Button, Card, Input, Label, Select, Textarea, ErrorState, Skeleton } from "@/components/ui";
 import { fetchWorkflowApi, WorkflowApiError } from "@/lib/workflow/client";
 import { deliverableKindLabelFa, platformLabelFa, UNKNOWN_LABEL_FA } from "@/lib/presentation-fa";
+import { VISIBLE_CHANNELS, getChannelAccounts } from "@/lib/channels";
 import {
   addDeliverableToDraft,
   calculateDueAt,
@@ -67,6 +68,7 @@ export function ProgramWizard() {
   const [dueAtInput, setDueAtInput] = useState(""); // datetime-local
   const [notes, setNotes] = useState("");
   const [ownerUserId, setOwnerUserId] = useState("");
+  const [channelId, setChannelId] = useState<string>("zaviye_no");
 
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -117,10 +119,14 @@ export function ProgramWizard() {
     const found = draft.deliverables.find((d) => d.draftId === draftId);
     if (!found) return;
     const has = found.destinations.some((x) => x.platform === platform);
-    const next: DraftDestination[] = has
-      ? found.destinations.filter((x) => x.platform !== platform)
-      : [...found.destinations, { platform }];
-    handleUpdate(draftId, { destinations: next });
+    if (has) {
+      handleUpdate(draftId, { destinations: found.destinations.filter((x) => x.platform !== platform) });
+      return;
+    }
+    const accounts = getChannelAccounts(channelId);
+    const socialAccountId =
+      platform === "youtube" ? accounts.youtubeAccountId : platform === "instagram" ? accounts.instagramAccountId : accounts.telegramTopicId;
+    handleUpdate(draftId, { destinations: [...found.destinations, { platform, socialAccountId: socialAccountId ?? null }] });
   }
 
   async function handleSave() {
@@ -146,6 +152,7 @@ export function ProgramWizard() {
     setSaving(true);
     setSaveError(null);
     try {
+      const accounts = getChannelAccounts(channelId);
       const payload = {
         title: title.trim(),
         seriesName: seriesName.trim() || null,
@@ -158,7 +165,16 @@ export function ProgramWizard() {
           name: d.name.trim(),
           kind: d.kind ?? null,
           sortOrder: idx,
-          destinations: d.destinations,
+          destinations: d.destinations.map((dest) => {
+            if (dest.socialAccountId) return dest;
+            const sid =
+              dest.platform === "youtube"
+                ? accounts.youtubeAccountId
+                : dest.platform === "instagram"
+                  ? accounts.instagramAccountId
+                  : accounts.telegramTopicId;
+            return { ...dest, socialAccountId: sid ?? null };
+          }),
           dueAt: d.dueAt ?? (d.dueOffsetMinutes != null && baseDueAt ? calculateDueAt(baseDueAt, d.dueOffsetMinutes) : d.dueAt),
           dueOffsetMinutes: d.dueOffsetMinutes,
           assigneeUserId: d.assigneeUserId || null,
@@ -283,6 +299,17 @@ export function ProgramWizard() {
             <div>
               <Label>مالک یا مسئول کل برنامه (شناسه کاربر، اختیاری)</Label>
               <Input value={ownerUserId} onChange={(e) => setOwnerUserId(e.target.value)} placeholder="شناسه کاربر" className="mt-1" />
+            </div>
+            <div>
+              <Label>کانال برنامه *</Label>
+              <Select value={channelId} onChange={(e) => setChannelId(e.target.value)} className="mt-1">
+                {VISIBLE_CHANNELS.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.labelFa}
+                  </option>
+                ))}
+              </Select>
+              <p className="mt-1 text-xs text-tg-secondary">انتخاب کانال، حساب یوتیوب/اینستاگرام هر خروجی را به همان کانال وصل می‌کند (همه اتصالات یک‌جا).</p>
             </div>
             <div>
               <Label>یادداشت</Label>

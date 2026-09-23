@@ -4,8 +4,8 @@ import { mergeChannelOverrides } from "./channel-accounts";
 import type { ChannelConfig } from "@/lib/channels";
 
 const STATIC: ChannelConfig[] = [
-  { id: "zed_revayat", labelFa: "x", organization: "emro", youtubeAccountId: null, instagramAccountId: null, telegramTopicId: null },
-  { id: "tamashin", labelFa: "y", organization: "emro", youtubeAccountId: "static-yt", instagramAccountId: null, telegramTopicId: null },
+  { id: "zed_revayat", labelFa: "x", organization: "emro", youtubeAccountId: null, instagramAccountId: null, telegramTopicId: null, publicTelegramChatId: null },
+  { id: "tamashin", labelFa: "y", organization: "emro", youtubeAccountId: "static-yt", instagramAccountId: null, telegramTopicId: null, publicTelegramChatId: null },
 ];
 
 describe("mergeChannelOverrides", () => {

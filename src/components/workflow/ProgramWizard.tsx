@@ -159,6 +159,7 @@ export function ProgramWizard() {
         dueAt: normalizeDateInput(dueAtInput),
         notes: notes.trim() || null,
         ownerUserId: ownerUserId.trim() || null,
+        channelId,
         // keep original template snapshot immutably as deliverables
         deliverables: draft.deliverables.map((d, idx) => ({
           // client-side draftId is not sent; server generates real ids

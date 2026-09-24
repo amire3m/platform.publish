@@ -15,6 +15,7 @@ export const createProgramSchema = z.object({
   dueAt: isoDatetimeNullable(),
   notes: z.string().max(4000).nullable().optional(),
   templateId: z.string().optional(),
+  channelId: z.string().trim().max(50).nullable().optional(),
 });
 
 export const updateProgramSchema = createProgramSchema

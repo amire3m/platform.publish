@@ -636,9 +636,17 @@ export default function WorkflowProgramDetailPage({ params }: { params: Promise<
                     )}
                   </div>
 
-                  {/* Publications per platform */}
-                  <div className="grid gap-3 sm:grid-cols-3">
-                    {(["telegram", "youtube", "instagram"] as const).map((platform) => {
+                  {/* Publications per platform — only relevant platform per deliverable kind */}
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    {(() => {
+                      const kind = (d.kind ?? "") as string;
+                      const allowed: Array<"telegram" | "youtube" | "instagram"> =
+                        kind === "youtube_full" ? ["youtube"] :
+                        kind === "highlight" ? ["youtube"] :
+                        kind === "reel" ? ["instagram"] :
+                        kind === "cover" ? ["instagram"] :
+                        ["youtube", "instagram"];
+                      return allowed.map((platform) => {
                       const pub = pubs.find((p) => p.platform === platform);
                       if (!pub) {
                         return (
@@ -700,7 +708,7 @@ export default function WorkflowProgramDetailPage({ params }: { params: Promise<
                           </div>
                         </div>
                       );
-                    })}
+                    })})()}
                   </div>
                 </div>
               );

@@ -96,6 +96,29 @@ export async function handleProgramsRequest(
         }
       }
 
+      // If channelId provided, wire all publications of this program to that channel's accounts (one channel, all components)
+      if ((data as unknown as { channelId?: string }).channelId) {
+        try {
+          const channelId = (data as unknown as { channelId: string }).channelId;
+          const { getChannelAccounts } = await import("@/lib/channels");
+          const accounts = getChannelAccounts(channelId);
+          const { db } = await import("@/db");
+          const { workflowDeliverables, workflowPublications } = await import("@/db/schema");
+          const { eq, inArray } = await import("drizzle-orm");
+          const dels = (await db.select().from(workflowDeliverables).where(eq(workflowDeliverables.programId, created.id))) as unknown as Array<{ id: string }>;
+          const delIds = dels.map((d) => d.id);
+          if (delIds.length) {
+            const pubs = (await db.select().from(workflowPublications).where(inArray(workflowPublications.deliverableId, delIds))) as unknown as Array<{ id: string; platform: string }>;
+            for (const pub of pubs) {
+              const sid = pub.platform === "youtube" ? accounts.youtubeAccountId : pub.platform === "instagram" ? accounts.instagramAccountId : null;
+              if (sid) {
+                await db.update(workflowPublications).set({ socialAccountId: sid } as never).where(eq(workflowPublications.id, pub.id));
+              }
+            }
+          }
+        } catch {}
+      }
+
       return jsonOk(created, 201);
     } catch (error) {
       const mapped = mapRepositoryError(error);

@@ -46,6 +46,18 @@ const sendSchema = z.object({
   expectedVersion: z.number().int().positive(),
   /** Optional selective send: publish only these parts (each must be individually ready). */
   partIds: z.array(z.string().min(1)).max(500).optional(),
+  partOverrides: z
+    .array(
+      z.object({
+        partId: z.string().min(1),
+        youtubeTitle: z.string().max(100).optional(),
+        youtubeDescription: z.string().max(4000).optional(),
+        instagramCaption: z.string().max(2200).optional(),
+      }),
+    )
+    .max(100)
+    .optional(),
+  scheduledAt: z.string().datetime({ offset: true }).nullable().optional(),
 });
 
 export async function handleSendRequest(
@@ -75,6 +87,8 @@ export async function handleSendRequest(
       expectedVersion: parsed.data.expectedVersion,
       actorUserId: (user as unknown as { id?: string }).id ?? "unknown",
       partIds: parsed.data.partIds,
+      partOverrides: parsed.data.partOverrides,
+      scheduledAt: parsed.data.scheduledAt ?? null,
     });
     return jsonOk({
       programId: result.program.id,

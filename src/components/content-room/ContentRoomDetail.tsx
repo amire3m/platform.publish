@@ -17,6 +17,7 @@ import { PartActivitiesGrid } from "./PartActivitiesGrid";
 import { TranscriptPanel } from "./TranscriptPanel";
 import { ChannelLinkDialog } from "./ChannelLinkDialog";
 import { EditProductDialog } from "./EditProductDialog";
+import { SendToPublishModal } from "./SendToPublishModal";
 
 interface Props {
   product: ContentRoomProductDetail;
@@ -45,6 +46,7 @@ export function ContentRoomDetail({ product, onRefresh }: Props) {
   const [toast, setToast] = useState<string | null>(null);
   const [sendLoading, setSendLoading] = useState(false);
   const [sendPartId, setSendPartId] = useState<string | null>(null);
+  const [sendModalOpen, setSendModalOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [linkOpen, setLinkOpen] = useState(false);
@@ -264,16 +266,29 @@ export function ContentRoomDetail({ product, onRefresh }: Props) {
 
         <div className="flex flex-wrap gap-2">
           <Button
-            onClick={handleSend}
-            disabled={!isReadyToSend || sendLoading}
+            onClick={() => setSendModalOpen(true)}
+            disabled={sendLoading}
             className="min-h-[44px]"
-            title={!isReadyToSend ? "فقط در وضعیت آماده ارسال امکان ارسال وجود دارد" : "ارسال به انتشار"}
+            title="ارسال به انتشار"
           >
-            {sendLoading ? "در حال ارسال..." : "ارسال به انتشار"}
+            ارسال به انتشار
           </Button>
-          {!isReadyToSend && <span className="self-center text-xs text-tg-secondary">فقط وقتی همه فعالیت‌های لازم برای قسمت‌های فعال تکمیل شود فعال است.</span>}
+          {!isReadyToSend && <span className="self-center text-xs text-amber-600">چک‌لیست کامل نیست ولی می‌توانید باز ارسال کنید — عنوان/توضیح در مرحله بعد پرسیده می‌شود.</span>}
         </div>
       </Card>
+
+      <SendToPublishModal
+        open={sendModalOpen}
+        product={product}
+        onClose={() => setSendModalOpen(false)}
+        onSuccess={(programId) => {
+          setSendResult({ programId });
+          setToast("محصول با موفقیت به اتاق انتشار ارسال شد.");
+          setTimeout(() => setToast(null), 4000);
+          onRefresh();
+        }}
+        onError={(msg) => setActionError(msg)}
+      />
 
       <div className="flex gap-2 border-b border-tg-border">
         {[

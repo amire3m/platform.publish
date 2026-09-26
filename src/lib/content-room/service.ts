@@ -39,6 +39,10 @@ export interface SendToPublicationCommand {
    * whole product to be ready_to_send).
    */
   partIds?: string[];
+  /** Per-part overrides from the new Send Modal (title/description for YouTube, caption for reels). */
+  partOverrides?: Array<{ partId: string; youtubeTitle?: string; youtubeDescription?: string; instagramCaption?: string }>;
+  /** If set, publications are created as scheduled (simple flow), otherwise waiting. */
+  scheduledAt?: string | null;
 }
 
 export interface SendToPublicationResult {
@@ -250,6 +254,8 @@ export function createContentRoomService(options: {
         return rows.length > 0 ? rows[rows.length - 1].fileRef : null;
       };
 
+      const overridesByPart = new Map((command.partOverrides ?? []).map((o) => [o.partId, o]));
+      const scheduledAtDate = command.scheduledAt ? new Date(command.scheduledAt) : null;
       let sortOrder = 0;
       for (const part of sortedParts) {
         for (const kindDef of DELIVERABLE_KINDS) {
@@ -259,17 +265,26 @@ export function createContentRoomService(options: {
             reelFileRef: latestAsset(part.id, "reel") ?? part.reelFileRef ?? null,
             coverFileRef: part.coverFileRef,
           });
+          const override = overridesByPart.get(part.id);
+          const isYoutubeKind = kindDef.kind === "youtube_full" || kindDef.kind === "highlight";
+          const isReelKind = kindDef.kind === "reel";
+          let deliverableName = `${product.title} - قسمت ${part.partNumber} - ${kindDef.nameSuffix}`;
+          let deliverableNotes: string | null = null;
+          if (isYoutubeKind && override?.youtubeTitle?.trim()) deliverableName = override.youtubeTitle.trim().slice(0, 100);
+          if (isYoutubeKind && override?.youtubeDescription?.trim()) deliverableNotes = override.youtubeDescription.trim().slice(0, 4000);
+          if (isReelKind && override?.instagramCaption?.trim()) deliverableNotes = override.instagramCaption.trim().slice(0, 2200);
           const deliverableId = generateEntityId("WDL");
+          const hasFile = Boolean(fileRef);
           const deliverable: WorkflowDeliverableRecord = {
             id: deliverableId,
             programId,
-            name: `${product.title} - قسمت ${part.partNumber} - ${kindDef.nameSuffix}`,
+            name: deliverableName,
             kind: kindDef.kind,
             sortOrder: sortOrder++,
-            productionStatus: "not_started",
+            productionStatus: hasFile ? "ready" : "not_started",
             assigneeUserId: null,
             dueAt: null,
-            notes: null,
+            notes: deliverableNotes,
             contentId: null,
             fileRef,
             archivedAt: null,
@@ -296,15 +311,17 @@ export function createContentRoomService(options: {
           const platform = (KIND_PLATFORM_MAP[kindDef.kind] ?? DELIVERABLE_KIND_TO_PLATFORM[kindDef.kind as keyof typeof DELIVERABLE_KIND_TO_PLATFORM] ?? "youtube") as (typeof PUBLICATION_PLATFORMS)[number];
           const socialAccountId = await resolveChannelAccountIdDb(product.channel, platform as "youtube" | "instagram" | "telegram");
           const pubId = generateEntityId("WPB");
+          const isReady = deliverable.productionStatus === "ready";
+          const pubStatus = isReady ? (scheduledAtDate ? "scheduled" : "ready") : "waiting_for_production";
           const pub: WorkflowPublicationRecord = {
             id: pubId,
             deliverableId,
             platform,
             socialAccountId: socialAccountId ?? null,
-            status: "waiting_for_production",
+            status: pubStatus as never,
             createdSource: "manual",
             terminalOwner: null,
-            scheduledAt: null,
+            scheduledAt: pubStatus === "scheduled" ? scheduledAtDate : null,
             publishedAt: null,
             externalId: null,
             permalink: null,

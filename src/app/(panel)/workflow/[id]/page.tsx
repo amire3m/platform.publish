@@ -611,29 +611,12 @@ export default function WorkflowProgramDetailPage({ params }: { params: Promise<
                     </div>
                   )}
 
-                  {/* Production quick actions */}
+                  {/* Simplified production: auto-ready when file exists — no complex actions for admins */}
                   <div className="rounded-lg border border-tg-border bg-tg-hover/20 p-3">
-                    <p className="mb-2 text-xs font-semibold text-tg-secondary">وضعیت تولید</p>
-                    {canAct ? (
-                      <WorkflowStatusAction
-                        currentStatus={d.productionStatus}
-                        allowedActions={d.allowedActions}
-                        options={[
-                          { action: "start", label: PRODUCTION_ACTION_LABELS.start.label, requiresReason: false },
-                          { action: "submit_review", label: PRODUCTION_ACTION_LABELS.submit_review.label, requiresReason: false },
-                          { action: "request_changes", label: PRODUCTION_ACTION_LABELS.request_changes.label, requiresReason: true, variant: "danger" },
-                          { action: "approve", label: PRODUCTION_ACTION_LABELS.approve.label, requiresReason: false, variant: "primary" },
-                          { action: "reopen", label: PRODUCTION_ACTION_LABELS.reopen.label, requiresReason: true },
-                          { action: "cancel", label: PRODUCTION_ACTION_LABELS.cancel.label, requiresReason: true, variant: "danger" },
-                          { action: "restore", label: PRODUCTION_ACTION_LABELS.restore.label, requiresReason: true },
-                        ]}
-                        onAction={(action, requiresReason) => handleProductionAction(d, action, requiresReason)}
-                      />
-                    ) : (
-                      <span className="inline-flex items-center gap-1 text-xs text-tg-secondary">
-                        تغییر وضعیت تولید نیازمند دسترسی است.
-                      </span>
-                    )}
+                    <p className="mb-1 text-xs font-semibold text-tg-secondary">وضعیت تولید</p>
+                    <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${d.productionStatus === "ready" ? "bg-emerald-500/15 text-emerald-700" : "bg-amber-500/15 text-amber-700"}`}>
+                      {d.productionStatus === "ready" ? "آماده" : "در انتظار فایل"}
+                    </span>
                   </div>
 
                   {/* Publications per platform — only relevant platform per deliverable kind */}
@@ -685,26 +668,9 @@ export default function WorkflowProgramDetailPage({ params }: { params: Promise<
                                </a>
                              </div>
                            )}
-                          <div className="mt-3">
-                            {canActPublication ? (
-                              <WorkflowStatusAction
-                                currentStatus={pub.status}
-                                allowedActions={pub.allowedActions}
-                                compact
-                                showCurrentLabel={false}
-                                options={[
-                                  { action: "schedule", label: PUBLICATION_ACTION_LABELS.schedule.label, requiresReason: false },
-                                  { action: "cancel_schedule", label: PUBLICATION_ACTION_LABELS.cancel_schedule.label, requiresReason: false },
-                                  { action: "suppress", label: PUBLICATION_ACTION_LABELS.suppress.label, requiresReason: true, variant: "danger" },
-                                  { action: "restore_suppressed", label: PUBLICATION_ACTION_LABELS.restore_suppressed.label, requiresReason: true },
-                                  { action: "manual_publish", label: PUBLICATION_ACTION_LABELS.manual_publish.label, requiresReason: true, variant: "primary" },
-                                  { action: "override_terminal_status", label: "اصلاح پایانی", requiresReason: true, variant: "danger" },
-                                ]}
-                                onAction={(action, requiresReason) => handlePublicationAction(pub, action, requiresReason)}
-                              />
-                            ) : (
-                              <span className="text-xs text-tg-secondary">—</span>
-                            )}
+                           <div className="mt-3 flex gap-1.5">
+                            <Button size="sm" variant="secondary" disabled={!canActPublication || !["ready","scheduled","failed"].includes(pub.status)} onClick={() => handlePublicationAction(pub, "schedule", false)} className="min-h-[32px] text-xs">زمان‌بندی</Button>
+                            <Button size="sm" disabled={!canActPublication || !["ready","scheduled","failed"].includes(pub.status)} onClick={() => handlePublicationAction(pub, "manual_publish", true)} className="min-h-[32px] text-xs">انتشار فوری</Button>
                           </div>
                         </div>
                       );

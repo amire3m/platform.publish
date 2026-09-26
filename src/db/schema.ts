@@ -66,6 +66,7 @@ export const telegramTopics = pgTable("telegram_topics", {
   messageThreadId: integer("message_thread_id"), // real Telegram topic id
   purpose: text("purpose").notNull(), // description of what is stored here
   isFixed: boolean("is_fixed").notNull().default(true),
+  statusMessageId: integer("status_message_id"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
@@ -254,6 +255,8 @@ export const appSettings = pgTable("app_settings", {
   readinessLastRunAt: timestamp("readiness_last_run_at", { withTimezone: true }),
   readinessLastStatus: text("readiness_last_status").notNull().default("unknown"),
   readinessLastResult: jsonb("readiness_last_result").$type<Record<string, unknown>>().notNull().default({}),
+  statusMessageId: integer("status_message_id"),
+  statusTopicId: text("status_topic_id"),
   syncStatus: text("sync_status").notNull().default("unknown"), // ok|degraded|offline|unknown
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });

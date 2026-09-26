@@ -5,10 +5,11 @@
 let instrumentationRunning = false;
 
 // Throttles for the heavier background jobs so the 60s publish loop is
-// never starved: mirrors every 5 min, retention sweep every 30 min, insta keep-alive every 6h.
+// never starved: mirrors every 5 min, retention sweep every 30 min, insta keep-alive every 6h, status live every 90s
 let lastMirrorRun = 0;
 let lastSweepRun = 0;
 let lastInstaKeepAlive = 0;
+let lastStatusLive = 0;
 
 async function safeRun(name: string, fn: () => Promise<unknown>) {
   if (instrumentationRunning) return;
@@ -221,6 +222,18 @@ export async function register() {
           return out;
         } catch (err) {
           console.error("[operator] tick failed:", (err as Error).message);
+          return null;
+        }
+      })(),
+      (async () => {
+        try {
+          if (Date.now() - lastStatusLive < 90 * 1000) return null;
+          lastStatusLive = Date.now();
+          const { updateStatusMessage } = await import("@/lib/telegram/status-live");
+          await updateStatusMessage();
+          return { ok: true };
+        } catch (err) {
+          console.error("[status-live] tick failed:", (err as Error).message);
           return null;
         }
       })(),

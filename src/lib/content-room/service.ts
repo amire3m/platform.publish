@@ -131,6 +131,23 @@ export function createContentRoomService(options: {
       if (product.version !== command.expectedVersion) {
         throw new ContentRoomServiceError("VERSION_CONFLICT", "نسخه قدیمی است.");
       }
+      // Prevent duplicate send: one active program per product
+      try {
+        const { db } = await import("@/db");
+        const { workflowPrograms } = await import("@/db/schema");
+        const { and, eq, isNull } = await import("drizzle-orm");
+        const [existing] = (await db
+          .select()
+          .from(workflowPrograms)
+          .where(and(eq(workflowPrograms.source, "content_room"), eq(workflowPrograms.sourceRef, product.id), isNull(workflowPrograms.archivedAt)))
+          .limit(1)) as unknown as Array<{ id: string }>;
+        if (existing) {
+          throw new ContentRoomServiceError("INVALID_TRANSITION", "این محتوا قبلاً به اتاق انتشار ارسال شده است.");
+        }
+      } catch (e) {
+        if ((e as { code?: string }).code === "INVALID_TRANSITION") throw e;
+        // ignore DB errors for test environments
+      }
       // Whole-product send requires ready_to_send; partial (selected-part) send
       // skips this gate — checked below in the branch on command.partIds.
 

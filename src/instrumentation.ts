@@ -51,6 +51,17 @@ export async function register() {
     Promise.allSettled([
       runPublishTick(),
       (async () => {
+        try {
+          const { runWorkflowPublishTick } = await import("@/lib/workflow/publish-worker");
+          const out = await runWorkflowPublishTick();
+          if (out.processed || out.errors) console.log(`[wf-worker] tick processed=${out.processed} errors=${out.errors}`);
+          return out;
+        } catch (err) {
+          console.error("[wf-worker] tick failed:", (err as Error).message);
+          return { processed: 0, errors: 0 };
+        }
+      })(),
+      (async () => {
         const { runLiveConductorTickReal } = await import("@/lib/live/conductor");
         return runLiveConductorTickReal();
       })(),

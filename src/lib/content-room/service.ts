@@ -39,12 +39,14 @@ export interface SendToPublicationCommand {
    * whole product to be ready_to_send).
    */
   partIds?: string[];
-  /** Per-part overrides from the new Send Modal (title/description for YouTube, caption for reels). */
-  partOverrides?: Array<{ partId: string; youtubeTitle?: string; youtubeDescription?: string; instagramCaption?: string }>;
+  /** Per-deliverable overrides: each entry is per part+kind with YouTube title/description/playlist and Instagram caption.
+   * kind: youtube_full | highlight | reel | cover (optional for legacy single-title)
+   */
+  partOverrides?: Array<{ partId: string; kind?: string; title?: string; description?: string; playlistId?: string | null; instagramCaption?: string; youtubeTitle?: string; youtubeDescription?: string }>;
   /** If set, publications are created as scheduled (simple flow), otherwise waiting. */
   scheduledAt?: string | null;
-  /** Optional per-part per-platform schedule (overrides global scheduledAt). */
-  perPartSchedules?: Array<{ partId: string; youtubeScheduledAt?: string | null; instagramScheduledAt?: string | null }>;
+  /** Optional per-part per-platform schedule (overrides global scheduledAt). Keys are partId+kind aware. */
+  perPartSchedules?: Array<{ partId: string; kind?: string | null; youtubeScheduledAt?: string | null; instagramScheduledAt?: string | null; scheduledAt?: string | null }>;
 }
 
 export interface SendToPublicationResult {
@@ -66,7 +68,7 @@ const DELIVERABLE_KINDS = [
 ] as const;
 
 const PUBLICATION_PLATFORMS = ["youtube", "instagram", "telegram"] as const;
-// Mapping: youtube_full/highlight->youtube only, cover->instagram only, reel-> both (Shorts youtube + instagram)
+// Mapping: each video kind can publish to YouTube (cover is thumbnail-only, no publication)
 const KIND_PLATFORM_MAP: Record<string, (typeof PUBLICATION_PLATFORMS)[number]> = {
   youtube_full: "youtube",
   highlight: "youtube",
@@ -76,6 +78,8 @@ const KIND_PLATFORM_MAP: Record<string, (typeof PUBLICATION_PLATFORMS)[number]> 
 const KIND_PLATFORMS_MULTI: Record<string, Array<(typeof PUBLICATION_PLATFORMS)[number]>> = {
   reel: ["youtube", "instagram"],
 };
+// Cover is thumbnail-only: no video publication, just file stored for thumbnail use
+const COVER_KIND = "cover";
 
 /** Which part file belongs to which deliverable kind. */
 function resolveDeliverableFileRef(
@@ -259,8 +263,11 @@ export function createContentRoomService(options: {
         return rows.length > 0 ? rows[rows.length - 1].fileRef : null;
       };
 
-      const overridesByPart = new Map((command.partOverrides ?? []).map((o) => [o.partId, o]));
-      const schedulesByPart = new Map((command.perPartSchedules ?? []).map((s) => [s.partId, s]));
+      // Build lookup: partId+kind -> override, and partId -> schedule, and partId+kind -> schedule
+      const overridesByKey = new Map((command.partOverrides ?? []).map((o) => [`${o.partId}:${o.kind}`, o] as const));
+      const overridesByPartLegacy = new Map((command.partOverrides ?? []).filter(o=>!o.kind).map((o) => [o.partId, o] as const));
+      const schedulesByKey = new Map((command.perPartSchedules ?? []).filter(s=>s.kind).map((s) => [`${s.partId}:${s.kind}`, s] as const));
+      const schedulesByPart = new Map((command.perPartSchedules ?? []).map((s) => [s.partId, s] as const));
       const scheduledAtDate = command.scheduledAt ? new Date(command.scheduledAt) : null;
       let sortOrder = 0;
       for (const part of sortedParts) {
@@ -271,16 +278,25 @@ export function createContentRoomService(options: {
             reelFileRef: latestAsset(part.id, "reel") ?? part.reelFileRef ?? null,
             coverFileRef: part.coverFileRef,
           });
-          const override = overridesByPart.get(part.id);
-          const isYoutubeKind = kindDef.kind === "youtube_full" || kindDef.kind === "highlight";
-          const isReelKind = kindDef.kind === "reel";
+          const override = overridesByKey.get(`${part.id}:${kindDef.kind}`) ?? overridesByPartLegacy.get(part.id) as unknown as { title?: string; description?: string; playlistId?: string | null; youtubeTitle?: string; youtubeDescription?: string; instagramCaption?: string } | undefined;
+          // Support both new (title/description/playlistId) and legacy (youtubeTitle etc)
           let deliverableName = `${product.title} - قسمت ${part.partNumber} - ${kindDef.nameSuffix}`;
           let deliverableNotes: string | null = null;
-          if (isYoutubeKind && override?.youtubeTitle?.trim()) deliverableName = override.youtubeTitle.trim().slice(0, 100);
-          if (isYoutubeKind && override?.youtubeDescription?.trim()) deliverableNotes = override.youtubeDescription.trim().slice(0, 4000);
-          if (isReelKind && override?.instagramCaption?.trim()) deliverableNotes = override.instagramCaption.trim().slice(0, 2200);
+          let playlistId: string | null = null;
+          if (override) {
+            const t = (override as unknown as { title?: string; youtubeTitle?: string }).title ?? (override as unknown as { youtubeTitle?: string }).youtubeTitle;
+            const d = (override as unknown as { description?: string; youtubeDescription?: string }).description ?? (override as unknown as { youtubeDescription?: string }).youtubeDescription;
+            const cap = (override as unknown as { instagramCaption?: string }).instagramCaption;
+            if (t?.trim()) deliverableName = t.trim().slice(0, 100);
+            if (kindDef.kind === "reel" && cap?.trim()) deliverableNotes = cap.trim().slice(0, 2200);
+            else if (d?.trim()) deliverableNotes = d.trim().slice(0, 5000);
+            const pl = (override as unknown as { playlistId?: string | null }).playlistId;
+            if (pl?.trim()) playlistId = pl.trim();
+          }
           const deliverableId = generateEntityId("WDL");
           const hasFile = Boolean(fileRef);
+          // Cover is thumbnail-only: ready if file exists, but no publication
+          const isCover = kindDef.kind === COVER_KIND;
           const deliverable: WorkflowDeliverableRecord = {
             id: deliverableId,
             programId,
@@ -313,10 +329,12 @@ export function createContentRoomService(options: {
             createdAt: now,
           });
 
+          if (isCover) continue; // No publication for cover — used as thumbnail for YouTube videos
           // Create publication(s) per deliverable — reel creates BOTH youtube (Shorts) + instagram with independent schedules
           const platforms: Array<(typeof PUBLICATION_PLATFORMS)[number]> = (KIND_PLATFORMS_MULTI[kindDef.kind] ??
             [(KIND_PLATFORM_MAP[kindDef.kind] ?? DELIVERABLE_KIND_TO_PLATFORM[kindDef.kind as keyof typeof DELIVERABLE_KIND_TO_PLATFORM] ?? "youtube") as (typeof PUBLICATION_PLATFORMS)[number]]);
-          const partSchedule = schedulesByPart.get(part.id);
+          // Prefer kind-specific schedule, fallback to part-wide
+          const partSchedule = schedulesByKey.get(`${part.id}:${kindDef.kind}`) ?? schedulesByPart.get(part.id);
           for (const platform of platforms) {
           const socialAccountId = await resolveChannelAccountIdDb(product.channel, platform as "youtube" | "instagram" | "telegram");
           const pubId = generateEntityId("WPB");
@@ -324,8 +342,8 @@ export function createContentRoomService(options: {
           // Per-platform schedule overrides global
           let perPlatformDate: Date | null = null;
           if (partSchedule) {
-            const raw = platform === "youtube" ? partSchedule.youtubeScheduledAt : partSchedule.instagramScheduledAt;
-            if (raw) perPlatformDate = new Date(raw);
+            const raw = platform === "youtube" ? (partSchedule.youtubeScheduledAt ?? partSchedule.scheduledAt) : (partSchedule.instagramScheduledAt ?? partSchedule.scheduledAt);
+            if (raw) perPlatformDate = new Date(raw as string);
           }
           const effectiveDate = perPlatformDate ?? scheduledAtDate;
           const pubStatus = isReady ? (effectiveDate ? "scheduled" : "ready") : "waiting_for_production";
@@ -344,11 +362,12 @@ export function createContentRoomService(options: {
             lastErrorCode: null,
             lastErrorMessage: null,
             manualReason: null,
+            playlistId: platform === "youtube" ? playlistId : null,
             version: 1,
             updatedBy: null,
             createdAt: now,
             updatedAt: now,
-          };
+          } as unknown as WorkflowPublicationRecord;
           publications.push(pub);
           events.push({
             id: generateEntityId("WEV"),

@@ -17,6 +17,7 @@ export interface PublishInput {
   category?: string;
   madeForKids?: boolean;
   thumbnailBuffer?: Buffer | null;
+  playlistId?: string | null;
   publishAtUtc?: string | null;
 }
 

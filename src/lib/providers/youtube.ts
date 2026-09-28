@@ -77,6 +77,17 @@ async function publish(input: PublishInput): Promise<PublishResult> {
       }
     }
 
+    if (input.playlistId) {
+      try {
+        await youtube.playlistItems.insert({
+          part: ["snippet"],
+          requestBody: { snippet: { playlistId: input.playlistId, resourceId: { kind: "youtube#video", videoId } } },
+        });
+      } catch {
+        // Playlist failure should not fail the whole publish.
+      }
+    }
+
     return {
       ok: true,
       externalId: videoId,

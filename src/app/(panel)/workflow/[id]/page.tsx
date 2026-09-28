@@ -45,6 +45,7 @@ interface PublicationDetail {
   lastErrorMessage?: string | null;
   externalId?: string | null;
   permalink?: string | null;
+  playlistId?: string | null;
 }
 
 interface DeliverableDetail {
@@ -619,7 +620,21 @@ export default function WorkflowProgramDetailPage({ params }: { params: Promise<
                     </span>
                   </div>
 
-                  {/* Publications per platform — only relevant platform per deliverable kind */}
+                  {/* Cover: thumbnail only */}
+                  {d.kind === "cover" && (
+                    <div className="rounded-lg border border-dashed border-tg-border bg-amber-500/5 p-3">
+                      <p className="text-xs font-semibold text-tg-secondary">کاور — به‌عنوان تامبنیل همهٔ ویدیوهای یوتیوب همین قسمت استفاده می‌شود</p>
+                      {d.fileUrl ? (
+                        <div className="mt-2 overflow-hidden rounded-lg border border-tg-border bg-black">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={d.fileUrl} alt={d.name} className="max-h-40 w-full object-contain" />
+                        </div>
+                      ) : (
+                        <p className="mt-2 text-xs text-tg-secondary">فایل کاور هنوز آپلود نشده است.</p>
+                      )}
+                    </div>
+                  )}
+                  {d.kind !== "cover" && (
                   <div className="grid gap-3 sm:grid-cols-2">
                     {(() => {
                       const kind = (d.kind ?? "") as string;
@@ -627,7 +642,6 @@ export default function WorkflowProgramDetailPage({ params }: { params: Promise<
                         kind === "youtube_full" ? ["youtube"] :
                         kind === "highlight" ? ["youtube"] :
                         kind === "reel" ? ["youtube", "instagram"] :
-                        kind === "cover" ? ["instagram"] :
                         ["youtube", "instagram"];
                       return allowed.map((platform) => {
                       const pub = pubs.find((p) => p.platform === platform);
@@ -676,6 +690,13 @@ export default function WorkflowProgramDetailPage({ params }: { params: Promise<
                       );
                     })})()}
                   </div>
+                  )}
+                  {d.kind !== "cover" && d.notes && (
+                    <div className="rounded-lg border border-tg-border bg-sky-500/5 p-3">
+                      <p className="mb-1 text-xs font-semibold text-tg-secondary">توضیحات یوتیوب</p>
+                      <p className="text-xs leading-relaxed text-tg-text/80">{d.notes}</p>
+                    </div>
+                  )}
                 </div>
               );
             })}

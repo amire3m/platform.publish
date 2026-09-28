@@ -137,11 +137,32 @@ async function doTick(): Promise<{ processed: number; errors: number }> {
     }
 
     let payload: MediaPayload | null = null;
+    let thumbBuffer: Buffer | null = null;
     try {
       payload = await getMediaPayload(client, fileRef);
       const fileBuffer = payload.kind === "buffer" ? payload.buffer : Buffer.alloc(0);
       const filePath = payload.kind === "file" ? payload.path : null;
       const fileSize = payloadSize(payload);
+
+      // Try to fetch cover thumbnail for this program (same program, kind=cover)
+      try {
+        const programId = (del as unknown as { programId: string }).programId;
+        const covers = await db.select().from(workflowDeliverables).where(and(eq(workflowDeliverables.programId, programId), eq(workflowDeliverables.kind, "cover"))).limit(1);
+        const coverRef = (covers[0] as unknown as { fileRef?: string | null })?.fileRef;
+        if (coverRef && !coverRef.startsWith("tg_msg_") && !coverRef.startsWith("sample_")) {
+          const cPayload = await getMediaPayload(client, coverRef);
+          if (cPayload.kind === "buffer") thumbBuffer = cPayload.buffer as Buffer;
+          else {
+            // file on disk: read first 5MB for thumbnail (cover should be small)
+            const { readFile } = await import("node:fs/promises");
+            thumbBuffer = await readFile(cPayload.path as string).catch(() => null) as Buffer | null;
+            await cleanupPayload(cPayload);
+          }
+          if (cPayload.kind === "buffer") await cleanupPayload(cPayload);
+        }
+      } catch {}
+
+      const playlistId = (pub as unknown as { playlistId?: string | null }).playlistId ?? null;
 
       let result: { ok: boolean; externalId?: string | null; permalink?: string | null; message?: string; retryable?: boolean };
 
@@ -160,6 +181,8 @@ async function doTick(): Promise<{ processed: number; errors: number }> {
           tags: [],
           privacyStatus: "private",
           madeForKids: false,
+          thumbnailBuffer: thumbBuffer,
+          playlistId: playlistId ?? null,
           publishAtUtc: null,
         });
         result = { ok: r.ok, externalId: (r as unknown as { externalId?: string }).externalId ?? null, permalink: (r as unknown as { permalink?: string }).permalink ?? null, message: (r as unknown as { message?: string }).message, retryable: (r as unknown as { retryable?: boolean }).retryable };

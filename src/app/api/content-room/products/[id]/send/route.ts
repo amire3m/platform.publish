@@ -50,23 +50,30 @@ const sendSchema = z.object({
     .array(
       z.object({
         partId: z.string().min(1),
-        youtubeTitle: z.string().max(100).optional(),
-        youtubeDescription: z.string().max(4000).optional(),
+        kind: z.string().min(1).optional(),
+        title: z.string().max(100).optional(),
+        description: z.string().max(5000).optional(),
+        playlistId: z.string().max(100).nullable().optional(),
         instagramCaption: z.string().max(2200).optional(),
+        // legacy
+        youtubeTitle: z.string().max(100).optional(),
+        youtubeDescription: z.string().max(5000).optional(),
       }),
     )
-    .max(100)
+    .max(200)
     .optional(),
   scheduledAt: z.string().datetime({ offset: true }).nullable().optional(),
   perPartSchedules: z
     .array(
       z.object({
         partId: z.string().min(1),
+        kind: z.string().min(1).nullable().optional(),
         youtubeScheduledAt: z.string().datetime({ offset: true }).nullable().optional(),
         instagramScheduledAt: z.string().datetime({ offset: true }).nullable().optional(),
+        scheduledAt: z.string().datetime({ offset: true }).nullable().optional(),
       }),
     )
-    .max(100)
+    .max(200)
     .optional(),
 });
 

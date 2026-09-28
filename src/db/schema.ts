@@ -404,6 +404,7 @@ export const workflowPublications = pgTable(
     lastErrorCode: text("last_error_code"),
     lastErrorMessage: text("last_error_message"),
     manualReason: text("manual_reason"),
+    playlistId: text("playlist_id"),
     version: integer("version").notNull().default(1),
     updatedBy: text("updated_by").references(() => users.id, {
       onDelete: "set null",

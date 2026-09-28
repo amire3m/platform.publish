@@ -58,6 +58,16 @@ const sendSchema = z.object({
     .max(100)
     .optional(),
   scheduledAt: z.string().datetime({ offset: true }).nullable().optional(),
+  perPartSchedules: z
+    .array(
+      z.object({
+        partId: z.string().min(1),
+        youtubeScheduledAt: z.string().datetime({ offset: true }).nullable().optional(),
+        instagramScheduledAt: z.string().datetime({ offset: true }).nullable().optional(),
+      }),
+    )
+    .max(100)
+    .optional(),
 });
 
 export async function handleSendRequest(
@@ -89,6 +99,7 @@ export async function handleSendRequest(
       partIds: parsed.data.partIds,
       partOverrides: parsed.data.partOverrides,
       scheduledAt: parsed.data.scheduledAt ?? null,
+      perPartSchedules: parsed.data.perPartSchedules ?? undefined,
     });
     return jsonOk({
       programId: result.program.id,

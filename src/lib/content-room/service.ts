@@ -43,6 +43,8 @@ export interface SendToPublicationCommand {
   partOverrides?: Array<{ partId: string; youtubeTitle?: string; youtubeDescription?: string; instagramCaption?: string }>;
   /** If set, publications are created as scheduled (simple flow), otherwise waiting. */
   scheduledAt?: string | null;
+  /** Optional per-part per-platform schedule (overrides global scheduledAt). */
+  perPartSchedules?: Array<{ partId: string; youtubeScheduledAt?: string | null; instagramScheduledAt?: string | null }>;
 }
 
 export interface SendToPublicationResult {
@@ -64,12 +66,15 @@ const DELIVERABLE_KINDS = [
 ] as const;
 
 const PUBLICATION_PLATFORMS = ["youtube", "instagram", "telegram"] as const;
-// Mapping per spec: youtube_full->youtube, highlight->youtube, reel->instagram, cover->instagram
+// Mapping: youtube_full/highlight->youtube only, cover->instagram only, reel-> both (Shorts youtube + instagram)
 const KIND_PLATFORM_MAP: Record<string, (typeof PUBLICATION_PLATFORMS)[number]> = {
   youtube_full: "youtube",
   highlight: "youtube",
   reel: "instagram",
   cover: "instagram",
+};
+const KIND_PLATFORMS_MULTI: Record<string, Array<(typeof PUBLICATION_PLATFORMS)[number]>> = {
+  reel: ["youtube", "instagram"],
 };
 
 /** Which part file belongs to which deliverable kind. */
@@ -255,6 +260,7 @@ export function createContentRoomService(options: {
       };
 
       const overridesByPart = new Map((command.partOverrides ?? []).map((o) => [o.partId, o]));
+      const schedulesByPart = new Map((command.perPartSchedules ?? []).map((s) => [s.partId, s]));
       const scheduledAtDate = command.scheduledAt ? new Date(command.scheduledAt) : null;
       let sortOrder = 0;
       for (const part of sortedParts) {
@@ -307,12 +313,22 @@ export function createContentRoomService(options: {
             createdAt: now,
           });
 
-          // Create single publication per deliverable mapped to channel's social account
-          const platform = (KIND_PLATFORM_MAP[kindDef.kind] ?? DELIVERABLE_KIND_TO_PLATFORM[kindDef.kind as keyof typeof DELIVERABLE_KIND_TO_PLATFORM] ?? "youtube") as (typeof PUBLICATION_PLATFORMS)[number];
+          // Create publication(s) per deliverable — reel creates BOTH youtube (Shorts) + instagram with independent schedules
+          const platforms: Array<(typeof PUBLICATION_PLATFORMS)[number]> = (KIND_PLATFORMS_MULTI[kindDef.kind] ??
+            [(KIND_PLATFORM_MAP[kindDef.kind] ?? DELIVERABLE_KIND_TO_PLATFORM[kindDef.kind as keyof typeof DELIVERABLE_KIND_TO_PLATFORM] ?? "youtube") as (typeof PUBLICATION_PLATFORMS)[number]]);
+          const partSchedule = schedulesByPart.get(part.id);
+          for (const platform of platforms) {
           const socialAccountId = await resolveChannelAccountIdDb(product.channel, platform as "youtube" | "instagram" | "telegram");
           const pubId = generateEntityId("WPB");
           const isReady = deliverable.productionStatus === "ready";
-          const pubStatus = isReady ? (scheduledAtDate ? "scheduled" : "ready") : "waiting_for_production";
+          // Per-platform schedule overrides global
+          let perPlatformDate: Date | null = null;
+          if (partSchedule) {
+            const raw = platform === "youtube" ? partSchedule.youtubeScheduledAt : partSchedule.instagramScheduledAt;
+            if (raw) perPlatformDate = new Date(raw);
+          }
+          const effectiveDate = perPlatformDate ?? scheduledAtDate;
+          const pubStatus = isReady ? (effectiveDate ? "scheduled" : "ready") : "waiting_for_production";
           const pub: WorkflowPublicationRecord = {
             id: pubId,
             deliverableId,
@@ -321,7 +337,7 @@ export function createContentRoomService(options: {
             status: pubStatus as never,
             createdSource: "manual",
             terminalOwner: null,
-            scheduledAt: pubStatus === "scheduled" ? scheduledAtDate : null,
+            scheduledAt: pubStatus === "scheduled" ? effectiveDate : null,
             publishedAt: null,
             externalId: null,
             permalink: null,
@@ -346,6 +362,7 @@ export function createContentRoomService(options: {
             reason: null,
             createdAt: now,
           });
+          }
         }
       }
 

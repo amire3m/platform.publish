@@ -626,7 +626,7 @@ export default function WorkflowProgramDetailPage({ params }: { params: Promise<
                       const allowed: Array<"telegram" | "youtube" | "instagram"> =
                         kind === "youtube_full" ? ["youtube"] :
                         kind === "highlight" ? ["youtube"] :
-                        kind === "reel" ? ["instagram"] :
+                        kind === "reel" ? ["youtube", "instagram"] :
                         kind === "cover" ? ["instagram"] :
                         ["youtube", "instagram"];
                       return allowed.map((platform) => {

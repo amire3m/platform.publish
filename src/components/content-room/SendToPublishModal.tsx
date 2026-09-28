@@ -20,11 +20,14 @@ interface Props {
 export function SendToPublishModal({ open, product, onClose, onSuccess, onError }: Props) {
   const parts = (product.parts ?? []).filter((p) => (p as unknown as { isActive?: boolean }).isActive ?? true).sort((a, b) => a.partNumber - b.partNumber);
   const [overrides, setOverrides] = useState<Record<string, { youtubeTitle: string; youtubeDescription: string; instagramCaption: string }>>({});
-  const [scheduledAt, setScheduledAt] = useState("");
+  const [schedules, setSchedules] = useState<Record<string, { youtubeScheduledAt: string; instagramScheduledAt: string }>>({});
   const [sending, setSending] = useState(false);
 
   function update(partId: string, field: string, value: string) {
     setOverrides((prev) => ({ ...prev, [partId]: { ...prev[partId], [field]: value } as never }));
+  }
+  function updateSchedule(partId: string, field: string, value: string) {
+    setSchedules((prev) => ({ ...prev, [partId]: { ...prev[partId], [field]: value } as never }));
   }
 
   async function handleSend() {
@@ -39,11 +42,19 @@ export function SendToPublishModal({ open, product, onClose, onSuccess, onError 
           instagramCaption: o.instagramCaption?.trim() || undefined,
         };
       });
+      const perPartSchedules = parts.map((p) => {
+        const s = schedules[p.id] ?? { youtubeScheduledAt: "", instagramScheduledAt: "" };
+        return {
+          partId: p.id,
+          youtubeScheduledAt: s.youtubeScheduledAt ? new Date(s.youtubeScheduledAt).toISOString() : null,
+          instagramScheduledAt: s.instagramScheduledAt ? new Date(s.instagramScheduledAt).toISOString() : null,
+        };
+      }).filter((s) => s.youtubeScheduledAt || s.instagramScheduledAt);
       const payload: Record<string, unknown> = {
         expectedVersion: product.version,
         partOverrides,
       };
-      if (scheduledAt) payload.scheduledAt = new Date(scheduledAt).toISOString();
+      if (perPartSchedules.length > 0) payload.perPartSchedules = perPartSchedules;
       const res = await fetch(`/api/content-room/products/${product.id}/send`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -61,46 +72,49 @@ export function SendToPublishModal({ open, product, onClose, onSuccess, onError 
   }
 
   return (
-    <Modal open={open} onClose={onClose} title="ارسال به اتاق انتشار">
+    <Modal open={open} onClose={onClose} title="ارسال به اتاق انتشار — زمان مستقل هر پلتفرم">
       <div className="space-y-4" dir="rtl">
-        <p className="text-xs text-tg-secondary">برای یوتیوب عنوان و توضیحات، برای اینستاگرام (فقط ریلز) کپشن را بنویس. خالی بگذاری از عنوان محصول استفاده می‌شود.</p>
-        <div>
-          <Label>زمان انتشار (خالی = آماده برای انتشار فوری)</Label>
-          <Input type="datetime-local" value={scheduledAt} onChange={(e) => setScheduledAt(e.target.value)} className="mt-1" />
-        </div>
-        <div className="max-h-[50vh] space-y-4 overflow-y-auto pr-1">
+        <p className="text-xs leading-relaxed text-tg-secondary">
+          ریلز یک فایل دارد ولی <b>دو انتشار جدا</b> می‌سازد: <span className="text-tg-text">یوتیوب Shorts</span> + <span className="text-tg-text">اینستاگرام</span> — زمان هر کدام را جدا انتخاب کن. خالی = آماده برای انتشار فوری. بعد هم در اتاق انتشار هر کدام را جدا زمان‌بندی/ویرایش می‌توانی کرد.
+        </p>
+        <div className="max-h-[55vh] space-y-4 overflow-y-auto pr-1">
           {parts.map((p) => (
             <div key={p.id} className="rounded-xl border border-tg-border p-3">
-              <p className="mb-2 text-sm font-bold text-tg-text">قسمت {p.partNumber}</p>
+              <p className="mb-3 text-sm font-bold text-tg-text">قسمت {p.partNumber}</p>
               <div className="grid gap-3">
-                <div>
-                  <Label>عنوان یوتیوب</Label>
+                <div className="rounded-lg bg-tg-hover/30 p-2.5">
+                  <Label>یوتیوب — عنوان / توضیحات + زمان یوتیوب</Label>
                   <Input
                     value={overrides[p.id]?.youtubeTitle ?? ""}
                     onChange={(e) => update(p.id, "youtubeTitle", e.target.value)}
                     placeholder={`${product.title} - قسمت ${p.partNumber}`}
-                    className="mt-1 text-xs"
+                    className="mt-1.5 text-xs"
                   />
-                </div>
-                <div>
-                  <Label>توضیحات یوتیوب</Label>
                   <Textarea
                     value={overrides[p.id]?.youtubeDescription ?? ""}
                     onChange={(e) => update(p.id, "youtubeDescription", e.target.value)}
                     rows={2}
                     placeholder="توضیحات ۲-۳ خط..."
-                    className="mt-1 text-xs"
+                    className="mt-2 text-xs"
                   />
+                  <div className="mt-2">
+                    <Label>زمان یوتیوب (کامل/هایلایت/ریلز Shorts)</Label>
+                    <Input type="datetime-local" value={schedules[p.id]?.youtubeScheduledAt ?? ""} onChange={(e) => updateSchedule(p.id, "youtubeScheduledAt", e.target.value)} className="mt-1 text-xs" />
+                  </div>
                 </div>
-                <div>
-                  <Label>کپشن اینستاگرام (ریلز)</Label>
+                <div className="rounded-lg bg-pink-500/5 p-2.5">
+                  <Label>اینستاگرام — کپشن ریلز + زمان اینستاگرام</Label>
                   <Textarea
                     value={overrides[p.id]?.instagramCaption ?? ""}
                     onChange={(e) => update(p.id, "instagramCaption", e.target.value)}
                     rows={2}
                     placeholder="کپشن کوتاه + هشتگ..."
-                    className="mt-1 text-xs"
+                    className="mt-1.5 text-xs"
                   />
+                  <div className="mt-2">
+                    <Label>زمان اینستاگرام (ریلز/کاور)</Label>
+                    <Input type="datetime-local" value={schedules[p.id]?.instagramScheduledAt ?? ""} onChange={(e) => updateSchedule(p.id, "instagramScheduledAt", e.target.value)} className="mt-1 text-xs" />
+                  </div>
                 </div>
               </div>
             </div>

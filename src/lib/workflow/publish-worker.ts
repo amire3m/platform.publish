@@ -99,7 +99,8 @@ async function doTick(): Promise<{ processed: number; errors: number }> {
       console.error("[wf-worker] gate check failed", pub.id, (e as Error).message);
     }
 
-    // Claim: ready/scheduled -> publishing via worker actor
+    // Claim: ready/scheduled -> publishing via worker actor (use real user id for FK)
+    const workerUserId = "USR-1405-918823";
     try {
       const { createWorkflowRepository } = await import("@/lib/workflow/repository");
       const repo = createWorkflowRepository();
@@ -108,10 +109,11 @@ async function doTick(): Promise<{ processed: number; errors: number }> {
         expectedVersion: pub.version,
         action: "claim_publish" as never,
         actor: "worker",
-        actorUserId: "worker",
+        actorUserId: workerUserId,
       });
     } catch (e) {
       // Already claimed or invalid transition, skip
+      console.error("[wf-worker] claim failed", pub.id, (e as Error).message);
       continue;
     }
 
@@ -220,7 +222,7 @@ async function doTick(): Promise<{ processed: number; errors: number }> {
           expectedVersion: fresh.version,
           action: "publish_succeeded" as never,
           actor: "worker",
-          actorUserId: "worker",
+          actorUserId: workerUserId,
         });
         // Save permalink/externalId
         await db.update(workflowPublications).set({ externalId: result.externalId ?? null, permalink: result.permalink ?? null, lastErrorMessage: null, lastErrorCode: null } as never).where(eq(workflowPublications.id, pub.id));
@@ -250,6 +252,7 @@ async function doTick(): Promise<{ processed: number; errors: number }> {
 }
 
 async function failPub(pubId: string, message: string, retryable?: boolean) {
+  const workerUserId = "USR-1405-918823";
   try {
     const [fresh] = await db.select().from(workflowPublications).where(eq(workflowPublications.id, pubId)).limit(1);
     if (!fresh) return;
@@ -261,7 +264,7 @@ async function failPub(pubId: string, message: string, retryable?: boolean) {
         expectedVersion: fresh.version,
         action: "publish_failed" as never,
         actor: "worker",
-        actorUserId: "worker",
+        actorUserId: workerUserId,
       });
       const [after] = await db.select().from(workflowPublications).where(eq(workflowPublications.id, pubId)).limit(1);
       await db.update(workflowPublications).set({ lastErrorMessage: message, lastErrorCode: retryable ? "RETRYABLE" : "FAILED" } as never).where(eq(workflowPublications.id, after.id));

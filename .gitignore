@@ -15,9 +15,10 @@ coverage/
 *.tsbuildinfo
 .eslintcache
 
-# Local agent workflow state
+# Local workflow state
 .superpowers/
 .worktrees/
+docs/superpowers/
 
 # Logs and temporary files
 *.log

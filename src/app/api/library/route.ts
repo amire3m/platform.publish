@@ -3,7 +3,7 @@ import { db } from "@/db";
 import { contentParts, contentProducts, contentPartAssets, workflowEvents } from "@/db/schema";
 import { jsonError, jsonOk } from "@/lib/api-helpers";
 import { getCurrentUser } from "@/lib/auth";
-import { getChannelLabelFa } from "@/lib/channels";
+import { getChannelLabelFa, HIDDEN_CHANNEL_IDS } from "@/lib/channels";
 import jwt from "jsonwebtoken";
 
 export const dynamic = "force-dynamic";
@@ -83,8 +83,10 @@ export async function GET() {
   const isPrivileged = ["owner", "manager", "admin"].includes(role) || allowedChannels.length === 0;
 
   const products = await db.select().from(contentProducts).orderBy(desc(contentProducts.updatedAt)).limit(300);
+  const hidden = new Set<string>(HIDDEN_CHANNEL_IDS as unknown as string[]);
   const filteredProducts = products.filter((p) => {
     const ch = (p as unknown as { channel: string }).channel;
+    if (hidden.has(ch)) return false;
     if (!isPrivileged && allowedChannels.length > 0 && !allowedChannels.includes(ch)) return false;
     return true;
   });

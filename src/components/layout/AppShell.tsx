@@ -8,9 +8,9 @@ import {
   BarChart3,
   Bell,
   CalendarDays,
+  ChevronDown,
   Compass,
   FileText,
-  FolderOpen,
   Images,
   LayoutDashboard,
   ListChecks,
@@ -19,9 +19,9 @@ import {
   Menu,
   Moon,
   Package,
-  PlusCircle,
   Radio,
   Settings,
+  Sparkles,
   Sun,
   Tv,
   Users,
@@ -30,13 +30,34 @@ import { useTheme, useToast } from "@/components/providers";
 import { roleLabelFa } from "@/lib/presentation-fa";
 import { NotificationCenter } from "@/components/workflow/NotificationCenter";
 
-const NAV_ITEMS = [
+type NavItem = { href: string; label: string; icon: React.ComponentType<{ className?: string }> };
+type NavGroup = { title: string; items: NavItem[]; defaultOpen?: boolean };
+
+const CORE_NAV: NavItem[] = [
   { href: "/dashboard", label: "داشبورد", icon: LayoutDashboard },
-  { href: "/calendar", label: "تقویم انتشار", icon: CalendarDays },
-  { href: "/accounts", label: "کانال‌ها و پیج‌ها", icon: Tv },
-  { href: "/users", label: "کاربران و تیم", icon: Users },
+  { href: "/content-room", label: "اتاق محتوا", icon: Package },
+  { href: "/workflow", label: "اتاق انتشار", icon: ListChecks },
+  { href: "/library", label: "کتابخانه", icon: Images },
+];
+const PUBLISH_NAV: NavItem[] = [
+  { href: "/calendar", label: "تقویم", icon: CalendarDays },
+  { href: "/live", label: "لایو", icon: Radio },
+];
+const ANALYTICS_NAV: NavItem[] = [
   { href: "/analytics", label: "آنالیز", icon: BarChart3 },
   { href: "/reports", label: "گزارش‌ها", icon: FileText },
+];
+const GROWTH_NAV: NavItem[] = [
+  { href: "/radar", label: "رادار", icon: Compass },
+  { href: "/growth", label: "رشد", icon: Sparkles },
+  { href: "/engagement", label: "تعامل", icon: Bell },
+  { href: "/retention", label: "نگهداشت", icon: CalendarDays },
+  { href: "/operator", label: "اپراتور", icon: Radio },
+  { href: "/readiness", label: "آمادگی", icon: AlertTriangle },
+];
+const MANAGE_NAV: NavItem[] = [
+  { href: "/accounts", label: "کانال‌ها", icon: Tv },
+  { href: "/users", label: "کاربران", icon: Users },
   { href: "/settings", label: "تنظیمات", icon: Settings },
 ];
 
@@ -113,36 +134,26 @@ export function AppShell({
     router.refresh();
   }
 
-  const workflowNavItem = { href: "/workflow", label: "اتاق انتشار", icon: ListChecks } as const;
-  const mailNavItem = { href: "/inbox", label: "صندوق", icon: Mail } as const;
-  const contentRoomNavItem = { href: "/content-room", label: "اتاق محتوا", icon: Package } as const;
-  const assetsNavItem = { href: "/library", label: "کتابخانه", icon: Images } as const;
-  const liveNavItem = { href: "/live", label: "لایو", icon: Radio } as const;
-  const radarNavItem = { href: "/radar", label: "رادار", icon: Compass } as const;
-  const readinessNavItem = { href: "/readiness", label: "آمادگی", icon: AlertTriangle } as const;
-  const growthNavItem = { href: "/growth", label: "رشد", icon: BarChart3 } as const;
-  const engagementNavItem = { href: "/engagement", label: "تعامل", icon: Bell } as const;
-  const retentionNavItem = { href: "/retention", label: "نگهداشت", icon: CalendarDays } as const;
-  const operatorNavItem = { href: "/operator", label: "اپراتور", icon: Radio } as const;
-  const withWorkflow = canViewWorkflow
-    ? ([NAV_ITEMS[0], workflowNavItem, ...NAV_ITEMS.slice(1)] as typeof NAV_ITEMS)
-    : NAV_ITEMS;
-  const withContentRoom = canViewContentRoom
-    ? ([withWorkflow[0], contentRoomNavItem, ...withWorkflow.slice(1)] as typeof NAV_ITEMS)
-    : withWorkflow;
-  const withAssets = canViewAssets
-    ? ([withContentRoom[0], assetsNavItem, ...withContentRoom.slice(1)] as typeof NAV_ITEMS)
-    : withContentRoom;
-  const withLive = canManageLive
-    ? ([withAssets[0], liveNavItem, ...withAssets.slice(1)] as typeof NAV_ITEMS)
-    : withAssets;
-  const withRadar = [...withLive.slice(0, 2), radarNavItem, ...withLive.slice(2)] as typeof NAV_ITEMS;
-  const withReadiness = [...withRadar.slice(0, 3), readinessNavItem, ...withRadar.slice(3)] as typeof NAV_ITEMS;
-  const withGrowth = [...withReadiness.slice(0, 4), growthNavItem, ...withReadiness.slice(4)] as typeof NAV_ITEMS;
-  const withEngagement = [...withGrowth.slice(0, 5), engagementNavItem, ...withGrowth.slice(5)] as typeof NAV_ITEMS;
-  const withRetention = [...withEngagement.slice(0, 6), retentionNavItem, ...withEngagement.slice(6)] as typeof NAV_ITEMS;
-  const withOperator = [...withRetention.slice(0, 7), operatorNavItem, ...withRetention.slice(7)] as typeof NAV_ITEMS;
-  const visibleNavItems = canViewMail ? ([...withOperator.slice(0, 2), mailNavItem, ...withOperator.slice(2)] as typeof NAV_ITEMS) : withOperator;
+  // Filter by permissions: hide items user cannot access to reduce noise
+  const coreItems = CORE_NAV.filter((it) => {
+    if (it.href === "/workflow" && !canViewWorkflow) return false;
+    if (it.href === "/content-room" && !canViewContentRoom) return false;
+    if (it.href === "/library" && !canViewAssets) return false;
+    return true;
+  });
+  const publishItems = PUBLISH_NAV.filter((it) => it.href !== "/live" || canManageLive);
+  const analyticsItems = ANALYTICS_NAV;
+  const growthItems = GROWTH_NAV; // show but collapsed by default
+  const manageItems = MANAGE_NAV;
+  const mailItems: NavItem[] = canViewMail ? [{ href: "/inbox", label: "صندوق", icon: Mail }] : [];
+
+  const [growthOpen, setGrowthOpen] = useState(false);
+  // Auto-open growth group if current path is inside it
+  useEffect(() => {
+    if (pathname && ["/radar", "/growth", "/engagement", "/retention", "/operator", "/readiness"].some((p) => pathname.startsWith(p))) {
+      setGrowthOpen(true);
+    }
+  }, [pathname]);
 
   return (
     <div className="flex min-h-screen">
@@ -162,26 +173,72 @@ export function AppShell({
             <p className="text-[11px] text-tg-secondary">مخزن اصلی: گروه تلگرام</p>
           </div>
         </div>
-        <nav className="flex flex-col gap-0.5 overflow-y-auto p-3" style={{ height: "calc(100vh - 4rem)" }}>
-          {visibleNavItems.map((item) => {
-            const Icon = item.icon;
-            const active = pathname === item.href || (item.href !== "/dashboard" && pathname?.startsWith(item.href));
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                onClick={() => setOpen(false)}
-                className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition ${
-                  active
-                    ? "bg-tg-accent text-tg-accent-fg"
-                    : "text-tg-secondary hover:bg-tg-hover hover:text-tg-text"
-                }`}
+        <nav className="flex flex-col gap-4 overflow-y-auto p-3" style={{ height: "calc(100vh - 4rem)" }}>
+          {[
+            { title: null as string | null, items: coreItems },
+            { title: mailItems.length ? "پیام" : null, items: mailItems },
+            { title: "انتشار", items: publishItems },
+            { title: "تحلیل", items: analyticsItems },
+            { title: "مدیریت", items: manageItems },
+          ]
+            .filter((g) => g.items.length > 0)
+            .map((group) => (
+              <div key={group.title ?? "core"} className="space-y-1">
+                {group.title && <p className="px-2 text-[10px] font-bold tracking-widest text-tg-secondary/70">{group.title}</p>}
+                {group.items.map((item) => {
+                  const Icon = item.icon;
+                  const active = pathname === item.href || (item.href !== "/dashboard" && pathname?.startsWith(item.href));
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      onClick={() => setOpen(false)}
+                      className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition ${
+                        active ? "bg-tg-accent text-tg-accent-fg" : "text-tg-secondary hover:bg-tg-hover hover:text-tg-text"
+                      }`}
+                    >
+                      <Icon className="h-[18px] w-[18px]" />
+                      <span>{item.label}</span>
+                    </Link>
+                  );
+                })}
+              </div>
+            ))}
+
+          {/* Collapsible growth/intelligence group — hidden by default to reduce noise */}
+          {growthItems.length > 0 && (
+            <div className="space-y-1 border-t border-tg-border pt-3">
+              <button
+                onClick={() => setGrowthOpen((v) => !v)}
+                className="flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-[10px] font-bold tracking-widest text-tg-secondary/70 hover:bg-tg-hover hover:text-tg-text"
+                aria-expanded={growthOpen}
               >
-                <Icon className="h-[18px] w-[18px]" />
-                <span>{item.label}</span>
-              </Link>
-            );
-          })}
+                <span className="flex items-center gap-1.5"><Sparkles className="h-3 w-3" /> هوش و رشد</span>
+                <ChevronDown className={`h-3 w-3 transition ${growthOpen ? "rotate-180" : ""}`} />
+              </button>
+              {growthOpen && (
+                <div className="space-y-0.5">
+                  {growthItems.map((item) => {
+                    const Icon = item.icon;
+                    const active = pathname?.startsWith(item.href);
+                    return (
+                      <Link
+                        key={item.href}
+                        href={item.href}
+                        onClick={() => setOpen(false)}
+                        className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition ${
+                          active ? "bg-tg-accent text-tg-accent-fg" : "text-tg-secondary hover:bg-tg-hover hover:text-tg-text"
+                        }`}
+                      >
+                        <Icon className="h-[18px] w-[18px]" />
+                        <span>{item.label}</span>
+                      </Link>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
         </nav>
       </aside>
 

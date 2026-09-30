@@ -407,7 +407,8 @@ const retentionRawMetricsSchema = z.object({
   channelId: z.string(),
   channelTitle: z.string(),
   videoId: z.string(),
-  title: z.string().optional(),
+  // Writer persists `title: md.title ?? null` — accept null for rows synced without a title.
+  title: z.string().nullable().optional(),
 });
 
 const DIMENSION_RAW_METRICS_SCHEMAS: Record<AnalyticsSnapshotScopeType, z.ZodObject<z.ZodRawShape> | null> = {

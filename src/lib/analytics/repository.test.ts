@@ -926,6 +926,45 @@ describe("analytics repository", () => {
     });
   });
 
+  it("reads retention snapshot synced without a title (title null)", async () => {
+    const port = new StatefulAnalyticsPort();
+    const repository = createAnalyticsRepository(port);
+    const retentionSnapshot = {
+      platform: "youtube",
+      accountId: "account-1",
+      scopeType: "retention",
+      scopeId: "video-no-title",
+      date: baseDate,
+      fetchedAt,
+      metrics: {
+        metricType: "retention",
+        views: 10,
+        likes: 0,
+        comments: 0,
+        shares: 0,
+        watchTimeMinutes: 5,
+        averageViewDurationSeconds: 30,
+        averageViewPercentage: 53,
+      },
+      metadata: {
+        metadataType: "retention",
+        channelId: "channel-1",
+        channelTitle: "Channel One",
+        videoId: "video-no-title",
+      },
+    } as unknown as AnalyticsSnapshotInput;
+
+    await repository.upsertSnapshots([retentionSnapshot]);
+
+    const rows = await repository.readSnapshots({ accountIds: ["account-1"], scopeType: "retention" as unknown as AnalyticsSnapshotFilter["scopeType"] });
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      scopeType: "retention",
+      scopeId: "video-no-title",
+      videoId: "video-no-title",
+    });
+  });
+
   it("persists search snapshot with keyword containing colons safely", async () => {
     const port = new StatefulAnalyticsPort();
     const repository = createAnalyticsRepository(port);

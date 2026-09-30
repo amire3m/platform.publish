@@ -275,7 +275,7 @@ export interface RetentionSnapshotMetadata {
   channelId: string;
   channelTitle: string;
   videoId: string;
-  title?: string;
+  title?: string | null;
 }
 
 export interface RetentionAnalyticsSnapshotInput extends AnalyticsSnapshotBase {

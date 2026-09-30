@@ -55,6 +55,9 @@ const sendSchema = z.object({
         description: z.string().max(5000).optional(),
         playlistId: z.string().max(100).nullable().optional(),
         instagramCaption: z.string().max(2200).optional(),
+        youtubeAccountId: z.string().min(1).max(64).nullable().optional(),
+        instagramAccountId: z.string().min(1).max(64).nullable().optional(),
+        publishToInstagram: z.boolean().optional(),
         // legacy
         youtubeTitle: z.string().max(100).optional(),
         youtubeDescription: z.string().max(5000).optional(),

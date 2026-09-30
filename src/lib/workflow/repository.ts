@@ -77,6 +77,7 @@ export interface WorkflowPublicationRecord {
   lastErrorCode: string | null;
   lastErrorMessage: string | null;
   manualReason: string | null;
+  playlistId: string | null;
   version: number;
   updatedBy: string | null;
   createdAt: Date;
@@ -895,6 +896,7 @@ function mapPublicationRow(row: Record<string, unknown>): WorkflowPublicationRec
     lastErrorCode: (row.lastErrorCode as string | null) ?? (row.last_error_code as string | null) ?? null,
     lastErrorMessage: (row.lastErrorMessage as string | null) ?? (row.last_error_message as string | null) ?? null,
     manualReason: (row.manualReason as string | null) ?? (row.manual_reason as string | null) ?? null,
+    playlistId: (row.playlistId as string | null) ?? (row.playlist_id as string | null) ?? null,
     version: row.version as number,
     updatedBy: (row.updatedBy as string | null) ?? (row.updated_by as string | null) ?? null,
     createdAt: (row.createdAt as Date) ?? (row.created_at as Date),
@@ -1009,6 +1011,7 @@ function toPublicationInsert(p: WorkflowPublicationRecord): Record<string, unkno
     lastErrorCode: p.lastErrorCode,
     lastErrorMessage: p.lastErrorMessage,
     manualReason: p.manualReason,
+    playlistId: p.playlistId ?? null,
     version: p.version,
     updatedBy: p.updatedBy,
     createdAt: p.createdAt,
@@ -1027,6 +1030,7 @@ function toPublicationPatch(patch: Partial<WorkflowPublicationRecord>, expectedV
   if (patch.lastErrorCode !== undefined) out.lastErrorCode = patch.lastErrorCode;
   if (patch.lastErrorMessage !== undefined) out.lastErrorMessage = patch.lastErrorMessage;
   if (patch.manualReason !== undefined) out.manualReason = patch.manualReason;
+  if (patch.playlistId !== undefined) out.playlistId = patch.playlistId;
   if (patch.updatedBy !== undefined) out.updatedBy = patch.updatedBy;
   out.version = expectedVersion + 1;
   out.updatedAt = patch.updatedAt ?? new Date();
@@ -1690,6 +1694,7 @@ export function createWorkflowRepository(port?: WorkflowDatabasePort): WorkflowR
             lastErrorCode: null,
             lastErrorMessage: null,
             manualReason: null,
+            playlistId: null,
             version: 1,
             updatedBy: null,
             createdAt: now,

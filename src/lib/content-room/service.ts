@@ -41,8 +41,10 @@ export interface SendToPublicationCommand {
   partIds?: string[];
   /** Per-deliverable overrides: each entry is per part+kind with YouTube title/description/playlist and Instagram caption.
    * kind: youtube_full | highlight | reel | cover (optional for legacy single-title)
+   * youtubeAccountId/instagramAccountId: explicit destination override (validated, fallback to channel default)
+   * publishToInstagram: reel-only toggle (default true = dual publish YT+IG)
    */
-  partOverrides?: Array<{ partId: string; kind?: string; title?: string; description?: string; playlistId?: string | null; instagramCaption?: string; youtubeTitle?: string; youtubeDescription?: string }>;
+  partOverrides?: Array<{ partId: string; kind?: string; title?: string; description?: string; playlistId?: string | null; instagramCaption?: string; youtubeTitle?: string; youtubeDescription?: string; youtubeAccountId?: string | null; instagramAccountId?: string | null; publishToInstagram?: boolean }>;
   /** If set, publications are created as scheduled (simple flow), otherwise waiting. */
   scheduledAt?: string | null;
   /** Optional per-part per-platform schedule (overrides global scheduledAt). Keys are partId+kind aware. */
@@ -97,6 +99,33 @@ function resolveDeliverableFileRef(
       return part.coverFileRef;
     default:
       return null;
+  }
+}
+
+/** Validate an explicit account override: must exist, match platform, and be usable. Returns id or null. */
+async function validateAccountOverride(
+  accountId: string | null | undefined,
+  platform: "youtube" | "instagram",
+): Promise<string | null> {
+  const id = accountId?.trim();
+  if (!id) return null;
+  try {
+    const { db } = await import("@/db");
+    const { socialAccounts } = await import("@/db/schema");
+    const { eq } = await import("drizzle-orm");
+    const [row] = (await db.select().from(socialAccounts).where(eq(socialAccounts.id, id)).limit(1)) as unknown as Array<{
+      id: string;
+      platform: string;
+      connectionStatus: string;
+      active: boolean;
+    }>;
+    if (!row) throw new ContentRoomServiceError("INVALID_TRANSITION", "حساب انتخاب‌شده یافت نشد.");
+    if (row.platform !== platform) throw new ContentRoomServiceError("INVALID_TRANSITION", "حساب انتخاب‌شده با پلتفرم مقصد سازگار نیست.");
+    if (!row.active) throw new ContentRoomServiceError("INVALID_TRANSITION", "حساب انتخاب‌شده غیرفعال است.");
+    return row.id;
+  } catch (e) {
+    if ((e as { code?: string }).code === "INVALID_TRANSITION") throw e;
+    return null;
   }
 }
 
@@ -330,13 +359,18 @@ export function createContentRoomService(options: {
           });
 
           if (isCover) continue; // No publication for cover — used as thumbnail for YouTube videos
-          // Create publication(s) per deliverable — reel creates BOTH youtube (Shorts) + instagram with independent schedules
-          const platforms: Array<(typeof PUBLICATION_PLATFORMS)[number]> = (KIND_PLATFORMS_MULTI[kindDef.kind] ??
+          // Create publication(s) per deliverable — reel dual-publishes YT+IG unless toggled off
+          const overrideFull = override as unknown as { publishToInstagram?: boolean; youtubeAccountId?: string | null; instagramAccountId?: string | null } | undefined;
+          const wantsInstagram = kindDef.kind === "reel" ? (overrideFull?.publishToInstagram ?? true) : true;
+          let platforms: Array<(typeof PUBLICATION_PLATFORMS)[number]> = (KIND_PLATFORMS_MULTI[kindDef.kind] ??
             [(KIND_PLATFORM_MAP[kindDef.kind] ?? DELIVERABLE_KIND_TO_PLATFORM[kindDef.kind as keyof typeof DELIVERABLE_KIND_TO_PLATFORM] ?? "youtube") as (typeof PUBLICATION_PLATFORMS)[number]]);
+          if (kindDef.kind === "reel" && !wantsInstagram) platforms = ["youtube"];
           // Prefer kind-specific schedule, fallback to part-wide
           const partSchedule = schedulesByKey.get(`${part.id}:${kindDef.kind}`) ?? schedulesByPart.get(part.id);
           for (const platform of platforms) {
-          const socialAccountId = await resolveChannelAccountIdDb(product.channel, platform as "youtube" | "instagram" | "telegram");
+          const explicitId = platform === "youtube" ? overrideFull?.youtubeAccountId : overrideFull?.instagramAccountId;
+          const validated = await validateAccountOverride(explicitId, platform as "youtube" | "instagram");
+          const socialAccountId = validated ?? await resolveChannelAccountIdDb(product.channel, platform as "youtube" | "instagram" | "telegram");
           const pubId = generateEntityId("WPB");
           const isReady = deliverable.productionStatus === "ready";
           // Per-platform schedule overrides global

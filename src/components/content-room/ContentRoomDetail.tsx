@@ -17,7 +17,7 @@ import { PartActivitiesGrid } from "./PartActivitiesGrid";
 import { TranscriptPanel } from "./TranscriptPanel";
 import { ChannelLinkDialog } from "./ChannelLinkDialog";
 import { EditProductDialog } from "./EditProductDialog";
-import { SendToPublishModal } from "./SendToPublishModal";
+
 
 interface Props {
   product: ContentRoomProductDetail;
@@ -46,7 +46,6 @@ export function ContentRoomDetail({ product, onRefresh }: Props) {
   const [toast, setToast] = useState<string | null>(null);
   const [sendLoading, setSendLoading] = useState(false);
   const [sendPartId, setSendPartId] = useState<string | null>(null);
-  const [sendModalOpen, setSendModalOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [linkOpen, setLinkOpen] = useState(false);
@@ -265,30 +264,14 @@ export function ContentRoomDetail({ product, onRefresh }: Props) {
         )}
 
         <div className="flex flex-wrap gap-2">
-          <Button
-            onClick={() => setSendModalOpen(true)}
-            disabled={sendLoading}
-            className="min-h-[44px]"
-            title="ارسال به انتشار"
-          >
-            ارسال به انتشار
-          </Button>
-          {!isReadyToSend && <span className="self-center text-xs text-amber-600">چک‌لیست کامل نیست ولی می‌توانید باز ارسال کنید — عنوان/توضیح در مرحله بعد پرسیده می‌شود.</span>}
+          <Link href={`/content-room/${product.id}/send`}>
+            <Button className="min-h-[44px]" title="ارسال به انتشار — تنظیم عنوان، مقصد و زمان‌بندی مثل آپلود یوتیوب">
+              ارسال به انتشار
+            </Button>
+          </Link>
+          {!isReadyToSend && <span className="self-center text-xs text-amber-600">در صفحه ارسال، عنوان/توضیح هر ویدیو، صفحه یوتیوب/اینستاگرام و زمان‌بندی را تنظیم می‌کنید.</span>}
         </div>
       </Card>
-
-      <SendToPublishModal
-        open={sendModalOpen}
-        product={product}
-        onClose={() => setSendModalOpen(false)}
-        onSuccess={(programId) => {
-          setSendResult({ programId });
-          setToast("محصول با موفقیت به اتاق انتشار ارسال شد.");
-          setTimeout(() => setToast(null), 4000);
-          onRefresh();
-        }}
-        onError={(msg) => setActionError(msg)}
-      />
 
       <div className="flex gap-2 border-b border-tg-border">
         {[

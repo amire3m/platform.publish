@@ -37,6 +37,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ public
   } catch (err) {
     if (err instanceof WorkflowTargetError) {
       if (err.code === "VERSION_CONFLICT") return jsonError(err.message, 409, err.code);
+      if (err.code === "INVALID_TRANSITION") return jsonError(err.message, 409, err.code);
       if (err.code === "PRODUCTION_NOT_READY") return jsonError(err.message, 422, err.code);
       if (err.code === "ACCOUNT_FORBIDDEN") return jsonError(err.message, 403, err.code);
       if (err.code === "NOT_FOUND") return jsonError(err.message, 404, err.code);

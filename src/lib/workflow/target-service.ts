@@ -285,7 +285,25 @@ export async function schedulePublicationTarget(
   }
 
   const contentId = (deliverable.contentId as string) ?? (deliverable.content_id as string) ?? null;
-  if (!contentId) throw new WorkflowTargetError("NOT_FOUND", "محتوا به خروجی متصل نیست.");
+  if (!contentId) {
+    // Content-room flow: deliverables carry the file directly and have no legacy
+    // `content` row — reschedule by patching the publication itself.
+    const currentStatus = (pub.status as string) ?? "";
+    if (["publishing", "published", "do_not_publish"].includes(currentStatus)) {
+      throw new WorkflowTargetError("INVALID_TRANSITION", "این انتشار قابل جابه‌جایی نیست.");
+    }
+    const updatedPub = await mirrorPublication(
+      input.publicationId,
+      input.expectedVersion,
+      {
+        scheduledAt: new Date(input.scheduledAtUtc),
+        status: "scheduled",
+        updatedBy: input.actorUserId,
+      },
+      deps,
+    );
+    return { content: {}, publication: updatedPub as unknown as Record<string, unknown> };
+  }
 
   const contentRow = (await loadContent(contentId, deps)) as Record<string, unknown> | null;
   if (!contentRow) throw new WorkflowTargetError("NOT_FOUND", "محتوا یافت نشد.");
@@ -350,7 +368,16 @@ export async function cancelPublicationSchedule(
   if (!deliverable) throw new WorkflowTargetError("NOT_FOUND", "خروجی یافت نشد.");
 
   const contentId = (deliverable.contentId as string) ?? (deliverable.content_id as string) ?? null;
-  if (!contentId) throw new WorkflowTargetError("NOT_FOUND", "محتوا به خروجی متصل نیست.");
+  if (!contentId) {
+    // Content-room flow: no legacy `content` row — cancel by patching the publication itself.
+    const updatedPub = await mirrorPublication(
+      input.publicationId,
+      input.expectedVersion,
+      { scheduledAt: null, status: "ready", updatedBy: input.actorUserId },
+      deps,
+    );
+    return { content: {}, publication: updatedPub as unknown as Record<string, unknown> };
+  }
 
   const contentRow = (await loadContent(contentId, deps)) as Record<string, unknown> | null;
   if (!contentRow) throw new WorkflowTargetError("NOT_FOUND", "محتوا یافت نشد.");

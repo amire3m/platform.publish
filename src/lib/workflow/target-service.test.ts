@@ -238,6 +238,45 @@ describe("workflow target-service", () => {
     });
   });
 
+  it("schedules content-room publication without legacy content row (direct patch)", async () => {
+    const deps = makeInMemoryDeps();
+    // content-room flow: deliverable carries the file, no contentId
+    (deps as unknown as { _maps: { deliverables: Map<string, Record<string, unknown>> } })._maps.deliverables.get("del1")!.contentId = null;
+    const iso = "2026-09-10T10:00:00.000Z";
+    const result = await schedulePublicationTarget(
+      { publicationId: "wp2", scheduledAtUtc: iso, actorUserId: "u1", expectedVersion: 2 },
+      deps as never,
+    );
+    const mirror = (deps as unknown as { _getWorkflowMirror: () => Record<string, unknown> })._getWorkflowMirror();
+    expect(mirror.status).toBe("scheduled");
+    expect((mirror.scheduledAt as Date)?.toISOString?.() ?? mirror.scheduledAt).toBe(iso);
+    // legacy content untouched
+    expect((deps.updateContentRecord as unknown as { mock: { calls: unknown[][] } }).mock.calls.length).toBe(0);
+    expect((result.publication as Record<string, unknown>).status).toBe("scheduled");
+  });
+
+  it("rejects reschedule of published content-room publication", async () => {
+    const deps = makeInMemoryDeps();
+    (deps as unknown as { _maps: { deliverables: Map<string, Record<string, unknown>> } })._maps.deliverables.get("del1")!.contentId = null;
+    (deps as unknown as { _maps: { publications: Map<string, Record<string, unknown>> } })._maps.publications.get("wp2")!.status = "published";
+    await expect(
+      schedulePublicationTarget(
+        { publicationId: "wp2", scheduledAtUtc: "2026-09-10T10:00:00.000Z", actorUserId: "u1", expectedVersion: 2 },
+        deps as never,
+      ),
+    ).rejects.toMatchObject({ code: "INVALID_TRANSITION" });
+  });
+
+  it("cancels content-room publication schedule without legacy content row", async () => {
+    const deps = makeInMemoryDeps();
+    (deps as unknown as { _maps: { deliverables: Map<string, Record<string, unknown>> } })._maps.deliverables.get("del1")!.contentId = null;
+    (deps as unknown as { _maps: { publications: Map<string, Record<string, unknown>> } })._maps.publications.get("wp1")!.status = "scheduled";
+    await cancelPublicationSchedule({ publicationId: "wp1", actorUserId: "u1", expectedVersion: 1 }, deps as never);
+    const mirror = (deps as unknown as { _getWorkflowMirror: () => Record<string, unknown> })._getWorkflowMirror();
+    expect(mirror.status).toBe("ready");
+    expect(mirror.scheduledAt).toBeNull();
+  });
+
   it("linkPublicationTarget creates keyed target via Telegram-first", async () => {
     const deps = makeInMemoryDeps();
     // create new publication wp99 and new content cnt99

@@ -10,6 +10,7 @@ let lastMirrorRun = 0;
 let lastSweepRun = 0;
 let lastInstaKeepAlive = 0;
 let lastStatusLive = 0;
+let lastStatusWatchRun = 0;
 
 async function safeRun(name: string, fn: () => Promise<unknown>) {
   if (instrumentationRunning) return;
@@ -245,6 +246,20 @@ export async function register() {
           return { ok: true };
         } catch (err) {
           console.error("[status-live] tick failed:", (err as Error).message);
+          return null;
+        }
+      })(),
+      (async () => {
+        // YouTube status watch: daily copyright block/takedown detection (cheap: 1 quota unit per 50 videos)
+        try {
+          if (Date.now() - lastStatusWatchRun < 24 * 60 * 60 * 1000) return null;
+          lastStatusWatchRun = Date.now();
+          const { runStatusWatchTick } = await import("@/lib/youtube/status-watch");
+          const out = await runStatusWatchTick();
+          if (out.checked || out.alerts) console.log(`[status-watch] tick checked=${out.checked} alerts=${out.alerts}`);
+          return out;
+        } catch (err) {
+          console.error("[status-watch] tick failed:", (err as Error).message);
           return null;
         }
       })(),

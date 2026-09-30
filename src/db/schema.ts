@@ -30,6 +30,7 @@ import {
   jsonb,
   numeric,
   pgTable,
+  primaryKey,
   text,
   timestamp,
   uniqueIndex,
@@ -992,6 +993,32 @@ export const operatorRuns = pgTable("operator_runs", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   completedAt: timestamp("completed_at", { withTimezone: true }),
 });
+
+export const youtubeStatusSnapshots = pgTable("youtube_status_snapshots", {
+  publicationId: text("publication_id")
+    .primaryKey()
+    .references(() => workflowPublications.id, { onDelete: "cascade" }),
+  accountId: text("account_id").notNull(),
+  externalId: text("external_id").notNull(),
+  uploadStatus: text("upload_status"),
+  rejectionReason: text("rejection_reason"),
+  privacyStatus: text("privacy_status"),
+  checkedAt: timestamp("checked_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const youtubeQuotaUsage = pgTable(
+  "youtube_quota_usage",
+  {
+    accountId: text("account_id").notNull(),
+    day: date("day").notNull(),
+    units: integer("units").notNull().default(0),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.accountId, t.day] }),
+  }),
+);
 
 export const channelPalettes = pgTable("channel_palettes", {
   accountId: text("account_id")

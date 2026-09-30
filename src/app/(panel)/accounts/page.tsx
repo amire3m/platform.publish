@@ -8,6 +8,7 @@ import { Button, Card, ConfirmModal, EmptyState, Input, Label, Modal, Select, Sk
 import { useToast } from "@/components/providers";
 import { PublishScheduleForm } from "@/components/accounts/PublishScheduleForm";
 import { BusinessSuiteSessionForm } from "@/components/accounts/BusinessSuiteSessionForm";
+import { ChannelProfile } from "@/components/accounts/ChannelProfile";
 import { PaletteEditor } from "@/components/covers/PaletteEditor";
 import { formatJalaliDateTime } from "@/lib/date/jalali";
 import type { PublicAccountDto } from "@/lib/accounts/public";
@@ -217,6 +218,7 @@ export default function AccountsPage() {
               </p>
             )}
             <BusinessSuiteSessionForm account={a} onChanged={() => mutate()} />
+            {a.platform === "youtube" && a.connectionStatus === "connected" && <ChannelProfile accountId={a.id} />}
             <PaletteEditor accountId={a.id} />
             <PublishScheduleForm account={a} onSaved={() => mutate()} />
             <div className="mt-4 flex justify-end">

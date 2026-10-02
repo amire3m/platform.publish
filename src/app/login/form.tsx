@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+
 import { Send } from "lucide-react";
 import { Button, Card, Input, Label } from "@/components/ui";
 import { useToast } from "@/components/providers";
@@ -17,7 +17,6 @@ declare global {
 // below, so the whole form is guaranteed to be in the SSR HTML even when no
 // client JS ever loads.
 export function LoginForm({ initialErr }: { initialErr?: string | null }) {
-  const router = useRouter();
   const { showToast } = useToast();
 
   // Native-form fallback redirects back with ?err= — surface it as a toast.
@@ -51,8 +50,8 @@ export function LoginForm({ initialErr }: { initialErr?: string | null }) {
           return;
         }
         showToast("خوش آمدید!", "success");
-        router.push("/dashboard");
-        router.refresh();
+        // Full navigation (not router.push): immune to stalled RSC streams.
+        window.location.href = "/dashboard";
       } finally {
         setLoading(false);
       }
@@ -74,8 +73,7 @@ export function LoginForm({ initialErr }: { initialErr?: string | null }) {
           const json = await res.json();
           if (json.ok) {
             showToast("خوش آمدید!", "success");
-            router.replace("/dashboard");
-            router.refresh();
+            window.location.href = "/dashboard";
             return;
           }
           showToast(json.error ?? "ورود ناموفق بود.", "error");
@@ -128,7 +126,7 @@ export function LoginForm({ initialErr }: { initialErr?: string | null }) {
     } else if (!botUsername) {
       setWidgetState("failed");
     }
-  }, [botUsername, router, showToast]);
+  }, [botUsername, showToast]);
 
   async function verifyCode(e?: React.FormEvent) {
     // With JS: AJAX verify. Without JS: native form POST below takes over
@@ -152,8 +150,7 @@ export function LoginForm({ initialErr }: { initialErr?: string | null }) {
         return;
       }
       showToast("خوش آمدید!", "success");
-      router.push("/dashboard");
-      router.refresh();
+      window.location.href = "/dashboard";
     } catch {
       showToast("خطا در ارتباط با سرور.", "error");
     } finally {
@@ -175,8 +172,7 @@ export function LoginForm({ initialErr }: { initialErr?: string | null }) {
         return;
       }
       showToast("خوش آمدید!", "success");
-      router.push("/dashboard");
-      router.refresh();
+      window.location.href = "/dashboard";
     } finally {
       setLoading(false);
     }

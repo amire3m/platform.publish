@@ -37,9 +37,17 @@ export const viewport: Viewport = {
   themeColor: "#17212b",
 };
 
+const STALE_ASSET_RELOADER = `(function(){var k='emro-stale-reload-at';window.addEventListener('error',function(e){var t=e.target||{};var u=t.src||t.href||'';if(typeof u==='string'&&u.indexOf('/_next/static')>-1){try{var l=+sessionStorage.getItem(k)||0;if(Date.now()-l<30000)return;sessionStorage.setItem(k,String(Date.now()));}catch(x){}location.reload();}},true);})();`;
+
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="fa" dir="rtl" className={vazirmatn.variable} suppressHydrationWarning>
+      <head>
+        {/* Self-healing after redeploys: hashed /_next/static files from an older
+            build 404 on tabs holding cached HTML (unstyled/dead page). This inline
+            script ships with the HTML itself, so it works even when bundles fail. */}
+        <script dangerouslySetInnerHTML={{ __html: STALE_ASSET_RELOADER }} />
+      </head>
       <body className="min-h-screen bg-tg-bg font-sans text-tg-text antialiased">
         <Providers>{children}</Providers>
       </body>

@@ -23,6 +23,13 @@ const COOKIE_OPTS = {
 
 // POST /api/auth/code/verify — sign in with a one-time bot code (no telegram.org needed).
 // JSON callers (React form) get JSON; native form posts (no-JS fallback) get a 303 redirect.
+// Redirects honor reverse-proxy headers (nginx) instead of the internal origin.
+function publicBaseUrl(req: Request): string {
+  const proto = req.headers.get("x-forwarded-proto")?.split(",")[0]?.trim() || new URL(req.url).protocol.replace(":", "");
+  const host = req.headers.get("x-forwarded-host")?.split(",")[0]?.trim() || req.headers.get("host") || new URL(req.url).host;
+  return `${proto}://${host}`;
+}
+
 export async function POST(req: Request) {
   if (!rateLimit(`code-login:${clientKeyFromRequest(req)}`, 10, 60_000)) {
     return jsonError("تعداد تلاش‌های ورود بیش از حد مجاز است. کمی بعد دوباره تلاش کنید.", 429);
@@ -30,7 +37,7 @@ export async function POST(req: Request) {
   const isNativeForm = (req.headers.get("content-type") ?? "").includes("application/x-www-form-urlencoded");
   const fail = (message: string, status: number, code?: string): Response => {
     if (isNativeForm) {
-      const url = new URL("/login", req.url);
+      const url = new URL("/login", publicBaseUrl(req));
       url.searchParams.set("err", code === "EXPIRED" ? "expired" : "invalid");
       return NextResponse.redirect(url, 303);
     }
@@ -84,7 +91,7 @@ export async function POST(req: Request) {
   });
 
   if (isNativeForm) {
-    const res = NextResponse.redirect(new URL("/dashboard", req.url), 303);
+    const res = NextResponse.redirect(new URL("/dashboard", publicBaseUrl(req)), 303);
     res.cookies.set(SESSION_COOKIE, token, COOKIE_OPTS);
     return res;
   }

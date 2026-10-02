@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { notificationEventLabelFa } from "@/lib/presentation-fa";
+import { timedFetch } from "@/lib/fetch-timeout";
 
 interface NotificationItem {
   id: string;
@@ -25,7 +26,7 @@ export function NotificationCenter() {
     try {
       setLoading(true);
       setError(null);
-      const res = await fetch("/api/workflow/notifications");
+      const res = await timedFetch("/api/workflow/notifications", undefined, 15000);
       if (!res.ok) throw new Error("خطا در دریافت اعلان‌ها");
       const body = await res.json();
       const data = body.data ?? body;

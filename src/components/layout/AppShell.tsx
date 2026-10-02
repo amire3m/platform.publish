@@ -27,6 +27,7 @@ import {
   Users,
 } from "lucide-react";
 import { useTheme, useToast } from "@/components/providers";
+import { timedFetch } from "@/lib/fetch-timeout";
 import { roleLabelFa } from "@/lib/presentation-fa";
 import { NotificationCenter } from "@/components/workflow/NotificationCenter";
 
@@ -110,7 +111,7 @@ export function AppShell({
     let cancelled = false;
     async function fetchUnread() {
       try {
-        const res = await fetch("/api/workflow/notifications?limit=1");
+        const res = await timedFetch("/api/workflow/notifications?limit=1", undefined, 15000);
         if (!res.ok) return;
         const body = await res.json();
         const count = body?.data?.unreadCount ?? 0;

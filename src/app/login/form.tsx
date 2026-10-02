@@ -98,6 +98,11 @@ export function LoginForm({ initialErr }: { initialErr?: string | null }) {
       const fail = () => {
         if (settled) return;
         settled = true;
+        // Abort the hanging telegram.org fetch — otherwise it holds the tab
+        // spinner indefinitely on blocked networks.
+        try {
+          script.remove();
+        } catch {}
         setWidgetState("failed");
       };
       const timer = setTimeout(fail, 8000);

@@ -158,7 +158,9 @@ export function DedicatedPlayer({ src, fallbackSrc, poster, title, className, on
         ref={videoRef}
         src={activeSrc}
         poster={poster}
-        preload="metadata"
+        // "none": metadata fetch over Telegram proxy hangs on slow links and
+        // holds the tab spinner forever — load only when the user hits play.
+        preload="none"
         playsInline
         className="h-full w-full object-contain"
         onClick={togglePlay}

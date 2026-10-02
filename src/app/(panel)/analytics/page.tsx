@@ -18,6 +18,7 @@ import { SyncResults } from "@/components/analytics/SyncResults";
 import { TopVideos } from "@/components/analytics/TopVideos";
 import { useToast } from "@/components/providers";
 import { Button, Card, EmptyState, Skeleton } from "@/components/ui";
+import { timedFetch } from "@/lib/fetch-timeout";
 import { formatAnalyticsNumber, formatComparison, formatWatchMinutes } from "@/lib/analytics/presentation";
 import { analyticsFilterKey, analyticsFiltersChanged, buildAnalyticsSyncRequest, createRequestGenerationGuard } from "@/lib/analytics/analytics-controls";
 import { runAnalyticsSync } from "@/lib/analytics/sync-controller-client";
@@ -43,7 +44,7 @@ class ApiRequestError extends Error {
 }
 
 async function fetchApi<T>(url: string): Promise<T> {
-  const response = await fetch(url);
+  const response = await timedFetch(url);
   const body = await response.json() as ApiEnvelope<T>;
   if (!response.ok || !body.ok || body.data === undefined) {
     throw new ApiRequestError(body.error ?? "دریافت اطلاعات ناموفق بود.", body.code, response.status);

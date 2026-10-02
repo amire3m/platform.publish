@@ -4,10 +4,11 @@ import { useState } from "react";
 import useSWR from "swr";
 import { ChevronDown, ChevronLeft, RefreshCw } from "lucide-react";
 import { Button, Skeleton } from "@/components/ui";
+import { timedFetch } from "@/lib/fetch-timeout";
 import type { ChannelFull, PlaylistFull, UploadItem, VideoFull } from "@/lib/youtube/gateway";
 
 async function fetcher<T>(url: string): Promise<T> {
-  const res = await fetch(url);
+  const res = await timedFetch(url);
   const body = await res.json();
   if (!res.ok || !body.ok) throw new Error(body.error ?? "خطا در خواندن از یوتیوب");
   return body.data as T;

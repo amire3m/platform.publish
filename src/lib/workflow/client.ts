@@ -9,8 +9,10 @@ export class WorkflowApiError extends Error {
   }
 }
 
+import { timedFetch } from "@/lib/fetch-timeout";
+
 export async function fetchWorkflowApi<T>(url: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(url, init);
+  const response = await timedFetch(url, init);
   const body = await response.json();
   if (!response.ok || !body.ok) throw new WorkflowApiError(body.error ?? "خطای ارتباط با سرور", response.status, body.code);
   return body.data as T;

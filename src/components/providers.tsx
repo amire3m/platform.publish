@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { SWRConfig } from "swr";
 
 // ---------------------------------------------------------------------------
 // Theme (dark mode)
@@ -115,7 +116,20 @@ function ToastProvider({ children }: { children: ReactNode }) {
 export function Providers({ children }: { children: ReactNode }) {
   return (
     <ThemeProvider>
-      <ToastProvider>{children}</ToastProvider>
+      <ToastProvider>
+        <SWRConfig
+          value={{
+            // On flaky links a failed request must surface an error UI with a
+            // retry button — not retry silently forever behind a skeleton.
+            errorRetryCount: 3,
+            errorRetryInterval: 4000,
+            dedupingInterval: 5000,
+            focusThrottleInterval: 10000,
+          }}
+        >
+          {children}
+        </SWRConfig>
+      </ToastProvider>
     </ThemeProvider>
   );
 }

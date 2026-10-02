@@ -6,6 +6,7 @@ import { Plus, Trash2 } from "lucide-react";
 import { InstagramIcon, YoutubeIcon } from "@/components/brand-icons";
 import { Button, Card, ConfirmModal, EmptyState, Input, Label, Modal, Select, Skeleton, StatusBadge } from "@/components/ui";
 import { useToast } from "@/components/providers";
+import { timedFetch } from "@/lib/fetch-timeout";
 import { PublishScheduleForm } from "@/components/accounts/PublishScheduleForm";
 import { BusinessSuiteSessionForm } from "@/components/accounts/BusinessSuiteSessionForm";
 import { ChannelProfile } from "@/components/accounts/ChannelProfile";
@@ -15,7 +16,7 @@ import type { PublicAccountDto } from "@/lib/accounts/public";
 import { oauthErrorMessageFa } from "@/lib/presentation-fa";
 import { MAIN_REPORT_ALIAS, ORGANIZATION_LABELS, type AccountOrganization } from "@/lib/accounts/organization";
 
-const fetcher = (url: string) => fetch(url).then((r) => r.json());
+const fetcher = (url: string) => timedFetch(url).then((r) => r.json());
 
 type Account = PublicAccountDto & { platform: "youtube" | "instagram" };
 

@@ -6,6 +6,7 @@ import Link from "next/link";
 import { AlertTriangle, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 import { InstagramIcon, YoutubeIcon } from "@/components/brand-icons";
 import { Button, Card, Select, StatusBadge } from "@/components/ui";
+import { timedFetch } from "@/lib/fetch-timeout";
 import { useToast } from "@/components/providers";
 import {
   buildJalaliMonthGrid,
@@ -24,7 +25,7 @@ import {
   wouldConflict,
 } from "@/lib/calendar-conflicts";
 
-const fetcher = (url: string) => fetch(url).then((r) => r.json());
+const fetcher = (url: string) => timedFetch(url).then((r) => r.json());
 
 interface CalendarEvent {
   contentId: string;

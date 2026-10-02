@@ -12,6 +12,7 @@ import { SyncStatus } from "@/components/analytics/SyncStatus";
 import { SyncResults } from "@/components/analytics/SyncResults";
 import { useToast } from "@/components/providers";
 import { Button, Skeleton } from "@/components/ui";
+import { timedFetch } from "@/lib/fetch-timeout";
 import { channelAverageMetrics, combinedInteractionsChange, formatAnalyticsDate, formatAnalyticsNumber, formatComparison, formatWatchMinutes } from "@/lib/analytics/presentation";
 import type { AnalyticsRange, ContentAnalytics, MetricTotals, PeriodComparison } from "@/lib/analytics/types";
 import type { AccountSyncResult } from "@/lib/analytics/sync";
@@ -23,7 +24,7 @@ class DetailRequestError extends Error {
 }
 
 async function fetchDetail(url: string): Promise<ContentAnalytics> {
-  const response = await fetch(url);
+  const response = await timedFetch(url);
   const body = await response.json() as ApiEnvelope<ContentAnalytics>;
   if (!response.ok || !body.ok || !body.data) throw new DetailRequestError(body.error ?? "دریافت آمار ویدیو ناموفق بود.", response.status);
   return body.data;

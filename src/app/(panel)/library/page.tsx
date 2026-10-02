@@ -9,9 +9,10 @@ import { Card, Input, Select, EmptyState, Skeleton } from "@/components/ui";
 import { ChannelOptions } from "@/components/ChannelOptions";
 import { MirrorStatusBox } from "@/components/library/MirrorStatus";
 import { DedicatedPlayer } from "@/components/media/DedicatedPlayer";
+import { timedFetch } from "@/lib/fetch-timeout";
 
 const fetcher = async (url: string) => {
-  const res = await fetch(url);
+  const res = await timedFetch(url);
   const body = await res.json();
   if (!res.ok || !body.ok) throw new Error(body.error ?? "خطا");
   return body.data;

@@ -5,6 +5,7 @@ import { Radio, SkipForward, Square, Play, AlertTriangle, ListVideo, Plus, Trash
 import { Button, Card, Input, Select, EmptyState, Skeleton } from "@/components/ui";
 import { useToast } from "@/components/providers";
 import { parseJsonResponse } from "@/lib/client/http";
+import { timedFetch } from "@/lib/fetch-timeout";
 
 interface QueueItem {
   videoId: string;
@@ -49,7 +50,7 @@ interface SceneRow {
 }
 
 export const liveFetcher = async <T,>(url: string): Promise<T> => {
-  const res = await fetch(url);
+  const res = await timedFetch(url);
   const body = await parseJsonResponse<{ ok: boolean; data: T; error?: string }>(res);
   if (!res.ok || !body.ok) throw new Error(body.error ?? "خطا");
   return body.data as T;

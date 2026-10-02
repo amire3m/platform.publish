@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { BoardDataset, CsvRow } from "./types";
 import { demoRows } from "./demo";
+import { timedFetch } from "@/lib/fetch-timeout";
 
 const KEY = "board-report:dataset:v1";
 const LIVE_KEY = "board-report:live:v1";
@@ -48,7 +49,7 @@ export function useBoardDataset() {
     }
     setLiveLoading(true);
     try {
-      const res = await fetch("/api/board/live-data");
+      const res = await timedFetch("/api/board/live-data");
       if (!res.ok) return;
       const body = (await res.json()) as {
         data?: { rows?: CsvRow[]; meta?: BoardDataset["liveMeta"] };

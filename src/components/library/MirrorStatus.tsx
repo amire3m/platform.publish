@@ -5,9 +5,10 @@ import useSWR from "swr";
 import { ChevronDown, ChevronLeft, CloudUpload, RefreshCw } from "lucide-react";
 import { Button, Card, Select } from "@/components/ui";
 import { MIRROR_STATUS_FA, type MirrorCounts } from "@/lib/mirrors/status";
+import { timedFetch } from "@/lib/fetch-timeout";
 
 const fetcher = async (url: string) => {
-  const res = await fetch(url);
+  const res = await timedFetch(url);
   const body = await res.json();
   if (!res.ok || !body.ok) throw new Error(body.error ?? "خطا");
   return body.data;

@@ -5,6 +5,7 @@ import useSWR from "swr";
 import { Mail, Send, RefreshCw, Inbox } from "lucide-react";
 import { Button, Card, Input, Label, Modal, Select, Textarea } from "@/components/ui";
 import { formatJalaliDateTime } from "@/lib/date/jalali";
+import { timedFetch } from "@/lib/fetch-timeout";
 
 type MailAccount = "info" | "support";
 interface MailMessage {
@@ -21,7 +22,7 @@ interface MailMessage {
 }
 
 const fetcher = async (url: string) => {
-  const res = await fetch(url);
+  const res = await timedFetch(url);
   const body = await res.json();
   if (!body.ok) throw new Error(body.error ?? "خطا");
   return body.data as { account: MailAccount; messages: MailMessage[] };

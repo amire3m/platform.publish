@@ -86,7 +86,7 @@ export function AppShell({
     let cancelled = false;
     async function loadPermissions() {
       try {
-        const res = await fetch("/api/auth/me");
+        const res = await timedFetch("/api/auth/me", undefined, 15000);
         if (!res.ok) return;
         const body = await res.json();
         const permissions: string[] = body?.data?.permissions ?? body?.permissions ?? [];

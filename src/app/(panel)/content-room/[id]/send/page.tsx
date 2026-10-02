@@ -8,6 +8,7 @@ import { ArrowRight, Clock, Send } from "lucide-react";
 import { YoutubeIcon, InstagramIcon } from "@/components/brand-icons";
 import { Button, Card, EmptyState, ErrorState, Skeleton } from "@/components/ui";
 import { fetchContentRoomApi, ContentRoomApiError } from "@/lib/content-room/client";
+import { timedFetch } from "@/lib/fetch-timeout";
 import type { ContentRoomProductDetail } from "@/components/content-room/types";
 import type { PublicAccountDto } from "@/lib/accounts/public";
 import { AccountPicker } from "@/components/content-room/AccountPicker";
@@ -32,7 +33,7 @@ async function detailFetcher(url: string): Promise<ContentRoomProductDetail | nu
 }
 
 async function jsonFetcher(url: string) {
-  const res = await fetch(url);
+  const res = await timedFetch(url);
   const body = await res.json().catch(() => null);
   if (!res.ok || !body?.ok) throw new Error(body?.error ?? "خطا در دریافت");
   return body.data;

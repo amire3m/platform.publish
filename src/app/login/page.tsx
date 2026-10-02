@@ -2,6 +2,11 @@
 
 import { Suspense, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+
+// Force dynamic render so the code-login form is fully server-rendered into
+// the HTML (a static prerender would bail out the Suspense subtree because of
+// useSearchParams, leaving no-JS clients with an empty page).
+export const dynamic = "force-dynamic";
 import { Send } from "lucide-react";
 import { Button, Card, Input, Label } from "@/components/ui";
 import { useToast } from "@/components/providers";

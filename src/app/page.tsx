@@ -14,6 +14,7 @@ import { db } from "@/db";
 import { socialAccounts, analyticsSnapshots, content } from "@/db/schema";
 import { and, eq, gte, inArray } from "drizzle-orm";
 import { MAIN_REPORT_ALIAS, MAIN_REPORT_ORGANIZATION } from "@/lib/accounts/organization";
+import { thumbUrl } from "@/lib/media/thumb-proxy";
 import {
   todayJalali,
   buildJalaliMonthGrid,
@@ -285,7 +286,7 @@ export default async function ShowcasePage() {
                   <div className="flex items-center gap-3">
                     {account.profileImage ? (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={account.profileImage} alt={account.displayName} className="h-12 w-12 rounded-xl object-cover" />
+                      <img src={thumbUrl(account.profileImage) ?? account.profileImage} alt={account.displayName} loading="lazy" decoding="async" className="h-12 w-12 rounded-xl object-cover" />
                     ) : (
                       <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#FFF1F2]">
                         {isYt ? <YoutubeIcon className="h-6 w-6 text-[#E11D48]" /> : <InstagramIcon className="h-6 w-6 text-[#E11D48]" />}
@@ -454,7 +455,7 @@ export default async function ShowcasePage() {
               >
                 {v.thumbnailUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={v.thumbnailUrl} alt={v.title} className="h-40 w-full object-cover" />
+                  <img src={thumbUrl(v.thumbnailUrl) ?? v.thumbnailUrl} alt={v.title} loading="lazy" decoding="async" className="h-40 w-full object-cover" />
                 ) : (
                   <div className="flex h-40 w-full items-center justify-center bg-[#FFF1F2] text-[#E11D48]">بدون تصویر</div>
                 )}

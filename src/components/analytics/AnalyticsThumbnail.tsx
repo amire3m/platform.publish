@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { ImageOff } from "lucide-react";
 import { safeThumbnailUrl } from "@/lib/analytics/presentation";
+import { thumbUrl } from "@/lib/media/thumb-proxy";
 
 export function AnalyticsThumbnail({
   src,
@@ -17,7 +18,7 @@ export function AnalyticsThumbnail({
   height: number;
   className: string;
 }) {
-  const safeSrc = safeThumbnailUrl(src);
+  const safeSrc = thumbUrl(safeThumbnailUrl(src)) ?? safeThumbnailUrl(src);
   const [failed, setFailed] = useState(false);
 
   if (!safeSrc || failed) {

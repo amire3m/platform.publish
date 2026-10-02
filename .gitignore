@@ -19,6 +19,7 @@ coverage/
 .superpowers/
 .worktrees/
 docs/superpowers/
+.data/
 
 # Logs and temporary files
 *.log

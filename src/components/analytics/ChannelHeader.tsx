@@ -1,6 +1,7 @@
 "use client";
 
 import { MAIN_REPORT_ALIAS } from "@/lib/accounts/organization";
+import { thumbUrl } from "@/lib/media/thumb-proxy";
 
 export function ChannelHeader({ account, isAggregated }: {
   account: { id: string; displayName: string; username: string; profileImage: string | null; externalAccountId: string | null } | null;
@@ -22,7 +23,7 @@ export function ChannelHeader({ account, isAggregated }: {
     <div className="flex items-center gap-4 rounded-xl border border-tg-border bg-tg-surface p-4">
       {account.profileImage ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={account.profileImage} alt={account.displayName} className="h-12 w-12 rounded-full object-cover" />
+        <img src={thumbUrl(account.profileImage) ?? account.profileImage} alt={account.displayName} loading="lazy" decoding="async" className="h-12 w-12 rounded-full object-cover" />
       ) : (
         <div className="flex h-12 w-12 items-center justify-center rounded-full bg-tg-hover text-tg-secondary font-bold">{account.displayName.slice(0,2)}</div>
       )}

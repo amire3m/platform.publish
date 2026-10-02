@@ -32,6 +32,26 @@ export async function POST(req: Request) {
   if (msg && isLiveCommand(msg.text)) {
     return Response.json({ ok: true });
   }
+  // /login in PRIVATE chat → one-time login code (for networks where
+  // telegram.org, and thus the web login widget, is blocked)
+  const isLoginCommand = (t?: string) => !!t && /^\/login(@\w+)?$/i.test((t || "").trim());
+  if (msg && msg.chat?.type === "private" && isLoginCommand(msg.text)) {
+    try {
+      const { issueLoginCode } = await import("@/lib/auth/login-codes");
+      const telegramId = String(msg.from?.id ?? msg.chat.id);
+      const { code } = issueLoginCode(telegramId);
+      const { TelegramClient } = await import("@/lib/telegram/client");
+      const client = TelegramClient.fromEnv();
+      await client.sendPrivateMessage(
+        telegramId,
+        `کد ورود شما: <code>${code}</code>\n\nاین کد را در صفحه ورود سامانه وارد کنید. ۱۰ دقیقه اعتبار دارد و یک‌بار مصرف است.`,
+        { parseMode: "HTML" },
+      );
+    } catch (err) {
+      console.error("[webhook] /login code issue failed:", (err as Error).message);
+    }
+    return Response.json({ ok: true });
+  }
   // old file via reply: user replies "لینک" to an old video
   if (msg && hasVideoInReply && isLinkCommand(msg.text)) {
     const groupId = process.env.TELEGRAM_GROUP_ID;

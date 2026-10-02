@@ -19,6 +19,9 @@ export default function LoginPage() {
   const [devTelegramId, setDevTelegramId] = useState("");
   const [devName, setDevName] = useState("");
   const [loading, setLoading] = useState(false);
+  const [widgetState, setWidgetState] = useState<"loading" | "ready" | "failed">("loading");
+  const [loginCode, setLoginCode] = useState("");
+  const [codeLoading, setCodeLoading] = useState(false);
   const botUsername = process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME;
   const devLoginEnabled = process.env.NEXT_PUBLIC_ALLOW_DEV_LOGIN === "1";
 
@@ -75,6 +78,18 @@ export default function LoginPage() {
     }
 
     if (botUsername && widgetRef.current) {
+      // telegram.org is blocked on some networks — never leave the page
+      // button-less: time out and fall back to the one-time bot code.
+      const host = widgetRef.current;
+      if (host.dataset.widgetArmed === "1") return;
+      host.dataset.widgetArmed = "1";
+      let settled = false;
+      const fail = () => {
+        if (settled) return;
+        settled = true;
+        setWidgetState("failed");
+      };
+      const timer = setTimeout(fail, 8000);
       const script = document.createElement("script");
       script.src = "https://telegram.org/js/telegram-widget.js?22";
       script.async = true;
@@ -82,9 +97,50 @@ export default function LoginPage() {
       script.setAttribute("data-size", "large");
       script.setAttribute("data-onauth", "onTelegramAuth(user)");
       script.setAttribute("data-request-access", "write");
-      widgetRef.current.appendChild(script);
+      script.onload = () => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        setWidgetState("ready");
+      };
+      script.onerror = () => {
+        clearTimeout(timer);
+        fail();
+      };
+      host.appendChild(script);
+      return () => clearTimeout(timer);
+    } else if (!botUsername) {
+      setWidgetState("failed");
     }
   }, [botUsername, router, showToast]);
+
+  async function verifyCode() {
+    const code = loginCode.trim();
+    if (!/^\d{6}$/.test(code)) {
+      showToast("کد ورود باید ۶ رقم باشد.", "error");
+      return;
+    }
+    setCodeLoading(true);
+    try {
+      const res = await fetch("/api/auth/code/verify", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ code }),
+      });
+      const json = await res.json();
+      if (!json.ok) {
+        showToast(json.error ?? "ورود ناموفق بود.", "error");
+        return;
+      }
+      showToast("خوش آمدید!", "success");
+      router.push("/dashboard");
+      router.refresh();
+    } catch {
+      showToast("خطا در ارتباط با سرور.", "error");
+    } finally {
+      setCodeLoading(false);
+    }
+  }
 
   async function devLogin() {
     setLoading(true);
@@ -125,6 +181,32 @@ export default function LoginPage() {
             </p>
           )}
         </div>
+        {widgetState === "loading" && botUsername && (
+          <p className="mt-3 text-center text-xs text-tg-secondary">در حال اتصال به تلگرام...</p>
+        )}
+        {widgetState === "failed" && (
+          <div className="mt-4 space-y-3 rounded-xl border border-dashed border-tg-border p-4 text-right">
+            <p className="text-xs leading-relaxed text-tg-secondary">
+              دکمه ورود تلگرام در این شبکه بارگذاری نشد. بدون نیاز به آن وارد شوید: در تلگرام به ربات پیام
+              <code dir="ltr" className="mx-1 rounded bg-tg-hover px-1.5 py-0.5">/login</code>
+              بدهید و کد ۶ رقمی را اینجا وارد کنید.
+            </p>
+            <div>
+              <Label>کد یکبارمصرف تلگرام</Label>
+              <Input
+                value={loginCode}
+                onChange={(e) => setLoginCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                placeholder="------"
+                inputMode="numeric"
+                dir="ltr"
+                className="mt-1 text-center text-lg tracking-[0.5em]"
+              />
+            </div>
+            <Button className="w-full" onClick={verifyCode} disabled={codeLoading || loginCode.trim().length !== 6}>
+              {codeLoading ? "در حال بررسی..." : "ورود با کد"}
+            </Button>
+          </div>
+        )}
 
         {devLoginEnabled && (
           <div className="mt-8 border-t border-dashed border-tg-border pt-6 text-right">

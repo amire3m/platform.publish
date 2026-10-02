@@ -26,6 +26,13 @@ import {
 
 export const dynamic = "force-dynamic";
 
+// In-memory cache for the expensive YouTube top-videos lookup (per process).
+const TOP_VIDEOS_TTL_MS = 10 * 60 * 1000;
+let topVideosCache: {
+  at: number;
+  items: Array<{ videoId: string; title: string; thumbnailUrl: string | null; viewCount: number; channelTitle: string; publishedAt: string | null }>;
+} | null = null;
+
 interface AccountRow {
   id: string;
   platform: string;
@@ -123,46 +130,62 @@ export default async function ShowcasePage() {
     }];
   });
 
-  // Top videos for homepage — Data API fallback (like dashboard)
-  let homepageTopVideos: Array<{ videoId: string; title: string; thumbnailUrl: string | null; viewCount: number; channelTitle: string; publishedAt: string | null }> = [];
-  try {
-    const { credentials } = await import("@/db/schema");
-    const { decryptSecret } = await import("@/lib/crypto");
-    const { google } = await import("googleapis");
-    const { getGoogleOAuthClient } = await import("@/lib/providers/youtube");
-    for (const acc of accounts.slice(0, 4)) {
-      const [fullAcc] = await db.select().from(socialAccounts).where(eq(socialAccounts.id, acc.id)).limit(1);
-      if (!fullAcc?.credentialRef) continue;
-      const [credRow] = await db.select().from(credentials).where(eq(credentials.id, fullAcc.credentialRef)).limit(1);
-      if (!credRow) continue;
-      try {
-        const tokens = JSON.parse(decryptSecret(credRow.encryptedPayload));
-        const auth = getGoogleOAuthClient();
-        auth.setCredentials(tokens);
-        const youtube = google.youtube({ version: "v3", auth });
-        const chRes = await youtube.channels.list({ part: ["contentDetails"], mine: true });
-        const uploadsId = (chRes.data.items?.[0] as unknown as { contentDetails?: { relatedPlaylists?: { uploads?: string } } })?.contentDetails?.relatedPlaylists?.uploads;
-        if (!uploadsId) continue;
-        const plRes = await youtube.playlistItems.list({ part: ["snippet", "contentDetails"], playlistId: uploadsId, maxResults: 10 });
-        const vIds = (plRes.data.items ?? []).map((it) => (it as unknown as { contentDetails?: { videoId?: string } }).contentDetails?.videoId).filter(Boolean) as string[];
-        if (vIds.length === 0) continue;
-        const vRes = await youtube.videos.list({ part: ["snippet", "statistics"], id: vIds });
-        for (const v of vRes.data.items ?? []) {
-          const s = v as unknown as { id?: string; snippet?: { title?: string; thumbnails?: { high?: { url?: string } }; publishedAt?: string }; statistics?: { viewCount?: string } };
-          if (!s.id) continue;
-          homepageTopVideos.push({
-            videoId: s.id,
-            title: s.snippet?.title ?? "",
-            thumbnailUrl: s.snippet?.thumbnails?.high?.url ?? null,
-            viewCount: Number(s.statistics?.viewCount ?? 0),
-            channelTitle: acc.displayName,
-            publishedAt: s.snippet?.publishedAt ?? null,
-          });
+  // Top videos for homepage — Data API fallback (like dashboard).
+  // Parallel per account + per-call timeout + 10min in-memory cache: this used
+  // to be 12 serial Google calls blocking TTFB on every single page view.
+  type TopVideo = { videoId: string; title: string; thumbnailUrl: string | null; viewCount: number; channelTitle: string; publishedAt: string | null };
+  const now = Date.now();
+  let homepageTopVideos: TopVideo[] = [];
+  if (topVideosCache && now - topVideosCache.at < TOP_VIDEOS_TTL_MS) {
+    homepageTopVideos = topVideosCache.items;
+  } else {
+    try {
+      const { credentials } = await import("@/db/schema");
+      const { decryptSecret } = await import("@/lib/crypto");
+      const { google } = await import("googleapis");
+      const { getGoogleOAuthClient } = await import("@/lib/providers/youtube");
+      const withTimeout = <T,>(p: Promise<T>, ms = 8000): Promise<T | null> =>
+        Promise.race([p, new Promise<null>((resolve) => setTimeout(() => resolve(null), ms))]);
+      const perAccount = accounts.slice(0, 4).map(async (acc): Promise<TopVideo[]> => {
+        try {
+          const [fullAcc] = await db.select().from(socialAccounts).where(eq(socialAccounts.id, acc.id)).limit(1);
+          if (!fullAcc?.credentialRef) return [];
+          const [credRow] = await db.select().from(credentials).where(eq(credentials.id, fullAcc.credentialRef)).limit(1);
+          if (!credRow) return [];
+          const tokens = JSON.parse(decryptSecret(credRow.encryptedPayload));
+          const auth = getGoogleOAuthClient();
+          auth.setCredentials(tokens);
+          const youtube = google.youtube({ version: "v3", auth });
+          const chRes = await withTimeout(youtube.channels.list({ part: ["contentDetails"], mine: true }));
+          const uploadsId = (chRes?.data.items?.[0] as unknown as { contentDetails?: { relatedPlaylists?: { uploads?: string } } } | undefined)?.contentDetails?.relatedPlaylists?.uploads;
+          if (!uploadsId) return [];
+          const plRes = await withTimeout(youtube.playlistItems.list({ part: ["snippet", "contentDetails"], playlistId: uploadsId, maxResults: 10 }));
+          const vIds = (plRes?.data.items ?? []).map((it) => (it as unknown as { contentDetails?: { videoId?: string } }).contentDetails?.videoId).filter(Boolean) as string[];
+          if (vIds.length === 0) return [];
+          const vRes = await withTimeout(youtube.videos.list({ part: ["snippet", "statistics"], id: vIds }));
+          const out: TopVideo[] = [];
+          for (const v of vRes?.data.items ?? []) {
+            const s = v as unknown as { id?: string; snippet?: { title?: string; thumbnails?: { high?: { url?: string } }; publishedAt?: string }; statistics?: { viewCount?: string } };
+            if (!s.id) continue;
+            out.push({
+              videoId: s.id,
+              title: s.snippet?.title ?? "",
+              thumbnailUrl: s.snippet?.thumbnails?.high?.url ?? null,
+              viewCount: Number(s.statistics?.viewCount ?? 0),
+              channelTitle: acc.displayName,
+              publishedAt: s.snippet?.publishedAt ?? null,
+            });
+          }
+          return out;
+        } catch {
+          return [];
         }
-      } catch {}
-    }
-    homepageTopVideos = homepageTopVideos.sort((a, b) => b.viewCount - a.viewCount).slice(0, 12);
-  } catch {}
+      });
+      const settled = await Promise.all(perAccount);
+      homepageTopVideos = settled.flat().sort((a, b) => b.viewCount - a.viewCount).slice(0, 12);
+      topVideosCache = { at: now, items: homepageTopVideos };
+    } catch {}
+  }
 
   return (
     <main className="min-h-screen bg-[#FFF1F2] font-sans text-[#881337]">

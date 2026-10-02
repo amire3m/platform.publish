@@ -192,6 +192,7 @@ export function AppShell({
                     <Link
                       key={item.href}
                       href={item.href}
+                      prefetch={false}
                       onClick={() => setOpen(false)}
                       className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition ${
                         active ? "bg-tg-accent text-tg-accent-fg" : "text-tg-secondary hover:bg-tg-hover hover:text-tg-text"
@@ -225,6 +226,7 @@ export function AppShell({
                       <Link
                         key={item.href}
                         href={item.href}
+                        prefetch={false}
                         onClick={() => setOpen(false)}
                         className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition ${
                           active ? "bg-tg-accent text-tg-accent-fg" : "text-tg-secondary hover:bg-tg-hover hover:text-tg-text"

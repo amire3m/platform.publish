@@ -87,4 +87,34 @@ describe("POST /api/auth/code/verify", () => {
     const res = await POST(req({ code: "123456" }));
     expect(res.status).toBe(429);
   });
+
+  it("native form posts 303-redirect to dashboard on success (no-JS login)", async () => {
+    mocks.verifyLoginCode.mockReturnValue({ ok: true, telegramId: "999" });
+    mocks.selectUser.mockResolvedValue([{ id: "USR-1", telegramId: "999", name: "A", role: "publisher", active: true }]);
+    const form = new URLSearchParams({ code: "123456" });
+    const res = await POST(
+      new Request("http://localhost/api/auth/code/verify", {
+        method: "POST",
+        headers: { "content-type": "application/x-www-form-urlencoded" },
+        body: form.toString(),
+      }),
+    );
+    expect(res.status).toBe(303);
+    expect(res.headers.get("location")).toContain("/dashboard");
+    expect(res.headers.get("set-cookie")).toContain("emro_session");
+  });
+
+  it("native form posts 303-redirect back to login on bad code", async () => {
+    mocks.verifyLoginCode.mockReturnValue({ ok: false, reason: "NOT_FOUND" });
+    const form = new URLSearchParams({ code: "000000" });
+    const res = await POST(
+      new Request("http://localhost/api/auth/code/verify", {
+        method: "POST",
+        headers: { "content-type": "application/x-www-form-urlencoded" },
+        body: form.toString(),
+      }),
+    );
+    expect(res.status).toBe(303);
+    expect(res.headers.get("location")).toContain("/login?err=");
+  });
 });

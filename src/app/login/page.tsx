@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useEffect, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Send } from "lucide-react";
 import { Button, Card, Input, Label } from "@/components/ui";
 import { useToast } from "@/components/providers";
@@ -12,9 +12,18 @@ declare global {
   }
 }
 
-export default function LoginPage() {
+function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { showToast } = useToast();
+
+  // Native-form fallback redirects back with ?err= — surface it as a toast.
+  useEffect(() => {
+    const err = searchParams.get("err");
+    if (err === "expired") showToast("کد منقضی شده است. در تلگرام دوباره /login بفرستید.", "error");
+    else if (err) showToast("کد نامعتبر است.", "error");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const widgetRef = useRef<HTMLDivElement>(null);
   const [devTelegramId, setDevTelegramId] = useState("");
   const [devName, setDevName] = useState("");
@@ -114,7 +123,10 @@ export default function LoginPage() {
     }
   }, [botUsername, router, showToast]);
 
-  async function verifyCode() {
+  async function verifyCode(e?: React.FormEvent) {
+    // With JS: AJAX verify. Without JS: native form POST below takes over
+    // (route 303-redirects), so login works even if no chunk ever loads.
+    e?.preventDefault();
     const code = loginCode.trim();
     if (!/^\d{6}$/.test(code)) {
       showToast("کد ورود باید ۶ رقم باشد.", "error");
@@ -184,8 +196,13 @@ export default function LoginPage() {
         {widgetState === "loading" && botUsername && (
           <p className="mt-3 text-center text-xs text-tg-secondary">در حال اتصال به تلگرام...</p>
         )}
-        {widgetState === "failed" && (
-          <div className="mt-4 space-y-3 rounded-xl border border-dashed border-tg-border p-4 text-right">
+        {widgetState !== "ready" && (
+          <form
+            method="POST"
+            action="/api/auth/code/verify"
+            onSubmit={verifyCode}
+            className="mt-4 space-y-3 rounded-xl border border-dashed border-tg-border p-4 text-right"
+          >
             <p className="text-xs leading-relaxed text-tg-secondary">
               دکمه ورود تلگرام در این شبکه بارگذاری نشد. بدون نیاز به آن وارد شوید: در تلگرام به ربات پیام
               <code dir="ltr" className="mx-1 rounded bg-tg-hover px-1.5 py-0.5">/login</code>
@@ -194,6 +211,7 @@ export default function LoginPage() {
             <div>
               <Label>کد یکبارمصرف تلگرام</Label>
               <Input
+                name="code"
                 value={loginCode}
                 onChange={(e) => setLoginCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
                 placeholder="------"
@@ -202,10 +220,10 @@ export default function LoginPage() {
                 className="mt-1 text-center text-lg tracking-[0.5em]"
               />
             </div>
-            <Button className="w-full" onClick={verifyCode} disabled={codeLoading || loginCode.trim().length !== 6}>
+            <Button type="submit" className="w-full" disabled={codeLoading || loginCode.trim().length !== 6}>
               {codeLoading ? "در حال بررسی..." : "ورود با کد"}
             </Button>
-          </div>
+          </form>
         )}
 
         {devLoginEnabled && (
@@ -222,13 +240,21 @@ export default function LoginPage() {
                 <Label>نام نمایشی</Label>
                 <Input value={devName} onChange={(e) => setDevName(e.target.value)} placeholder="نام شما" />
               </div>
-              <Button className="w-full" onClick={devLogin} disabled={loading || !devTelegramId}>
-                {loading ? "در حال ورود..." : "ورود آزمایشی"}
-              </Button>
+            <Button className="w-full" onClick={devLogin} disabled={loading || !devTelegramId}>
+              {loading ? "در حال ورود..." : "ورود آزمایشی"}
+            </Button>
             </div>
           </div>
         )}
       </Card>
     </main>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense>
+      <LoginForm />
+    </Suspense>
   );
 }

@@ -23,7 +23,7 @@ export function ChannelHeader({ account, isAggregated }: {
     <div className="flex items-center gap-4 rounded-xl border border-tg-border bg-tg-surface p-4">
       {account.profileImage ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={thumbUrl(account.profileImage) ?? account.profileImage} alt={account.displayName} loading="lazy" decoding="async" className="h-12 w-12 rounded-full object-cover" />
+        <img src={thumbUrl(account.profileImage, 96) ?? account.profileImage} alt={account.displayName} loading="lazy" decoding="async" className="h-12 w-12 rounded-full object-cover" />
       ) : (
         <div className="flex h-12 w-12 items-center justify-center rounded-full bg-tg-hover text-tg-secondary font-bold">{account.displayName.slice(0,2)}</div>
       )}

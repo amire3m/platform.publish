@@ -10,6 +10,12 @@ describe("thumb-proxy helper", () => {
     expect(thumbUrl("https://lh3.googleusercontent.com/a/x.jpg")).toMatch(/^\/api\/thumb\?u=/);
   });
 
+  it("appends clamped width when requested", () => {
+    expect(thumbUrl("https://i.ytimg.com/vi/abc/hqdefault.jpg", 480)).toContain("&w=480");
+    expect(thumbUrl("https://i.ytimg.com/vi/abc/hqdefault.jpg", 9999)).toContain("&w=1280");
+    expect(thumbUrl("https://i.ytimg.com/vi/abc/hqdefault.jpg", 1)).toContain("&w=32");
+  });
+
   it("passes through local and other hosts", () => {
     expect(thumbUrl("/brand/logo.png")).toBe("/brand/logo.png");
     expect(thumbUrl("https://example.com/a.jpg")).toBe("https://example.com/a.jpg");

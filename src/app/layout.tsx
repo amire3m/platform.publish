@@ -37,7 +37,7 @@ export const viewport: Viewport = {
   themeColor: "#17212b",
 };
 
-const STALE_ASSET_RELOADER = `(function(){var k='emro-stale-reload-at';window.addEventListener('error',function(e){var t=e.target||{};var u=t.src||t.href||'';if(typeof u==='string'&&u.indexOf('/_next/static')>-1){try{var l=+sessionStorage.getItem(k)||0;if(Date.now()-l<30000)return;sessionStorage.setItem(k,String(Date.now()));}catch(x){}location.reload();}},true);})();`;
+const STALE_ASSET_RELOADER = `(function(){var k='emro-stale-reload-at';window.addEventListener('error',function(e){var t=e.target||{};var u=t.src||t.href||'';if(typeof u==='string'&&u.indexOf('/_next/static')>-1){try{var l=+sessionStorage.getItem(k)||0;if(Date.now()-l<30000)return;sessionStorage.setItem(k,String(Date.now()));}catch(x){}location.reload();}},true);if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js').catch(function(){});}})();`;
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (

@@ -18,7 +18,7 @@ export function AnalyticsThumbnail({
   height: number;
   className: string;
 }) {
-  const safeSrc = thumbUrl(safeThumbnailUrl(src)) ?? safeThumbnailUrl(src);
+  const safeSrc = thumbUrl(safeThumbnailUrl(src), width) ?? safeThumbnailUrl(src);
   const [failed, setFailed] = useState(false);
 
   if (!safeSrc || failed) {

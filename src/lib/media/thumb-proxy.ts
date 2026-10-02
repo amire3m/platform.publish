@@ -18,9 +18,11 @@ export function isProxiableImageUrl(src: string | null | undefined): boolean {
   }
 }
 
-/** Rewrite a remote thumbnail URL to the local proxy; local/data URLs pass through. */
-export function thumbUrl(src: string | null | undefined): string | null {
+/** Rewrite a remote thumbnail URL to the local proxy; local/data URLs pass through.
+ *  Pass w (px) to get a resized variant — much smaller on slow links. */
+export function thumbUrl(src: string | null | undefined, w?: number): string | null {
   if (!src) return null;
   if (!isProxiableImageUrl(src)) return src;
-  return `/api/thumb?u=${encodeURIComponent(src)}`;
+  const width = w != null && Number.isFinite(w) ? Math.min(1280, Math.max(32, Math.round(w))) : null;
+  return `/api/thumb?u=${encodeURIComponent(src)}${width ? `&w=${width}` : ""}`;
 }

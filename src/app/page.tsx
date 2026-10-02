@@ -10,9 +10,12 @@ import {
   Users,
 } from "lucide-react";
 import { InstagramIcon, YoutubeIcon } from "@/components/brand-icons";
+import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 import { db } from "@/db";
 import { socialAccounts, analyticsSnapshots, content } from "@/db/schema";
 import { and, eq, gte, inArray } from "drizzle-orm";
+import { SESSION_COOKIE, verifySession } from "@/lib/auth";
 import { MAIN_REPORT_ALIAS, MAIN_REPORT_ORGANIZATION } from "@/lib/accounts/organization";
 import { thumbUrl } from "@/lib/media/thumb-proxy";
 import {
@@ -66,6 +69,11 @@ function persianNumber(n: number | null | undefined): string {
 }
 
 export default async function ShowcasePage() {
+  // Signed-in users never need the heavy public showcase (12+ thumbnails on a
+  // slow link) — send them straight to the panel.
+  const token = (await cookies()).get(SESSION_COOKIE)?.value;
+  if (token && verifySession(token)) redirect("/dashboard");
+
   const accounts = await db
     .select()
     .from(socialAccounts)
@@ -286,7 +294,7 @@ export default async function ShowcasePage() {
                   <div className="flex items-center gap-3">
                     {account.profileImage ? (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={thumbUrl(account.profileImage) ?? account.profileImage} alt={account.displayName} loading="lazy" decoding="async" className="h-12 w-12 rounded-xl object-cover" />
+                      <img src={thumbUrl(account.profileImage, 96) ?? account.profileImage} alt={account.displayName} loading="lazy" decoding="async" className="h-12 w-12 rounded-xl object-cover" />
                     ) : (
                       <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#FFF1F2]">
                         {isYt ? <YoutubeIcon className="h-6 w-6 text-[#E11D48]" /> : <InstagramIcon className="h-6 w-6 text-[#E11D48]" />}
@@ -455,7 +463,7 @@ export default async function ShowcasePage() {
               >
                 {v.thumbnailUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={thumbUrl(v.thumbnailUrl) ?? v.thumbnailUrl} alt={v.title} loading="lazy" decoding="async" className="h-40 w-full object-cover" />
+                  <img src={thumbUrl(v.thumbnailUrl, 480) ?? v.thumbnailUrl} alt={v.title} loading="lazy" decoding="async" className="h-40 w-full object-cover" />
                 ) : (
                   <div className="flex h-40 w-full items-center justify-center bg-[#FFF1F2] text-[#E11D48]">بدون تصویر</div>
                 )}

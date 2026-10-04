@@ -23,6 +23,7 @@ import {
   Settings,
   Sparkles,
   Sun,
+  Target,
   Tv,
   Users,
 } from "lucide-react";
@@ -49,6 +50,7 @@ const ANALYTICS_NAV: NavItem[] = [
   { href: "/reports", label: "گزارش‌ها", icon: FileText },
 ];
 const GROWTH_NAV: NavItem[] = [
+  { href: "/strategy", label: "استراتژی محتوا", icon: Target },
   { href: "/radar", label: "رادار", icon: Compass },
   { href: "/growth", label: "رشد", icon: Sparkles },
   { href: "/engagement", label: "تعامل", icon: Bell },
@@ -151,7 +153,7 @@ export function AppShell({
   const [growthOpen, setGrowthOpen] = useState(false);
   // Auto-open growth group if current path is inside it
   useEffect(() => {
-    if (pathname && ["/radar", "/growth", "/engagement", "/retention", "/operator", "/readiness"].some((p) => pathname.startsWith(p))) {
+    if (pathname && ["/strategy", "/radar", "/growth", "/engagement", "/retention", "/operator", "/readiness"].some((p) => pathname.startsWith(p))) {
       setGrowthOpen(true);
     }
   }, [pathname]);

@@ -4,8 +4,9 @@ import { tarikhIndexTopic } from "./topics/tarikh-index";
 import { radarTopic } from "./topics/radar";
 import { tarikhMoaserTopic } from "./topics/tarikh-moaser";
 import { hooshTopic } from "./topics/hoosh";
+import { ketabTopic } from "./topics/ketab";
 
-const allTopics: StrategyTopic[] = [radarTopic, tarikhIndexTopic, tarikhTopic, tarikhMoaserTopic, hooshTopic];
+const allTopics: StrategyTopic[] = [radarTopic, tarikhIndexTopic, tarikhTopic, tarikhMoaserTopic, hooshTopic, ketabTopic];
 
 // فقط والدها در فهرست اصلی؛ فرزندها زیر کارت والد.
 export const strategyTopics: StrategyTopic[] = allTopics.filter((t) => !t.parentId);

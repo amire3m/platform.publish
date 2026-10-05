@@ -6,8 +6,10 @@ import { tarikhMoaserTopic } from "./topics/tarikh-moaser";
 import { hooshTopic } from "./topics/hoosh";
 import { ketabTopic } from "./topics/ketab";
 import { maliTopic } from "./topics/mali";
+import { dastanTopic } from "./topics/dastan";
+import { jenaeiTopic } from "./topics/jenaei";
 
-const allTopics: StrategyTopic[] = [radarTopic, tarikhIndexTopic, tarikhTopic, tarikhMoaserTopic, hooshTopic, ketabTopic, maliTopic];
+const allTopics: StrategyTopic[] = [radarTopic, tarikhIndexTopic, tarikhTopic, tarikhMoaserTopic, hooshTopic, ketabTopic, maliTopic, dastanTopic, jenaeiTopic];
 
 // فقط والدها در فهرست اصلی؛ فرزندها زیر کارت والد.
 export const strategyTopics: StrategyTopic[] = allTopics.filter((t) => !t.parentId);

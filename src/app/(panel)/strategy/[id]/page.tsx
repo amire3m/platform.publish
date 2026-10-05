@@ -5,7 +5,7 @@ import Link from "next/link";
 import useSWR from "swr";
 import { ArrowRight, BarChart3, Clapperboard, Flag, ListVideo, Map, Rocket, Star, Tags } from "lucide-react";
 import { Button, Card, EmptyState, Skeleton } from "@/components/ui";
-import { CompareChart, DemandChart, TrendChart } from "@/components/strategy/Charts";
+import { ChartsLazySection } from "@/components/strategy/ChartsLazy";
 import { CHANNEL_FA, getStrategyTopic, getTopicChildren, stars } from "@/lib/strategy";
 import type { StrategyTopic } from "@/lib/strategy/types";
 
@@ -141,15 +141,7 @@ export default function StrategyTopicPage({ params }: { params: Promise<{ id: st
 
       {t.charts && (t.charts.demand || t.charts.trend || t.charts.compare) && (
         <Section icon={BarChart3} title="نمودارهای داده">
-          <div className="grid gap-4 lg:grid-cols-2">
-            {t.charts.demand && (
-              <DemandChart data={t.charts.demand} source={t.charts.demandSource} />
-            )}
-            {t.charts.compare && (
-              <CompareChart data={t.charts.compare} source={t.charts.compareSource} />
-            )}
-          </div>
-          {t.charts.trend && <TrendChart trend={t.charts.trend} />}
+          <ChartsLazySection charts={t.charts} />
         </Section>
       )}
 

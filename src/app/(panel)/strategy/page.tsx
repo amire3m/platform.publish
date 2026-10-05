@@ -24,6 +24,17 @@ export default function StrategyPage() {
         </p>
       </div>
 
+      <Card className="space-y-2 border-sky-500/25 bg-sky-500/5">
+        <h2 className="text-sm font-bold text-tg-text">روش‌شناسی (ثابت همه پرونده‌ها)</h2>
+        <ul className="list-disc space-y-1 pr-5 text-xs leading-6 text-tg-text/90">
+          <li>مبنا تحقیق بازار است (داده + منابع باز)؛ هر عدد منبع و تاریخ دارد و عدد تأییدنشده «نیازمند تأیید» می‌خورد.</li>
+          <li>امتیازها ۱ تا ۵: در «رقابت» کمتر یعنی بکرتر؛ وزن ریسک پلتفرم عمداً بالاست.</li>
+          <li>تولید واقعی: بدون تصویر/صدای ساخته هوش مصنوعی؛ آرشیو واقعی، راوی انسان، بازسازی با برچسب.</li>
+          <li>شورتس محتوای جدا نیست؛ مکمل ویدیوی کامل است (هر بلند ۲ تا ۳ شورتس، معیار: تبدیل به تماشای کامل).</li>
+          <li>موج‌بندی: ۱ شروع فوری · ۲ بعدی و ارزان · ۳ متوقف تا روشن‌شدن ریسک.</li>
+        </ul>
+      </Card>
+
       {strategyTopics.length === 0 && <EmptyState title="پرونده‌ای ثبت نشده است" />}
 
       <div className="grid gap-4 md:grid-cols-2">

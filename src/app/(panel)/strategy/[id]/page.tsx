@@ -155,10 +155,11 @@ export default function StrategyTopicPage({ params }: { params: Promise<{ id: st
 
       <Section icon={Tags} title={`بانک ایده‌ها (${t.ideas.length}) — ★ یعنی کمتر/بهتر در رقابت`}>
         <MiniTable
-          head={["#", "عنوان", "رقابت", "پتانسیل", "گفتمان", "کانال", "پرچم"]}
+          head={["#", "عنوان", ...(t.ideas.some((i) => i.wave) ? ["موج"] : []), "رقابت", "پتانسیل", "گفتمان", "کانال", "پرچم"]}
           rows={t.ideas.map((i) => [
             String(i.n),
             `${i.t}${i.kind ? ` (${i.kind})` : ""}`,
+            ...(t.ideas.some((x) => x.wave) ? [i.wave ? `موج ${i.wave}` : "—"] : []),
             stars(i.comp),
             stars(i.pot),
             stars(i.disc),
@@ -166,6 +167,7 @@ export default function StrategyTopicPage({ params }: { params: Promise<{ id: st
             i.flag ?? "—",
           ])}
         />
+        {t.shortsPolicy && <ExplainBox text={`قاعده شورتس: ${t.shortsPolicy}`} />}
       </Section>
 
       <Section icon={Rocket} title="۱۰ عنوان شروع">

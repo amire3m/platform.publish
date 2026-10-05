@@ -12,6 +12,7 @@ export interface StrategySeries {
   channels: string[]; // شناسه کانال‌ها
   note?: string;
   why?: string; // چرا این سری؟ چرا این کانال‌ها؟ (توضیح تحلیلی)
+  wave?: 1 | 2 | 3; // موج تولید: ۱ فوری، ۲ بعدی، ۳ متوقف تا روشن‌شدن ریسک
 }
 
 export interface StrategyIdea {
@@ -23,6 +24,8 @@ export interface StrategyIdea {
   ch: string[]; // کانال‌ها: zed|zaviye|tamashin|frame
   kind?: string; // سری/فرم والد
   flag?: string; // ⚠️ خط قرمز / ابهام / اولویت
+  wave?: 1 | 2 | 3;
+  cost?: CostTier;
 }
 
 export interface StrategyFormat {
@@ -59,6 +62,8 @@ export interface StrategyTopic {
   spinoffs: { name: string; verdict: string }[];
   redlines: string[];
   redlinesOpen: boolean;
+  // اصل ثابت: شورتس محتوای جدا نیست، مکمل ویدیوی کامل است (قیف ورود + بازنشر).
+  shortsPolicy?: string;
   readingGuide?: string; // راهنمای خواندن پرونده + منطق کلی امتیازدهی
   collabLogic?: string; // منطق نقشه کلب دوقلو
   redlineNote?: string; // توضیح وضعیت خط قرمزها

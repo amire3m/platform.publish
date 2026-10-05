@@ -27,6 +27,14 @@ function Section({ icon: Icon, title, children }: { icon: React.ComponentType<{ 
   );
 }
 
+function ExplainBox({ text }: { text: string }) {
+  return (
+    <div className="rounded-lg border border-sky-500/25 bg-sky-500/5 p-3 text-xs leading-6 text-tg-text/90">
+      {text}
+    </div>
+  );
+}
+
 function MiniTable({ head, rows }: { head: string[]; rows: string[][] }) {
   return (
     <div className="overflow-x-auto rounded-lg border border-tg-border">
@@ -112,6 +120,8 @@ export default function StrategyTopicPage({ params }: { params: Promise<{ id: st
         </Section>
       )}
 
+      {t.readingGuide && <ExplainBox text={t.readingGuide} />}
+
       <Section icon={Map} title="نقشه رقبا و خلأها">
         <MiniTable
           head={["رقیب", "فرم", "مقیاس", "خلأ قابل حمله"]}
@@ -132,6 +142,15 @@ export default function StrategyTopicPage({ params }: { params: Promise<{ id: st
             s.note ?? "—",
           ])}
         />
+        <div className="space-y-2">
+          <p className="text-xs font-bold text-tg-text">چرای هر سری:</p>
+          {t.series.filter((s) => s.why).map((s) => (
+            <p key={s.name} className="text-xs leading-6 text-tg-text/90">
+              <b className="text-tg-accent">{s.name}: </b>
+              {s.why}
+            </p>
+          ))}
+        </div>
       </Section>
 
       <Section icon={Tags} title={`بانک ایده‌ها (${t.ideas.length}) — ★ یعنی کمتر/بهتر در رقابت`}>
@@ -178,6 +197,7 @@ export default function StrategyTopicPage({ params }: { params: Promise<{ id: st
       </Section>
 
       <Section icon={Map} title="نقشه کلب (انتشار دوقلو)">
+        {t.collabLogic && <ExplainBox text={t.collabLogic} />}
         <MiniTable head={["هفته", "ستون ایران (فارسی)", "ستون جهان (+نسخه عربی/انگلیسی)"]} rows={t.collabs.map((c) => [c.weeks, c.colIran, c.colWorld])} />
       </Section>
 
@@ -191,6 +211,7 @@ export default function StrategyTopicPage({ params }: { params: Promise<{ id: st
             <li key={s.name} className="text-tg-text"><b>{s.name}:</b> <span className="text-tg-secondary">{s.verdict}</span></li>
           ))}
         </ul>
+        {t.redlineNote && <ExplainBox text={t.redlineNote} />}
         {t.redlines.length > 0 && (
           <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-2.5">
             <p className="mb-1 text-xs font-bold text-amber-700 dark:text-amber-300">خط قرمزها {t.redlinesOpen ? "(باز — تعیین تکلیف نشده)" : "(تعیین تکلیف شده)"}:</p>

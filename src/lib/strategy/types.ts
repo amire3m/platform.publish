@@ -11,6 +11,7 @@ export interface StrategySeries {
   discourse: number; // ارزش گفتمانی 1 تا 5
   channels: string[]; // شناسه کانال‌ها
   note?: string;
+  why?: string; // چرا این سری؟ چرا این کانال‌ها؟ (توضیح تحلیلی)
 }
 
 export interface StrategyIdea {
@@ -58,6 +59,9 @@ export interface StrategyTopic {
   spinoffs: { name: string; verdict: string }[];
   redlines: string[];
   redlinesOpen: boolean;
+  readingGuide?: string; // راهنمای خواندن پرونده + منطق کلی امتیازدهی
+  collabLogic?: string; // منطق نقشه کلب دوقلو
+  redlineNote?: string; // توضیح وضعیت خط قرمزها
 }
 
 export const CHANNEL_FA: Record<string, string> = {

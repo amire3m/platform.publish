@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { ArrowLeft, Compass, Flag } from "lucide-react";
 import { Card, EmptyState } from "@/components/ui";
-import { strategyTopics } from "@/lib/strategy";
+import { getTopicChildren, strategyTopics } from "@/lib/strategy";
 
 const STATUS_STYLE: Record<string, string> = {
   "پیش‌نویس": "bg-amber-500/15 text-amber-700 dark:text-amber-300",
@@ -38,34 +38,50 @@ export default function StrategyPage() {
       {strategyTopics.length === 0 && <EmptyState title="پرونده‌ای ثبت نشده است" />}
 
       <div className="grid gap-4 md:grid-cols-2">
-        {strategyTopics.map((t) => (
-          <Link key={t.id} href={`/strategy/${t.id}`}>
-            <Card className="space-y-3 transition hover:border-tg-accent">
+        {strategyTopics.map((t) => {
+          const children = getTopicChildren(t.id);
+          return (
+          <Card key={t.id} className="space-y-3">
+            <Link href={`/strategy/${t.id}`}>
               <div className="flex items-start justify-between gap-2">
-                <p className="text-base font-bold text-tg-text">{t.title}</p>
+                <p className="text-base font-bold text-tg-text transition hover:text-tg-accent">{t.title}</p>
                 <span className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-medium ${STATUS_STYLE[t.status] ?? "bg-tg-hover text-tg-secondary"}`}>
                   {t.status} · {t.version}
                 </span>
               </div>
-              <p className="text-xs text-tg-secondary">مخاطب: {t.audience} · هدف: {t.goal}</p>
-              <div className="flex flex-wrap gap-3 text-xs text-tg-secondary">
-                <span>{t.series.length} سری</span>
-                <span>{t.ideas.length} ایده</span>
-                <span>{t.formats.length} فرم تولید</span>
-                {t.redlinesOpen && (
-                  <span className="inline-flex items-center gap-1 font-medium text-amber-700 dark:text-amber-300">
-                    <Flag className="h-3.5 w-3.5" />
-                    {t.redlines.length} خط قرمز باز
-                  </span>
-                )}
+            </Link>
+            <p className="text-xs text-tg-secondary">مخاطب: {t.audience} · هدف: {t.goal}</p>
+            <div className="flex flex-wrap gap-3 text-xs text-tg-secondary">
+              <span>{t.series.length} سری</span>
+              <span>{t.ideas.length} ایده</span>
+              <span>{t.formats.length} فرم تولید</span>
+              {t.redlinesOpen && (
+                <span className="inline-flex items-center gap-1 font-medium text-amber-700 dark:text-amber-300">
+                  <Flag className="h-3.5 w-3.5" />
+                  {t.redlines.length} خط قرمز باز
+                </span>
+              )}
+            </div>
+            {children.length > 0 && (
+              <div className="space-y-1.5 border-t border-tg-border pt-2.5">
+                {children.map((c) => (
+                  <Link key={c.id} href={`/strategy/${c.id}`} className="flex items-center justify-between rounded-lg bg-tg-hover/40 px-3 py-2 transition hover:bg-tg-hover">
+                    <span className="text-xs font-medium text-tg-text">{c.title}</span>
+                    <span className="flex items-center gap-2 text-[11px] text-tg-secondary">
+                      {c.ideas.length} ایده
+                      <ArrowLeft className="h-3 w-3 text-tg-accent" />
+                    </span>
+                  </Link>
+                ))}
               </div>
-              <span className="inline-flex items-center gap-1 text-xs font-medium text-tg-accent">
-                مشاهده پرونده
-                <ArrowLeft className="h-3.5 w-3.5" />
-              </span>
-            </Card>
-          </Link>
-        ))}
+            )}
+            <Link href={`/strategy/${t.id}`} className="inline-flex items-center gap-1 text-xs font-medium text-tg-accent">
+              مشاهده پرونده
+              <ArrowLeft className="h-3.5 w-3.5" />
+            </Link>
+          </Card>
+          );
+        })}
       </div>
     </div>
   );

@@ -1,9 +1,10 @@
 import type { StrategyTopic } from "../types";
 
-// پرونده موضوع شماره ۱: تاریخ — نسخه ۱.۰ (بسته، در انتظار خط قرمزها)
+// پرونده دوره باستان و میانه (زیرمجموعه «تاریخ») — نسخه ۱.۰ (بسته، در انتظار خط قرمزها)
 export const tarikhTopic: StrategyTopic = {
-  id: "tarikh",
-  title: "تاریخ",
+  id: "tarikh-bastan",
+  title: "تاریخ باستان و میانه",
+  parentId: "tarikh",
   status: "بسته",
   version: "۱.۰",
   audience: "خانواده عمومی فارسی‌زبان",

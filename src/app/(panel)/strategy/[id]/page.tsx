@@ -3,9 +3,10 @@
 import { use } from "react";
 import Link from "next/link";
 import useSWR from "swr";
-import { ArrowRight, Clapperboard, Flag, ListVideo, Map, Rocket, Star, Tags } from "lucide-react";
+import { ArrowRight, BarChart3, Clapperboard, Flag, ListVideo, Map, Rocket, Star, Tags } from "lucide-react";
 import { Button, Card, EmptyState, Skeleton } from "@/components/ui";
-import { CHANNEL_FA, getStrategyTopic, stars } from "@/lib/strategy";
+import { CompareChart, DemandChart, TrendChart } from "@/components/strategy/Charts";
+import { CHANNEL_FA, getStrategyTopic, getTopicChildren, stars } from "@/lib/strategy";
 import type { StrategyTopic } from "@/lib/strategy/types";
 
 async function fetcher(url: string) {
@@ -109,6 +110,22 @@ export default function StrategyTopicPage({ params }: { params: Promise<{ id: st
         )}
       </div>
 
+      {getTopicChildren(t.id).length > 0 && (
+        <Section icon={ListVideo} title={`دوره‌ها (${getTopicChildren(t.id).length})`}>
+          <div className="grid gap-2.5 sm:grid-cols-2">
+            {getTopicChildren(t.id).map((c) => (
+              <Link key={c.id} href={`/strategy/${c.id}`}>
+                <Card className="space-y-2 transition hover:border-tg-accent">
+                  <p className="text-sm font-bold text-tg-text">{c.title}</p>
+                  <p className="text-[11px] text-tg-secondary">{c.status} · {c.ideas.length} ایده · {c.series.length} سری</p>
+                  <span className="text-[11px] font-medium text-tg-accent">ورود به پرونده دوره ←</span>
+                </Card>
+              </Link>
+            ))}
+          </div>
+        </Section>
+      )}
+
       {t.houseFormat && (
         <Section icon={Star} title={`فرم خانه: ${t.houseFormat.name}`}>
           <p className="text-xs leading-relaxed text-tg-secondary">{t.houseFormat.desc}</p>
@@ -121,6 +138,20 @@ export default function StrategyTopicPage({ params }: { params: Promise<{ id: st
       )}
 
       {t.readingGuide && <ExplainBox text={t.readingGuide} />}
+
+      {t.charts && (t.charts.demand || t.charts.trend || t.charts.compare) && (
+        <Section icon={BarChart3} title="نمودارهای داده">
+          <div className="grid gap-4 lg:grid-cols-2">
+            {t.charts.demand && (
+              <DemandChart data={t.charts.demand} source={t.charts.demandSource} />
+            )}
+            {t.charts.compare && (
+              <CompareChart data={t.charts.compare} source={t.charts.compareSource} />
+            )}
+          </div>
+          {t.charts.trend && <TrendChart trend={t.charts.trend} />}
+        </Section>
+      )}
 
       <Section icon={Map} title="نقشه رقبا و خلأها">
         <MiniTable

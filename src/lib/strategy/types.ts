@@ -42,9 +42,28 @@ export interface StrategyCollab {
   colWorld: string;
 }
 
+export interface StrategyChartDemand {
+  label: string;
+  value: number; // هزار بازدید (میانه ۵ ویدیوی برتر)
+  highlight?: boolean;
+}
+
+export interface StrategyChartTrend {
+  months: string[];
+  lines: { name: string; color: string; values: (number | null)[] }[];
+  source: string;
+}
+
+export interface StrategyChartCompare {
+  label: string;
+  recent: number | null; // بهترین ۱۲ ماه اخیر (هزار بازدید)
+  allTime: number | null; // مرجع همه‌زمان
+}
+
 export interface StrategyTopic {
   id: string;
   title: string;
+  parentId?: string; // اگر زیرمجموعه یک والد باشد
   status: "پیش‌نویس" | "بسته" | "در حال انتشار";
   version: string;
   audience: string;
@@ -67,6 +86,13 @@ export interface StrategyTopic {
   readingGuide?: string; // راهنمای خواندن پرونده + منطق کلی امتیازدهی
   collabLogic?: string; // منطق نقشه کلب دوقلو
   redlineNote?: string; // توضیح وضعیت خط قرمزها
+  charts?: {
+    demand?: StrategyChartDemand[]; // میله‌ای تقاضا (هزار بازدید)
+    demandSource?: string;
+    trend?: StrategyChartTrend; // خطی روند ماهانه
+    compare?: StrategyChartCompare[]; // میله‌ای دوبل ۱۲ماه اخیر vs همه‌زمان
+    compareSource?: string;
+  };
 }
 
 export const CHANNEL_FA: Record<string, string> = {

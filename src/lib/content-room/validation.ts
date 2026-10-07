@@ -1,14 +1,9 @@
 import { z } from "zod";
+import { PART_ACTIVITIES } from "./activities";
+import { CONTENT_STATUSES } from "./statuses";
 
-export const PART_ACTIVITIES = [
-  "raw_done",
-  "copyright_fix",
-  "editing_full_done",
-  "cover_ready",
-  "highlight_done",
-  "reel_done",
-  "previously_published",
-] as const;
+export { PART_ACTIVITIES } from "./activities";
+export { CONTENT_STATUSES } from "./statuses";
 
 export const PRODUCT_TYPES = [
   "serial",
@@ -29,15 +24,6 @@ export const CHANNELS = [
   "iranian_frame",
   "shock",
   "tinazh",
-] as const;
-
-export const CONTENT_STATUSES = [
-  "imported",
-  "copyright_fix",
-  "highlight_done",
-  "reel_done",
-  "cover_ready",
-  "ready_to_send",
 ] as const;
 
 const STATUS_ORDER: Record<(typeof CONTENT_STATUSES)[number], number> = {

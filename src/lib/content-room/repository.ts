@@ -1,19 +1,14 @@
 import { generateEntityId } from "@/lib/ids";
 import { PART_ACTIVITIES, REQUIRED_FOR_SEND, deriveProductStatusFromParts, planPartsReconciliation } from "./activities";
+import { CONTENT_STATUSES, CONTENT_STATUS_ORDER } from "./statuses";
+import type { ContentStatus } from "./statuses";
 import { HIDDEN_CHANNEL_IDS, isChannelHidden } from "@/lib/channels";
 
 // ---------------------------------------------------------------------------
-// Constants & types
+// Constants & types (status/activity lists live in ./statuses and ./activities)
 // ---------------------------------------------------------------------------
-export const CONTENT_STATUSES = [
-  "imported",
-  "copyright_fix",
-  "highlight_done",
-  "reel_done",
-  "cover_ready",
-  "ready_to_send",
-] as const;
-export type ContentStatus = (typeof CONTENT_STATUSES)[number];
+export { CONTENT_STATUSES };
+export type { ContentStatus };
 
 export const PRODUCT_TYPES = [
   "serial",
@@ -38,14 +33,7 @@ export const CHANNELS = [
 ] as const;
 export type Channel = (typeof CHANNELS)[number];
 
-const STATUS_ORDER: Record<ContentStatus, number> = {
-  imported: 0,
-  copyright_fix: 1,
-  highlight_done: 2,
-  reel_done: 3,
-  cover_ready: 4,
-  ready_to_send: 5,
-};
+const STATUS_ORDER = CONTENT_STATUS_ORDER;
 
 export function deriveIsCold(archivedAt: Date | null | undefined): boolean {
   if (!archivedAt) return false;
@@ -107,8 +95,42 @@ export interface ContentPartRecord {
   status: string | null;
   isActive: boolean;
   activities?: Record<string, boolean>;
+  /** Per-activity audit: who checked each box and when (null = never checked). */
+  activityMeta?: Record<string, PartActivityMeta>;
   createdAt: Date;
   updatedAt: Date;
+}
+
+/** Who checked a part-activity box and when. */
+export interface PartActivityMeta {
+  completedAt: Date | null;
+  completedBy: string | null;
+}
+
+export function emptyActivityMeta(): Record<string, PartActivityMeta> {
+  const out: Record<string, PartActivityMeta> = {};
+  for (const a of PART_ACTIVITIES) out[a] = { completedAt: null, completedBy: null };
+  return out;
+}
+
+/** Builds per-part activity meta from raw activity rows (camelCase or snake_case). */
+export function activityMetaFromRows(
+  rows: Array<Record<string, unknown>>,
+): Record<string, Record<string, PartActivityMeta>> {
+  const byPart: Record<string, Record<string, PartActivityMeta>> = {};
+  for (const ar of rows) {
+    const pid = ((ar.partId as string) ?? (ar.part_id as string) ?? "") as string;
+    const act = ar.activity as string;
+    if (!pid || !act) continue;
+    const atRaw = (ar.completedAt as unknown) ?? ar.completed_at;
+    const byRaw = (ar.completedBy as unknown) ?? ar.completed_by;
+    if (!byPart[pid]) byPart[pid] = {};
+    byPart[pid][act] = {
+      completedAt: atRaw ? new Date(atRaw as string | Date) : null,
+      completedBy: (byRaw as string | null) ?? null,
+    };
+  }
+  return byPart;
 }
 
 export interface ContentProductDetail extends ContentProductRecord {
@@ -257,7 +279,12 @@ export class InMemoryContentRoomPort implements ContentRoomDatabasePort {
   private enrichPart(p: ContentPartRecord): ContentPartRecord {
     this.ensureActivities(p.id);
     const activities = { ...this.activitiesByPart.get(p.id)! };
-    return { ...p, activities, isActive: p.isActive ?? true };
+    const metaMap = this.activityMeta.get(p.id)!;
+    const activityMeta: Record<string, PartActivityMeta> = {};
+    for (const a of PART_ACTIVITIES) {
+      activityMeta[a] = metaMap.get(a) ?? { completedAt: null, completedBy: null };
+    }
+    return { ...p, activities, activityMeta, isActive: p.isActive ?? true };
   }
 
   async listProducts(filters?: ProductFilters): Promise<ContentProductRecord[]> {
@@ -590,6 +617,7 @@ export function createDrizzleContentRoomPort(): ContentRoomDatabasePort {
       // fetch activities for parts
       const partIds = partRows.map((r) => (r as unknown as { id: string }).id);
       let activitiesByPart: Record<string, Record<string, boolean>> = {};
+      let metaByPart: Record<string, Record<string, PartActivityMeta>> = {};
       if (partIds.length) {
         const { inArray } = await import("drizzle-orm");
         const activityRows = await db
@@ -603,13 +631,14 @@ export function createDrizzleContentRoomPort(): ContentRoomDatabasePort {
           if (!activitiesByPart[pid]) activitiesByPart[pid] = {};
           activitiesByPart[pid][act] = !!done;
         }
+        metaByPart = activityMetaFromRows(activityRows as unknown as Array<Record<string, unknown>>);
       }
       const parts = partRows.map((r) => {
         const mapped = mapPartRow(r as unknown as Record<string, unknown>);
         // fill missing activities
         const acts: Record<string, boolean> = {};
         for (const a of PART_ACTIVITIES) acts[a] = activitiesByPart[mapped.id]?.[a] ?? false;
-        return { ...mapped, activities: acts };
+        return { ...mapped, activities: acts, activityMeta: { ...emptyActivityMeta(), ...(metaByPart[mapped.id] ?? {}) } };
       });
       return { ...product, parts };
     },
@@ -637,11 +666,12 @@ export function createDrizzleContentRoomPort(): ContentRoomDatabasePort {
         if (!activitiesByPart[pid]) activitiesByPart[pid] = {};
         activitiesByPart[pid][act] = !!done;
       }
+      const metaByPart = activityMetaFromRows(activityRows as unknown as Array<Record<string, unknown>>);
       return rows.map((r) => {
         const mapped = mapPartRow(r as unknown as Record<string, unknown>);
         const acts: Record<string, boolean> = {};
         for (const a of PART_ACTIVITIES) acts[a] = activitiesByPart[mapped.id]?.[a] ?? false;
-        return { ...mapped, activities: acts };
+        return { ...mapped, activities: acts, activityMeta: { ...emptyActivityMeta(), ...(metaByPart[mapped.id] ?? {}) } };
       });
     },
 
@@ -803,7 +833,8 @@ export function createDrizzleContentRoomPort(): ContentRoomDatabasePort {
         const done = (ar.isDone as boolean) ?? (ar.is_done as boolean);
         acts[act] = !!done;
       }
-      return { ...mapped, activities: acts };
+      const metaByPart = activityMetaFromRows(actRows as unknown as Array<Record<string, unknown>>);
+      return { ...mapped, activities: acts, activityMeta: { ...emptyActivityMeta(), ...(metaByPart[id] ?? {}) } };
     },
 
     async transactTogglePartActivity(partId, activity, isDone, expectedProductVersion, event) {
@@ -885,7 +916,9 @@ export function createDrizzleContentRoomPort(): ContentRoomDatabasePort {
         const updatedActs: Record<string, boolean> = {};
         for (const a of PART_ACTIVITIES) updatedActs[a] = byPart[partId]?.[a] ?? (a === activity ? isDone : false);
         updatedActs[activity] = isDone;
-        return { ...mappedPart, activities: updatedActs } as ContentPartRecord;
+        const myRows = await tx.select().from(contentPartActivities).where(eq(contentPartActivities.partId, partId));
+        const myMeta = activityMetaFromRows(myRows as unknown as Array<Record<string, unknown>>)[partId] ?? {};
+        return { ...mappedPart, activities: updatedActs, activityMeta: { ...emptyActivityMeta(), ...myMeta } } as ContentPartRecord;
       });
     },
 
@@ -1259,7 +1292,7 @@ export function createContentRoomRepository(port?: ContentRoomDatabasePort): Con
       };
       await dbPort.transactCreateProduct(product, parts, event);
       // attach activities for in-memory enrichment
-      const enrichedParts = parts.map((p) => ({ ...p, activities: Object.fromEntries(PART_ACTIVITIES.map((a) => [a, false])) }));
+      const enrichedParts = parts.map((p) => ({ ...p, activities: Object.fromEntries(PART_ACTIVITIES.map((a) => [a, false])), activityMeta: emptyActivityMeta() }));
       return { ...product, parts: enrichedParts as ContentPartRecord[] };
     },
 
@@ -1324,7 +1357,7 @@ export function createContentRoomRepository(port?: ContentRoomDatabasePort): Con
           createdAt: now,
         };
         items.push({ product, parts, event });
-        details.push({ ...product, parts: parts.map((p) => ({ ...p, activities: Object.fromEntries(PART_ACTIVITIES.map((a) => [a, false])) })) as ContentPartRecord[] });
+        details.push({ ...product, parts: parts.map((p) => ({ ...p, activities: Object.fromEntries(PART_ACTIVITIES.map((a) => [a, false])), activityMeta: emptyActivityMeta() })) as ContentPartRecord[] });
       }
 
       if (dbPort.transactCreateProductsBatch) {

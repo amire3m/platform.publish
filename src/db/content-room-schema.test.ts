@@ -6,9 +6,34 @@ import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 
 import { contentPartActivities, contentParts, contentProducts, partTranscripts, channelAccounts, mediaMirrors, mediaAccess } from "./schema";
-import { PART_ACTIVITIES } from "@/lib/content-room/activities";
+import { PART_ACTIVITIES, REQUIRED_FOR_SEND as CANONICAL_REQUIRED, ACTIVITY_LABELS_FA } from "@/lib/content-room/activities";
 import { PART_ACTIVITIES as VALIDATION_PART_ACTIVITIES, PRODUCT_TYPES as VALIDATION_PRODUCT_TYPES } from "@/lib/content-room/validation";
 import { CONTENT_STATUS_ORDER } from "@/lib/content-room/presentation";
+import { CONTENT_STATUSES as CANONICAL_STATUSES, STATUS_LABELS_FA } from "@/lib/content-room/statuses";
+import { CONTENT_STATUSES as REPO_STATUSES } from "@/lib/content-room/repository";
+import { PART_ACTIVITIES as COMPONENT_PART_ACTIVITIES, REQUIRED_FOR_SEND as COMPONENT_REQUIRED } from "@/components/content-room/types";
+import { ACTIVITY_LABELS as ROOM_ACTIVITY_LABELS, REQUIRED_FOR_SEND as ROOM_REQUIRED, STATUS_LABELS as ROOM_STATUS_LABELS } from "@/components/content-room/room-model";
+
+describe("content-room single source of truth", () => {
+  it("keeps every PART_ACTIVITIES copy identical to canonical", () => {
+    expect([...VALIDATION_PART_ACTIVITIES]).toEqual([...PART_ACTIVITIES]);
+    expect([...COMPONENT_PART_ACTIVITIES]).toEqual([...PART_ACTIVITIES]);
+  });
+  it("keeps every REQUIRED_FOR_SEND copy identical to canonical", () => {
+    expect([...COMPONENT_REQUIRED]).toEqual([...CANONICAL_REQUIRED]);
+    expect([...ROOM_REQUIRED]).toEqual([...CANONICAL_REQUIRED]);
+  });
+  it("keeps every CONTENT_STATUSES copy identical to canonical", () => {
+    expect([...REPO_STATUSES]).toEqual([...CANONICAL_STATUSES]);
+    expect(Object.keys(CONTENT_STATUS_ORDER).sort()).toEqual([...CANONICAL_STATUSES, "previously_published"].sort());
+  });
+  it("keeps every label map covering exactly the canonical keys", () => {
+    expect(Object.keys(ACTIVITY_LABELS_FA).sort()).toEqual([...PART_ACTIVITIES].sort());
+    expect(Object.keys(STATUS_LABELS_FA).sort()).toEqual([...CANONICAL_STATUSES, "previously_published"].sort());
+    expect(Object.keys(ROOM_ACTIVITY_LABELS).sort()).toEqual([...PART_ACTIVITIES].sort());
+    expect(Object.keys(ROOM_STATUS_LABELS).sort()).toEqual([...CANONICAL_STATUSES, "previously_published"].sort());
+  });
+});
 
 describe("content room schema batch activities", () => {
   it("exposes isActive and activities table", () => {

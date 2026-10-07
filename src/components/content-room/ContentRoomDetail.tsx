@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import useSWR from "swr";
@@ -8,6 +8,7 @@ import { Pencil, UploadCloud, Film, Image as ImageIcon, Scissors, Smartphone, Cl
 import { Button, Card, ConfirmModal, Input } from "@/components/ui";
 import { DedicatedPlayer } from "@/components/media/DedicatedPlayer";
 import { fetchContentRoomApi, ContentRoomApiError } from "@/lib/content-room/client";
+import { fetchWorkflowApi } from "@/lib/workflow/client";
 import { contentStatusPresentation } from "@/lib/content-room/presentation";
 import type { ContentStatus } from "@/lib/content-room/presentation";
 import type { ContentRoomProductDetail } from "./types";
@@ -72,6 +73,14 @@ export function ContentRoomDetail({ product, onRefresh }: Props) {
         return null;
       }
     },
+  );
+  const { data: staffNames } = useSWR<{ names: Array<{ id: string; name: string }> }>(
+    "/api/users/names",
+    fetchWorkflowApi<{ names: Array<{ id: string; name: string }> }>,
+  );
+  const userNames = useMemo(
+    () => Object.fromEntries((staffNames?.names ?? []).map((u) => [u.id, u.name])),
+    [staffNames],
   );
   const liveChannel = channelsData?.channels?.find((c) => c.id === product.channel);
   const ytId = liveChannel?.youtubeAccountId ?? channelAccounts.youtubeAccountId;
@@ -291,7 +300,7 @@ export function ContentRoomDetail({ product, onRefresh }: Props) {
       {activeTab === "checklist" && (
         <Card className="space-y-3">
           <h2 className="text-sm font-bold text-tg-text">چک‌لیست فعالیت‌ها (هر قسمت مستقل)</h2>
-          <PartActivitiesGrid parts={product.parts as never} onToggle={handleToggle} onSendPart={handleSendPart} />
+          <PartActivitiesGrid parts={product.parts as never} onToggle={handleToggle} onSendPart={handleSendPart} userNames={userNames} />
         </Card>
       )}
 

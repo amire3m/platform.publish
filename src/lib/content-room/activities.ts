@@ -19,6 +19,17 @@ export const REQUIRED_FOR_SEND: PartActivity[] = [
   "reel_done",
 ];
 
+/** Canonical Persian labels for part activities (single source of truth). */
+export const ACTIVITY_LABELS_FA: Record<PartActivity, string> = {
+  raw_done: "خام",
+  copyright_fix: "رفع کپی‌رایت",
+  editing_full_done: "تدوین کامل",
+  cover_ready: "کاور",
+  highlight_done: "برش",
+  reel_done: "ریلز",
+  previously_published: "قبلاً منتشر شده",
+};
+
 export function deriveProductStatusFromParts(
   parts: Array<{ isActive: boolean; activities: Record<string, boolean> }>,
 ): string {

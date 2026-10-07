@@ -3,24 +3,11 @@ import type { ContentStatus } from "@/lib/content-room/presentation";
 export type ProductType = "serial" | "documentary" | "tv_program" | "film" | "short_film" | "educational" | "teaser" | "music_video" | "raw_video";
 export type Channel = "zed_revayat" | "zaviye_no" | "tamashin" | "iranian_frame" | "shock" | "tinazh";
 
-export const PART_ACTIVITIES = [
-  "raw_done",
-  "copyright_fix",
-  "editing_full_done",
-  "cover_ready",
-  "highlight_done",
-  "reel_done",
-  "previously_published",
-] as const;
-export type PartActivity = (typeof PART_ACTIVITIES)[number];
-export const REQUIRED_FOR_SEND: PartActivity[] = [
-  "raw_done",
-  "copyright_fix",
-  "editing_full_done",
-  "cover_ready",
-  "highlight_done",
-  "reel_done",
-];
+import { PART_ACTIVITIES, REQUIRED_FOR_SEND } from "@/lib/content-room/activities";
+import type { PartActivity } from "@/lib/content-room/activities";
+
+export { PART_ACTIVITIES, REQUIRED_FOR_SEND };
+export type { PartActivity };
 
 export type ContentPartActivityState = Record<PartActivity, boolean>;
 
@@ -60,6 +47,8 @@ export interface ContentPart {
   status?: string | null;
   isActive?: boolean;
   activities?: Partial<Record<PartActivity, boolean>> & Record<string, boolean>;
+  /** Per-activity audit: who checked each box and when. */
+  activityMeta?: Record<string, { completedAt?: string | Date | null; completedBy?: string | null }>;
   createdAt?: string | Date | null;
   updatedAt?: string | Date | null;
 }

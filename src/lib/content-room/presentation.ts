@@ -1,4 +1,19 @@
 import { UNKNOWN_LABEL_FA } from "@/lib/presentation-fa";
+import {
+  STATUS_META,
+  type AnyContentStatus,
+  type StatusIcon,
+  type StatusTone,
+} from "./statuses";
+import { ACTIVITY_LABELS_FA as CANONICAL_ACTIVITY_LABELS } from "./activities";
+
+export type { ContentStatus, AnyContentStatus, StatusTone, StatusIcon } from "./statuses";
+export {
+  CONTENT_STATUSES,
+  CONTENT_STATUS_ORDER,
+  STATUS_META,
+  STATUS_LABELS_FA,
+} from "./statuses";
 
 export const PRODUCT_TYPE_LABELS_FA: Record<string, string> = {
   serial: "سریال",
@@ -12,42 +27,18 @@ export const PRODUCT_TYPE_LABELS_FA: Record<string, string> = {
   raw_video: "ویدیو خام",
 };
 
-export const ACTIVITY_LABELS_FA: Record<string, string> = {
-  raw_done: "خام",
-  copyright_fix: "رفع کپی‌رایت",
-  editing_full_done: "تدوین کامل",
-  highlight_done: "هایلایت",
-  reel_done: "ریلز",
-  cover_ready: "کاور",
-  previously_published: "قبلاً منتشر شده",
-};
-
-export type ContentStatus =
-  | "imported"
-  | "copyright_fix"
-  | "highlight_done"
-  | "reel_done"
-  | "cover_ready"
-  | "ready_to_send"
-  | "previously_published";
+/** Canonical activity labels (re-exported single source). */
+export const ACTIVITY_LABELS_FA: Record<string, string> = CANONICAL_ACTIVITY_LABELS;
 
 export interface ContentStatusPresentation {
   label: string;
-  tone: "neutral" | "info" | "warning" | "success" | "danger";
-  icon: "clock" | "loader" | "eye" | "alert" | "check" | "calendar" | "x";
+  tone: StatusTone;
+  icon: StatusIcon;
 }
 
-const PRESENTATIONS: Record<string, ContentStatusPresentation> = {
-  imported: { label: "واردشده", tone: "neutral", icon: "clock" },
-  copyright_fix: { label: "رفع کپی‌رایت", tone: "warning", icon: "eye" },
-  highlight_done: { label: "هایلایت ساخته شد", tone: "info", icon: "check" },
-  reel_done: { label: "ریلز ساخته شد", tone: "info", icon: "check" },
-  cover_ready: { label: "کاور آماده", tone: "info", icon: "calendar" },
-  ready_to_send: { label: "آماده ارسال", tone: "success", icon: "check" },
-  previously_published: { label: "قبلاً منتشر شده", tone: "neutral", icon: "check" },
-};
+const PRESENTATIONS: Record<string, ContentStatusPresentation> = STATUS_META;
 
-export function contentStatusPresentation(status: ContentStatus): ContentStatusPresentation {
+export function contentStatusPresentation(status: AnyContentStatus): ContentStatusPresentation {
   return (
     PRESENTATIONS[status] ?? {
       label: UNKNOWN_LABEL_FA,
@@ -59,22 +50,3 @@ export function contentStatusPresentation(status: ContentStatus): ContentStatusP
 
 // Alias for task spec: workflowStatusPresentation-like mapping for content statuses
 export const workflowStatusPresentation = contentStatusPresentation;
-
-export const CONTENT_STATUS_ORDER: Record<ContentStatus, number> = {
-  imported: 0,
-  copyright_fix: 1,
-  highlight_done: 2,
-  reel_done: 3,
-  cover_ready: 4,
-  ready_to_send: 5,
-  previously_published: 6,
-};
-
-export const CONTENT_STATUSES = [
-  "imported",
-  "copyright_fix",
-  "highlight_done",
-  "reel_done",
-  "cover_ready",
-  "ready_to_send",
-] as const;

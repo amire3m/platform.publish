@@ -127,6 +127,36 @@ export default function UsersPage() {
     }
   }
 
+  async function changeRole(u: UserRow, role: Role) {
+    if (role === u.role) return;
+    try {
+      const res = await fetch(`/api/users/${u.id}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ role }),
+      });
+      const json = await res.json();
+      if (!json.ok) return showToast(json.error, "error");
+      mutate();
+      showToast(`نقش ${u.name} به «${roleLabelFa(role)}» تغییر کرد.`, "success");
+    } catch (e) {
+      showToast((e as Error).message, "error");
+    }
+  }
+
+  async function removeUser(u: UserRow) {
+    if (!window.confirm(`کاربر «${u.name}» حذف (غیرفعال) شود؟ سوابق ثبت‌شده او (مثل تیک‌ها) با نامش باقی می‌ماند.`)) return;
+    try {
+      const res = await fetch(`/api/users/${u.id}`, { method: "DELETE" });
+      const json = await res.json();
+      if (!json.ok) return showToast(json.error, "error");
+      mutate();
+      showToast(`کاربر ${u.name} حذف شد.`, "success");
+    } catch (e) {
+      showToast((e as Error).message, "error");
+    }
+  }
+
   async function saveRow(userId: string) {
     const draft = drafts[userId];
     if (!draft) return;
@@ -224,9 +254,22 @@ export default function UsersPage() {
                 return (
                   <tr key={u.id} className="border-b border-tg-border last:border-0">
                     <th scope="row" className="p-3 text-right font-medium whitespace-nowrap">
-                      <div className="flex flex-col">
+                      <div className="flex flex-col gap-1">
                         <span className="text-tg-text">{u.name} {u.isOwnerProtected && <span className="text-xs text-amber-500">(مالک)</span>}</span>
-                        <span className="text-[11px] text-tg-secondary">{roleLabelFa(u.role)} · {u.telegramId}</span>
+                        <span className="text-[11px] text-tg-secondary">{u.telegramId}</span>
+                        <Select
+                          value={u.role}
+                          disabled={!isOwner || u.isOwnerProtected}
+                          onChange={(e) => changeRole(u, e.target.value as Role)}
+                          aria-label={`نقش ${u.name}`}
+                          className="max-w-[140px] text-xs"
+                        >
+                          {Object.entries(ROLE_LABELS_FA).map(([v, l]) => (
+                            <option key={v} value={v}>
+                              {l}
+                            </option>
+                          ))}
+                        </Select>
                         <span className="mt-1"><StatusBadge status={u.active ? "connected" : "disconnected"} /></span>
                       </div>
                     </th>
@@ -282,6 +325,11 @@ export default function UsersPage() {
                         {!u.isOwnerProtected && (
                           <Button size="sm" variant={u.active ? "danger" : "primary"} onClick={() => toggleActive(u)}>
                             {u.active ? "غیرفعال‌سازی" : "فعال‌سازی"}
+                          </Button>
+                        )}
+                        {isOwner && !u.isOwnerProtected && (
+                          <Button size="sm" variant="danger" onClick={() => removeUser(u)} aria-label={`حذف ${u.name}`}>
+                            حذف
                           </Button>
                         )}
                         <span className="text-[11px] text-tg-secondary">{formatJalaliDateTime(u.createdAt)}</span>

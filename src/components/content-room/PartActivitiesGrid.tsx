@@ -4,19 +4,31 @@ import { useState } from "react";
 import type { ContentPart } from "./types";
 import { ACTIVITY_LABELS } from "./room-model";
 import { PART_ACTIVITIES, REQUIRED_FOR_SEND } from "@/lib/content-room/activities";
+import { formatJalaliDateTime } from "@/lib/date/jalali";
 import { Send } from "lucide-react";
 
 const ACTIVITY_ORDER = PART_ACTIVITIES;
+
+function tickTitle(label: string, partNumber: number, meta: ContentPart["activityMeta"], activity: string, userNames?: Record<string, string>): string {
+  const m = meta?.[activity];
+  if (!m?.completedBy) return `${label} برای قسمت ${partNumber}`;
+  const who = userNames?.[m.completedBy] ?? m.completedBy;
+  const when = m.completedAt ? formatJalaliDateTime(m.completedAt) : "";
+  return `${label} برای قسمت ${partNumber} — ثبت: ${who}${when ? ` · ${when}` : ""}`;
+}
 
 export function PartActivitiesGrid({
   parts,
   onToggle,
   onSendPart,
+  userNames,
 }: {
   parts: ContentPart[];
   onToggle: (partId: string, activity: string, isDone: boolean) => void;
   /** Optional: publish a single ready part right away (selective send). */
   onSendPart?: (partId: string, partNumber: number) => Promise<void> | void;
+  /** userId → display name for audit tooltips. */
+  userNames?: Record<string, string>;
 }) {
   const activities = ACTIVITY_ORDER;
   const activeParts = parts.filter((p) => (p.isActive ?? true));
@@ -70,17 +82,33 @@ export function PartActivitiesGrid({
                   {activities.map((a) => {
                     const checked = Boolean(p.activities?.[a]);
                     const disabled = a !== "previously_published" && isPreviouslyPublished;
+                    const label = ACTIVITY_LABELS[a] ?? a;
+                    const meta = p.activityMeta?.[a];
+                    const byName = meta?.completedBy ? (userNames?.[meta.completedBy] ?? meta.completedBy) : null;
+                    const title = disabled
+                      ? "این قسمت قبلاً منتشر شده است؛ سایر فعالیت‌ها غیرفعال است."
+                      : tickTitle(label, p.partNumber, p.activityMeta, a, userNames);
                     return (
                       <td key={a} className={`px-2 py-2 text-center ${a === "previously_published" ? "bg-amber-500/5" : ""}`}>
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          disabled={disabled}
-                          onChange={(e) => onToggle(p.id, a, e.target.checked)}
-                          className="h-4 w-4 rounded border-tg-border text-tg-accent focus:ring-tg-accent disabled:opacity-40"
-                          aria-label={`${ACTIVITY_LABELS[a] ?? a} برای قسمت ${p.partNumber}`}
-                          title={disabled ? "این قسمت قبلاً منتشر شده است؛ سایر فعالیت‌ها غیرفعال است." : undefined}
-                        />
+                        <span className="inline-flex items-center gap-1">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            disabled={disabled}
+                            onChange={(e) => onToggle(p.id, a, e.target.checked)}
+                            className="h-4 w-4 rounded border-tg-border text-tg-accent focus:ring-tg-accent disabled:opacity-40"
+                            aria-label={title}
+                            title={title}
+                          />
+                          {checked && byName && (
+                            <span
+                              title={title}
+                              className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-tg-accent-soft px-1 text-[9px] font-bold text-tg-accent"
+                            >
+                              {byName.trim().charAt(0)}
+                            </span>
+                          )}
+                        </span>
                       </td>
                     );
                   })}
@@ -109,7 +137,7 @@ export function PartActivitiesGrid({
         </tbody>
       </table>
       <p className="px-3 py-2 text-[11px] text-tg-secondary">
-        ردیف سبز = همه فعالیت‌های آن قسمت کامل است و دکمه «انتشار» فعال می‌شود — انتشار هر قسمت مستقل از بقیه است و نیازی به آماده‌بودن کل برنامه ندارد. تیک «قبلاً منتشر شده» سایر فعالیت‌های همان قسمت را غیرفعال می‌کند و در ارسال نادیده گرفته می‌شود.
+        ردیف سبز = همه فعالیت‌های آن قسمت کامل است و دکمه «انتشار» فعال می‌شود — انتشار هر قسمت مستقل از بقیه است و نیازی به آماده‌بودن کل برنامه ندارد. تیک «قبلاً منتشر شده» سایر فعالیت‌های همان قسمت را غیرفعال می‌کند و در ارسال نادیده گرفته می‌شود. حرف کنار هر تیک = حرف اول نام ثبت‌کننده؛ نگه‌داشتن نشانگر جزئیات (نام و تاریخ ثبت) را نشان می‌دهد.
       </p>
     </div>
   );

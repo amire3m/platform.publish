@@ -16,39 +16,17 @@ export const PRODUCT_TYPE_LABELS: Record<string, string> = {
   raw_video: "ویدیو خام",
 };
 
-export const ACTIVITY_LABELS: Record<string, string> = {
-  raw_done: "خام",
-  copyright_fix: "رفع کپی‌رایت",
-  editing_full_done: "تدوین کامل",
-  cover_ready: "کاور",
-  highlight_done: "برش",
-  reel_done: "ریلز",
-  previously_published: "قبلاً منتشر شده",
-};
+import { ACTIVITY_LABELS_FA, REQUIRED_FOR_SEND as CANONICAL_REQUIRED_FOR_SEND } from "@/lib/content-room/activities";
 
-export const REQUIRED_FOR_SEND: readonly string[] = [
-  "raw_done",
-  "copyright_fix",
-  "editing_full_done",
-  "cover_ready",
-  "highlight_done",
-  "reel_done",
-] as const;
+export const ACTIVITY_LABELS: Record<string, string> = ACTIVITY_LABELS_FA;
+export const REQUIRED_FOR_SEND: readonly string[] = CANONICAL_REQUIRED_FOR_SEND;
 
 export const CHANNEL_LABELS: Record<string, string> = Object.fromEntries(VISIBLE_CHANNELS.map((c) => [c.id, c.labelFa]));
 
 export const productTypeLabelFa = (value: string) => PRODUCT_TYPE_LABELS[value] ?? UNKNOWN_LABEL_FA;
 export const channelLabelFa = (value: string) => CHANNEL_LABELS[value] ?? UNKNOWN_LABEL_FA;
 
-export const STATUS_LABELS: Record<string, string> = {
-  imported: "واردشده",
-  copyright_fix: "رفع کپی‌رایت",
-  highlight_done: "هایلایت ساخته شد",
-  reel_done: "ریلز ساخته شد",
-  cover_ready: "کاور آماده",
-  ready_to_send: "آماده ارسال",
-  previously_published: "قبلاً منتشر شده",
-};
+export { STATUS_LABELS_FA as STATUS_LABELS } from "@/lib/content-room/statuses";
 
 export function filterProducts(
   products: readonly ContentRoomProductSummary[],

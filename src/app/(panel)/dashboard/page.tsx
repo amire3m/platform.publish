@@ -14,6 +14,7 @@ import { platformLabelFa, statusLabelFa, UNKNOWN_LABEL_FA } from "@/lib/presenta
 import { MAIN_REPORT_ALIAS } from "@/lib/accounts/organization";
 import { ChannelHeader } from "@/components/analytics/ChannelHeader";
 import type { PublicAccountDto } from "@/lib/accounts/public";
+import { CONTENT_STATUSES as STATUS_ORDER, STATUS_LABELS_FA } from "@/lib/content-room/statuses";
 
 type IconType = React.ComponentType<{ className?: string }>;
 
@@ -41,17 +42,6 @@ interface DashboardSummary {
   youtube: { totalViews30d: number; byChannel: Array<{ channelId: string; label: string; views: number }>; topVideos: Array<{ videoId: string; title: string; views: number; channel: string; channelId?: string }> };
   instagram: { status: "awaiting_connection" | "connected"; byPage: Array<{ pageId: string; label: string; views: number }>; connectedCount: number };
 }
-
-const STATUS_LABELS_FA: Record<string, string> = {
-  imported: "وارد شده",
-  copyright_fix: "اصلاح کپی‌رایت",
-  highlight_done: "هایلایت آماده",
-  reel_done: "ریل آماده",
-  cover_ready: "کاور آماده",
-  ready_to_send: "آماده ارسال",
-};
-
-const STATUS_ORDER = ["imported", "copyright_fix", "highlight_done", "reel_done", "cover_ready", "ready_to_send"] as const;
 
 function KpiCard({ label, value, sub, icon: Icon, tone }: { label: string; value: string | number; sub?: string; icon: IconType; tone?: string }) {
   return (
@@ -281,7 +271,7 @@ function DashboardContent() {
                             {p.title || p.id}
                           </Link>
                         </td>
-                         <td className="p-2.5 text-xs">{STATUS_LABELS_FA[p.status] ?? statusLabelFa(p.status)}</td>
+                         <td className="p-2.5 text-xs">{STATUS_LABELS_FA[p.status as keyof typeof STATUS_LABELS_FA] ?? statusLabelFa(p.status)}</td>
                         <td className="p-2.5 text-xs text-tg-secondary">{p.dueAt ? formatJalaliDateTime(p.dueAt) : "—"}</td>
                       </tr>
                     ))}

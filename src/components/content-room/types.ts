@@ -4,20 +4,22 @@ export type ProductType = "serial" | "documentary" | "tv_program" | "film" | "sh
 export type Channel = "zed_revayat" | "zaviye_no" | "tamashin" | "iranian_frame" | "shock" | "tinazh";
 
 export const PART_ACTIVITIES = [
-  "editing_youtube",
+  "raw_done",
   "copyright_fix",
+  "editing_full_done",
+  "cover_ready",
   "highlight_done",
   "reel_done",
-  "cover_ready",
   "previously_published",
 ] as const;
 export type PartActivity = (typeof PART_ACTIVITIES)[number];
 export const REQUIRED_FOR_SEND: PartActivity[] = [
-  "editing_youtube",
+  "raw_done",
   "copyright_fix",
+  "editing_full_done",
+  "cover_ready",
   "highlight_done",
   "reel_done",
-  "cover_ready",
 ];
 
 export type ContentPartActivityState = Record<PartActivity, boolean>;

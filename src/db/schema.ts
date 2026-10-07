@@ -622,7 +622,7 @@ export const contentProducts = pgTable(
     productType: text("product_type").notNull(), // serial | documentary | tv_program | film | short_film | educational
     channel: text("channel").notNull(), // zed_revayat | zaviye_no | tamashin | iranian_frame | shock | tinazh
     partsCount: integer("parts_count").notNull(),
-    status: text("status").notNull().default("imported"), // imported | editing_youtube | copyright_fix | highlight_done | reel_done | cover_ready | ready_to_send
+    status: text("status").notNull().default("imported"), // imported | copyright_fix | highlight_done | reel_done | cover_ready | ready_to_send
     version: integer("version").notNull().default(1),
     createdBy: text("created_by").references(() => users.id, {
       onDelete: "set null",

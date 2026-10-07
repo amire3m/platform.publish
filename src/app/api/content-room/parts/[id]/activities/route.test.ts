@@ -6,7 +6,7 @@ function makeDeps(overrides: Partial<ActivitiesRouteDependencies> & { user?: unk
   const user = overrides.user !== undefined ? overrides.user : { id: "u1", role: "manager", allowedActions: ["manage_content_room"], allowedAccountIds: [] };
   const getCurrentUser = vi.fn().mockResolvedValue(user);
   const repository = {
-    togglePartActivity: vi.fn().mockResolvedValue({ id: "CPP-1", partNumber: 1, isActive: true, activities: { editing_youtube: true } }),
+    togglePartActivity: vi.fn().mockResolvedValue({ id: "CPP-1", partNumber: 1, isActive: true, activities: { copyright_fix: true } }),
     getPart: vi.fn(),
     getProduct: vi.fn(),
   };
@@ -30,7 +30,7 @@ describe("PATCH /api/content-room/parts/:partId/activities", () => {
   it("rejects unauthenticated (401)", async () => {
     const repository = { togglePartActivity: vi.fn() };
     const getCurrentUser = vi.fn().mockResolvedValue(null);
-    const res = await handleActivitiesRequest(req({ activity: "editing_youtube", isDone: true, expectedProductVersion: 1 }), { params: Promise.resolve({ id: "CPP-1" }) }, {
+    const res = await handleActivitiesRequest(req({ activity: "copyright_fix", isDone: true, expectedProductVersion: 1 }), { params: Promise.resolve({ id: "CPP-1" }) }, {
       getCurrentUser: getCurrentUser as never,
       repository: repository as never,
     });
@@ -41,7 +41,7 @@ describe("PATCH /api/content-room/parts/:partId/activities", () => {
   it("rejects without permission (403)", async () => {
     const repository = { togglePartActivity: vi.fn() };
     const res = await handleActivitiesRequest(
-      req({ activity: "editing_youtube", isDone: true, expectedProductVersion: 1 }),
+      req({ activity: "copyright_fix", isDone: true, expectedProductVersion: 1 }),
       { params: Promise.resolve({ id: "CPP-1" }) },
       makeDeps({ user: { id: "u2", role: "viewer", allowedActions: [], allowedAccountIds: [] }, repository: repository as never }),
     );
@@ -52,7 +52,7 @@ describe("PATCH /api/content-room/parts/:partId/activities", () => {
   it("allows editor with update_assigned_content", async () => {
     const repository = { togglePartActivity: vi.fn().mockResolvedValue({ id: "CPP-1" }) };
     const res = await handleActivitiesRequest(
-      req({ activity: "editing_youtube", isDone: true, expectedProductVersion: 1 }),
+      req({ activity: "copyright_fix", isDone: true, expectedProductVersion: 1 }),
       { params: Promise.resolve({ id: "CPP-1" }) },
       makeDeps({ user: { id: "u2", role: "editor", allowedActions: ["update_assigned_content"], allowedAccountIds: [] }, repository: repository as never }),
     );
@@ -68,19 +68,19 @@ describe("PATCH /api/content-room/parts/:partId/activities", () => {
 
   it("returns 422 for missing expectedProductVersion", async () => {
     const deps = makeDeps();
-    const res = await handleActivitiesRequest(req({ activity: "editing_youtube", isDone: true }), { params: Promise.resolve({ id: "CPP-1" }) }, deps);
+    const res = await handleActivitiesRequest(req({ activity: "copyright_fix", isDone: true }), { params: Promise.resolve({ id: "CPP-1" }) }, deps);
     expect(res.status).toBe(422);
   });
 
   it("returns 404 for NOT_FOUND", async () => {
     const repository = { togglePartActivity: vi.fn().mockRejectedValue({ code: "NOT_FOUND", message: "قسمت یافت نشد." }) };
-    const res = await handleActivitiesRequest(req({ activity: "editing_youtube", isDone: true, expectedProductVersion: 1 }), { params: Promise.resolve({ id: "CPP-missing" }) }, makeDeps({ repository: repository as never }));
+    const res = await handleActivitiesRequest(req({ activity: "copyright_fix", isDone: true, expectedProductVersion: 1 }), { params: Promise.resolve({ id: "CPP-missing" }) }, makeDeps({ repository: repository as never }));
     expect(res.status).toBe(404);
   });
 
   it("returns 409 for VERSION_CONFLICT", async () => {
     const repository = { togglePartActivity: vi.fn().mockRejectedValue({ code: "VERSION_CONFLICT", message: "نسخه قدیمی است." }) };
-    const res = await handleActivitiesRequest(req({ activity: "editing_youtube", isDone: true, expectedProductVersion: 1 }), { params: Promise.resolve({ id: "CPP-1" }) }, makeDeps({ repository: repository as never }));
+    const res = await handleActivitiesRequest(req({ activity: "copyright_fix", isDone: true, expectedProductVersion: 1 }), { params: Promise.resolve({ id: "CPP-1" }) }, makeDeps({ repository: repository as never }));
     expect(res.status).toBe(409);
   });
 
@@ -101,7 +101,7 @@ describe("PATCH /api/content-room/parts/:partId/activities", () => {
 
   it("toggles activity successfully", async () => {
     const deps = makeDeps();
-    const res = await handleActivitiesRequest(req({ activity: "editing_youtube", isDone: true, expectedProductVersion: 2 }), { params: Promise.resolve({ id: "CPP-1" }) }, deps);
+    const res = await handleActivitiesRequest(req({ activity: "copyright_fix", isDone: true, expectedProductVersion: 2 }), { params: Promise.resolve({ id: "CPP-1" }) }, deps);
     expect(res.status).toBe(200);
     expect(deps.repository.togglePartActivity).toHaveBeenCalledWith(expect.objectContaining({ expectedProductVersion: 2, isDone: true }));
   });

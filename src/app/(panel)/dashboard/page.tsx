@@ -44,7 +44,6 @@ interface DashboardSummary {
 
 const STATUS_LABELS_FA: Record<string, string> = {
   imported: "وارد شده",
-  editing_youtube: "تدوین یوتیوب",
   copyright_fix: "اصلاح کپی‌رایت",
   highlight_done: "هایلایت آماده",
   reel_done: "ریل آماده",
@@ -52,7 +51,7 @@ const STATUS_LABELS_FA: Record<string, string> = {
   ready_to_send: "آماده ارسال",
 };
 
-const STATUS_ORDER = ["imported", "editing_youtube", "copyright_fix", "highlight_done", "reel_done", "cover_ready", "ready_to_send"] as const;
+const STATUS_ORDER = ["imported", "copyright_fix", "highlight_done", "reel_done", "cover_ready", "ready_to_send"] as const;
 
 function KpiCard({ label, value, sub, icon: Icon, tone }: { label: string; value: string | number; sub?: string; icon: IconType; tone?: string }) {
   return (

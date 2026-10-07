@@ -84,7 +84,6 @@ export function ContentRoomFilters({ value, onChange }: Props) {
           >
             <option value="">همه وضعیت‌ها</option>
             <option value="imported">واردشده</option>
-            <option value="editing_youtube">در تدوین یوتیوب</option>
             <option value="copyright_fix">رفع کپی‌رایت</option>
             <option value="highlight_done">هایلایت ساخته شد</option>
             <option value="reel_done">ریلز ساخته شد</option>

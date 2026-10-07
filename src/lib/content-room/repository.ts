@@ -7,7 +7,6 @@ import { HIDDEN_CHANNEL_IDS, isChannelHidden } from "@/lib/channels";
 // ---------------------------------------------------------------------------
 export const CONTENT_STATUSES = [
   "imported",
-  "editing_youtube",
   "copyright_fix",
   "highlight_done",
   "reel_done",
@@ -41,12 +40,11 @@ export type Channel = (typeof CHANNELS)[number];
 
 const STATUS_ORDER: Record<ContentStatus, number> = {
   imported: 0,
-  editing_youtube: 1,
-  copyright_fix: 2,
-  highlight_done: 3,
-  reel_done: 4,
-  cover_ready: 5,
-  ready_to_send: 6,
+  copyright_fix: 1,
+  highlight_done: 2,
+  reel_done: 3,
+  cover_ready: 4,
+  ready_to_send: 5,
 };
 
 export function deriveIsCold(archivedAt: Date | null | undefined): boolean {

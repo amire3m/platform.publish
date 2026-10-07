@@ -195,7 +195,6 @@ export default function ContentRoomPage() {
                 <Select value={filters.status} onChange={(e) => setFilters((f) => ({ ...f, status: e.target.value }))} className="min-h-[44px]">
                   <option value="">همه وضعیت‌ها</option>
                   <option value="imported">واردشده</option>
-                  <option value="editing_youtube">در تدوین یوتیوب</option>
                   <option value="copyright_fix">رفع کپی‌رایت</option>
                   <option value="highlight_done">هایلایت ساخته شد</option>
                   <option value="reel_done">ریلز ساخته شد</option>

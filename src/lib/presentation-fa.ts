@@ -78,7 +78,6 @@ const STATUS_LABELS = {
   failed: "ناموفق",
   do_not_publish: "منتشر نشود",
   imported: "واردشده",
-  editing_youtube: "در حال تدوین YouTube",
   copyright_fix: "رفع کپی‌رایت",
   highlight_done: "هایلایت آماده",
   reel_done: "ریل آماده",

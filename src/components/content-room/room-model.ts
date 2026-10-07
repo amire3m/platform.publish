@@ -18,23 +18,21 @@ export const PRODUCT_TYPE_LABELS: Record<string, string> = {
 
 export const ACTIVITY_LABELS: Record<string, string> = {
   raw_done: "خام",
-  editing_full_done: "تدوین کامل",
-  editing_youtube: "تدوین یوتیوب",
   copyright_fix: "رفع کپی‌رایت",
+  editing_full_done: "تدوین کامل",
+  cover_ready: "کاور",
   highlight_done: "برش",
   reel_done: "ریلز",
-  cover_ready: "کاور",
   previously_published: "قبلاً منتشر شده",
 };
 
 export const REQUIRED_FOR_SEND: readonly string[] = [
   "raw_done",
-  "editing_full_done",
-  "editing_youtube",
   "copyright_fix",
+  "editing_full_done",
+  "cover_ready",
   "highlight_done",
   "reel_done",
-  "cover_ready",
 ] as const;
 
 export const CHANNEL_LABELS: Record<string, string> = Object.fromEntries(VISIBLE_CHANNELS.map((c) => [c.id, c.labelFa]));
@@ -44,7 +42,6 @@ export const channelLabelFa = (value: string) => CHANNEL_LABELS[value] ?? UNKNOW
 
 export const STATUS_LABELS: Record<string, string> = {
   imported: "واردشده",
-  editing_youtube: "در تدوین یوتیوب",
   copyright_fix: "رفع کپی‌رایت",
   highlight_done: "هایلایت ساخته شد",
   reel_done: "ریلز ساخته شد",
@@ -136,7 +133,8 @@ export function getNextActionFromActivities(detail: { parts?: Array<{ isActive?:
 export function getProductProgress(status: string): { percent: number; label: string } {
   const order = CONTENT_STATUS_ORDER[status as ContentStatus];
   if (order === undefined) return { percent: 0, label: UNKNOWN_LABEL_FA };
-  const percent = Math.round(((order + 1) / 7) * 100);
+  const readyOrder = CONTENT_STATUS_ORDER.ready_to_send;
+  const percent = Math.min(100, Math.round(((order + 1) / (readyOrder + 1)) * 100));
   return { percent, label: `${percent}٪` };
 }
 

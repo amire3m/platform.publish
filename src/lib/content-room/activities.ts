@@ -1,11 +1,10 @@
 export const PART_ACTIVITIES = [
   "raw_done",
-  "editing_full_done",
-  "editing_youtube",
   "copyright_fix",
+  "editing_full_done",
+  "cover_ready",
   "highlight_done",
   "reel_done",
-  "cover_ready",
   "previously_published",
 ] as const;
 
@@ -13,12 +12,11 @@ export type PartActivity = (typeof PART_ACTIVITIES)[number];
 
 export const REQUIRED_FOR_SEND: PartActivity[] = [
   "raw_done",
-  "editing_full_done",
-  "editing_youtube",
   "copyright_fix",
+  "editing_full_done",
+  "cover_ready",
   "highlight_done",
   "reel_done",
-  "cover_ready",
 ];
 
 export function deriveProductStatusFromParts(

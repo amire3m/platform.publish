@@ -2,12 +2,11 @@ import { z } from "zod";
 
 export const PART_ACTIVITIES = [
   "raw_done",
-  "editing_full_done",
-  "editing_youtube",
   "copyright_fix",
+  "editing_full_done",
+  "cover_ready",
   "highlight_done",
   "reel_done",
-  "cover_ready",
   "previously_published",
 ] as const;
 
@@ -34,7 +33,6 @@ export const CHANNELS = [
 
 export const CONTENT_STATUSES = [
   "imported",
-  "editing_youtube",
   "copyright_fix",
   "highlight_done",
   "reel_done",
@@ -44,12 +42,11 @@ export const CONTENT_STATUSES = [
 
 const STATUS_ORDER: Record<(typeof CONTENT_STATUSES)[number], number> = {
   imported: 0,
-  editing_youtube: 1,
-  copyright_fix: 2,
-  highlight_done: 3,
-  reel_done: 4,
-  cover_ready: 5,
-  ready_to_send: 6,
+  copyright_fix: 1,
+  highlight_done: 2,
+  reel_done: 3,
+  cover_ready: 4,
+  ready_to_send: 5,
 };
 
 export function requiresReasonForTransition(

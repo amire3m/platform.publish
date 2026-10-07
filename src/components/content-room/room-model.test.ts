@@ -25,7 +25,7 @@ function summary(patch: Partial<ContentRoomProductSummary> & { id: string }): Co
 
 const rows: ContentRoomProductSummary[] = [
   summary({ id: "a", title: "سریال فرات", productType: "serial", channel: "zed_revayat", status: "imported" }),
-  summary({ id: "b", title: "مستند طبیعت", productType: "documentary", channel: "tamashin", status: "editing_youtube" }),
+  summary({ id: "b", title: "مستند طبیعت", productType: "documentary", channel: "tamashin", status: "copyright_fix" }),
   summary({ id: "c", title: "فیلم سینمایی آرش", productType: "film", channel: "shock", status: "ready_to_send" }),
   summary({ id: "d", title: "آموزشی پایتون", productType: "educational", channel: "tinazh", status: "highlight_done" }),
 ];
@@ -70,8 +70,9 @@ describe("filterProducts", () => {
 
 describe("getProductProgress", () => {
   it("computes progress percent", () => {
-    expect(getProductProgress("imported").percent).toBe(14);
+    expect(getProductProgress("imported").percent).toBe(17);
     expect(getProductProgress("ready_to_send").percent).toBe(100);
+    expect(getProductProgress("previously_published").percent).toBe(100);
   });
 
   it("does not expose an unknown status identifier", () => {
@@ -81,7 +82,7 @@ describe("getProductProgress", () => {
 
 describe("getNextAction", () => {
   it("returns next status label or آماده ارسال", () => {
-    expect(getNextAction("imported")).toBe("در تدوین یوتیوب");
+    expect(getNextAction("imported")).toBe("رفع کپی‌رایت");
     expect(getNextAction("ready_to_send")).toBe("آماده ارسال");
   });
 });
@@ -101,12 +102,11 @@ describe("progressFromActivities", () => {
           isActive: true,
           activities: {
             raw_done: true,
-            editing_full_done: true,
-            editing_youtube: true,
             copyright_fix: true,
+            editing_full_done: true,
+            cover_ready: true,
             highlight_done: true,
             reel_done: true,
-            cover_ready: true,
             previously_published: false,
           },
         },
@@ -122,24 +122,24 @@ describe("progressFromActivities", () => {
       parts: [
         {
           isActive: true,
-          activities: { raw_done: true, editing_full_done: true, editing_youtube: true, copyright_fix: false, highlight_done: false, reel_done: false, cover_ready: false, previously_published: false },
+          activities: { raw_done: true, copyright_fix: false, editing_full_done: true, cover_ready: false, highlight_done: false, reel_done: false, previously_published: false },
         },
         {
           isActive: true,
-          activities: { raw_done: true, editing_full_done: true, editing_youtube: true, copyright_fix: true, highlight_done: true, reel_done: false, cover_ready: false, previously_published: false },
+          activities: { raw_done: true, copyright_fix: true, editing_full_done: true, cover_ready: false, highlight_done: true, reel_done: false, previously_published: false },
         },
       ],
     } as never;
-    // 8 completed out of 14 (2 parts *7)
-    expect(progressFromActivities(detail)).toBeCloseTo(8 / 14, 5);
-    expect(getProductProgressFromActivities(detail).percent).toBe(57);
+    // 6 completed out of 12 (2 parts * 6)
+    expect(progressFromActivities(detail)).toBeCloseTo(6 / 12, 5);
+    expect(getProductProgressFromActivities(detail).percent).toBe(50);
   });
 
   it("excludes inactive and previously_published parts", () => {
     const detail = {
       parts: [
-        { isActive: false, activities: { raw_done: true, editing_full_done: true, editing_youtube: true, copyright_fix: true, highlight_done: true, reel_done: true, cover_ready: true, previously_published: false } },
-        { isActive: true, activities: { raw_done: false, editing_full_done: false, editing_youtube: false, copyright_fix: false, highlight_done: false, reel_done: false, cover_ready: false, previously_published: true } },
+        { isActive: false, activities: { raw_done: true, copyright_fix: true, editing_full_done: true, cover_ready: true, highlight_done: true, reel_done: true, previously_published: false } },
+        { isActive: true, activities: { raw_done: false, copyright_fix: false, editing_full_done: false, cover_ready: false, highlight_done: false, reel_done: false, previously_published: true } },
       ],
     } as never;
     expect(progressFromActivities(detail)).toBe(1);

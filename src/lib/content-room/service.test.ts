@@ -8,7 +8,7 @@ function createReadyProduct(port: InMemoryContentRoomPort, repo: ReturnType<type
 }
 
 async function advanceToReady(port: InMemoryContentRoomPort, repo: ReturnType<typeof createContentRoomRepository>, productId: string) {
-  const statuses = ["editing_youtube", "copyright_fix", "highlight_done", "reel_done", "cover_ready", "ready_to_send"] as const;
+  const statuses = ["copyright_fix", "highlight_done", "reel_done", "cover_ready", "ready_to_send"] as const;
   let version = 1;
   for (const s of statuses) {
     await repo.updateProductStatus({ id: productId, status: s, expectedVersion: version, actorUserId: "u1" });
@@ -63,17 +63,17 @@ describe("content room sendToPublication service", () => {
     const partsCount = 3;
     const product = await createReadyProduct(contentPort, contentRepo, partsCount);
     const nextVersion = await advanceToReady(contentPort, contentRepo, product.id);
-    // nextVersion should be 7, product version is 7
+    // nextVersion should be 6, product version is 6
     const fetched = await contentPort.getProduct(product.id);
     expect(fetched?.status).toBe("ready_to_send");
-    expect(fetched?.version).toBe(7);
+    expect(fetched?.version).toBe(6);
 
-    const result = await service.sendToPublication({ productId: product.id, expectedVersion: 7, actorUserId: "u1" });
+    const result = await service.sendToPublication({ productId: product.id, expectedVersion: 6, actorUserId: "u1" });
 
     // product version bumped
-    expect(result.product.version).toBe(8);
+    expect(result.product.version).toBe(7);
     const after = await contentPort.getProduct(product.id);
-    expect(after?.version).toBe(8);
+    expect(after?.version).toBe(7);
     // event logged
     expect(contentPort.events.some((e) => e.action === "sent_to_publication" && e.entityId === product.id)).toBe(true);
 
@@ -110,11 +110,22 @@ describe("content room sendToPublication service", () => {
     };
     for (const d of result.deliverables) {
       const pubs = result.publications.filter((p) => p.deliverableId === d.id);
+      if (d.kind === "cover") {
+        // cover is thumbnail-only: no publication
+        expect(pubs).toHaveLength(0);
+        continue;
+      }
+      if (d.kind === "reel") {
+        // reel dual-publishes YT Shorts + IG
+        expect(pubs).toHaveLength(2);
+        expect(pubs.map((p) => p.platform).sort()).toEqual(["instagram", "youtube"]);
+        continue;
+      }
       expect(pubs).toHaveLength(1);
       const expected = kindToPlatform[d.kind ?? ""] ?? "youtube";
       expect(pubs[0].platform).toBe(expected);
-      // socialAccountId fallback null when channel not linked
-      expect(pubs[0].socialAccountId).toBeNull();
+      // zed_revayat statically links a youtube account but no instagram account
+      expect(pubs[0].socialAccountId).toBe(expected === "youtube" ? "ACC-1405-688518" : null);
     }
 
     // cover deliverable is image type? check kind cover exists
@@ -130,7 +141,7 @@ describe("content room sendToPublication service", () => {
 
     const product = await createReadyProduct(contentPort, contentRepo, 1);
     await advanceToReady(contentPort, contentRepo, product.id);
-    const result = await service.sendToPublication({ productId: product.id, expectedVersion: 7, actorUserId: "u1" });
+    const result = await service.sendToPublication({ productId: product.id, expectedVersion: 6, actorUserId: "u1" });
     expect(result.deliverables).toHaveLength(4);
     expect(result.publications).toHaveLength(4);
   });
@@ -143,10 +154,10 @@ describe("content room sendToPublication service", () => {
 
     const product = await createReadyProduct(contentPort, contentRepo, 2);
     await advanceToReady(contentPort, contentRepo, product.id);
-    await service.sendToPublication({ productId: product.id, expectedVersion: 7, actorUserId: "u1" });
+    await service.sendToPublication({ productId: product.id, expectedVersion: 6, actorUserId: "u1" });
     expect(workflowPort.programs).toHaveLength(1);
     // second attempt with stale version should fail without creating another program
-    await expect(service.sendToPublication({ productId: product.id, expectedVersion: 7, actorUserId: "u1" })).rejects.toMatchObject({
+    await expect(service.sendToPublication({ productId: product.id, expectedVersion: 6, actorUserId: "u1" })).rejects.toMatchObject({
       code: "VERSION_CONFLICT",
     });
     expect(workflowPort.programs).toHaveLength(1);
@@ -168,7 +179,7 @@ describe("content room sendToPublication service", () => {
     part.reelFileRef = "tg_reel_file_1";
 
     await advanceToReady(contentPort, contentRepo, product.id);
-    const result = await service.sendToPublication({ productId: product.id, expectedVersion: 7, actorUserId: "u1" });
+    const result = await service.sendToPublication({ productId: product.id, expectedVersion: 6, actorUserId: "u1" });
 
     const byKind = Object.fromEntries(result.deliverables.map((d) => [d.kind, d.fileRef]));
     expect(byKind.youtube_full).toBe("tg_raw_file_1");
@@ -187,7 +198,7 @@ describe("content room sendToPublication service", () => {
     // Product is still "imported" — NOT ready_to_send. Complete part 1's checklist only.
     const part1 = contentPort.parts.filter((p) => p.productId === product.id).sort((a, b) => a.partNumber - b.partNumber)[0];
     let version = 1;
-    for (const activity of ["raw_done", "editing_full_done", "editing_youtube", "copyright_fix", "highlight_done", "reel_done", "cover_ready"]) {
+    for (const activity of ["raw_done", "copyright_fix", "editing_full_done", "cover_ready", "highlight_done", "reel_done"]) {
       await contentRepo.togglePartActivity({ partId: part1.id, activity, isDone: true, expectedProductVersion: version, actorUserId: "u1" });
       version += 1;
     }

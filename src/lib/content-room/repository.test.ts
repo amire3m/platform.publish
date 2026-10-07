@@ -34,7 +34,6 @@ describe("content room repository", () => {
     const repo = createContentRoomRepository(port);
     await repo.createProduct({ title: "فرات ۳۱", productType: "serial", channel: "zed_revayat", partsCount: 2, actorUserId: "u1" });
     await repo.createProduct({ title: "مستند طبیعت", productType: "documentary", channel: "tamashin", partsCount: 1, actorUserId: "u1" });
-    // Manually set second product status to editing_youtube via transition? Use in-memory direct for setup
     // Instead test filters on creation: search
     const search = await repo.listProducts({ search: "فرات" });
     expect(search).toHaveLength(1);
@@ -75,15 +74,15 @@ describe("content room repository", () => {
     // first valid transition
     const v2 = await repo.updateProductStatus({
       id: created.id,
-      status: "editing_youtube",
+      status: "copyright_fix",
       expectedVersion: 1,
       actorUserId: "u1",
     });
     expect(v2.version).toBe(2);
-    expect(v2.status).toBe("editing_youtube");
+    expect(v2.status).toBe("copyright_fix");
     const eventsBefore = port.events.length;
     await expect(
-      repo.updateProductStatus({ id: created.id, status: "copyright_fix", expectedVersion: 1, actorUserId: "u1" }),
+      repo.updateProductStatus({ id: created.id, status: "highlight_done", expectedVersion: 1, actorUserId: "u1" }),
     ).rejects.toMatchObject({ code: "VERSION_CONFLICT" });
     expect(port.events).toHaveLength(eventsBefore);
     const still = await port.getProduct(created.id);
@@ -95,34 +94,30 @@ describe("content room repository", () => {
     const repo = createContentRoomRepository(port);
     const created = await repo.createProduct({ title: "تست وضعیت", productType: "educational", channel: "zaviye_no", partsCount: 1, actorUserId: "u1" });
 
-    // imported -> editing_youtube : forward sequential, no reason required -> should succeed
-    const s1 = await repo.updateProductStatus({ id: created.id, status: "editing_youtube", expectedVersion: 1, actorUserId: "u1" });
-    expect(s1.status).toBe("editing_youtube");
-
-    // editing_youtube -> copyright_fix : forward sequential
-    const s2 = await repo.updateProductStatus({ id: s1.id, status: "copyright_fix", expectedVersion: 2, actorUserId: "u1" });
+    // imported -> copyright_fix : forward sequential, no reason required -> should succeed
+    const s2 = await repo.updateProductStatus({ id: created.id, status: "copyright_fix", expectedVersion: 1, actorUserId: "u1" });
     expect(s2.status).toBe("copyright_fix");
 
     // copyright_fix -> highlight_done : forward sequential
-    const s3 = await repo.updateProductStatus({ id: s2.id, status: "highlight_done", expectedVersion: 3, actorUserId: "u1" });
+    const s3 = await repo.updateProductStatus({ id: s2.id, status: "highlight_done", expectedVersion: 2, actorUserId: "u1" });
     expect(s3.status).toBe("highlight_done");
 
     // highlight_done -> reel_done : forward sequential
-    const s4 = await repo.updateProductStatus({ id: s3.id, status: "reel_done", expectedVersion: 4, actorUserId: "u1" });
+    const s4 = await repo.updateProductStatus({ id: s3.id, status: "reel_done", expectedVersion: 3, actorUserId: "u1" });
     expect(s4.status).toBe("reel_done");
 
     // reel_done -> cover_ready
-    const s5 = await repo.updateProductStatus({ id: s4.id, status: "cover_ready", expectedVersion: 5, actorUserId: "u1" });
+    const s5 = await repo.updateProductStatus({ id: s4.id, status: "cover_ready", expectedVersion: 4, actorUserId: "u1" });
     expect(s5.status).toBe("cover_ready");
 
     // cover_ready -> ready_to_send
-    const s6 = await repo.updateProductStatus({ id: s5.id, status: "ready_to_send", expectedVersion: 6, actorUserId: "u1" });
+    const s6 = await repo.updateProductStatus({ id: s5.id, status: "ready_to_send", expectedVersion: 5, actorUserId: "u1" });
     expect(s6.status).toBe("ready_to_send");
 
     // Now test backward requires reason: try to go back to imported without reason should fail
     const eventsBefore = port.events.length;
     await expect(
-      repo.updateProductStatus({ id: s6.id, status: "imported", expectedVersion: 7, actorUserId: "u1" }),
+      repo.updateProductStatus({ id: s6.id, status: "imported", expectedVersion: 6, actorUserId: "u1" }),
     ).rejects.toMatchObject({ code: "REASON_REQUIRED" });
     expect(port.events).toHaveLength(eventsBefore);
 
@@ -130,26 +125,26 @@ describe("content room repository", () => {
     const back = await repo.updateProductStatus({
       id: s6.id,
       status: "imported",
-      expectedVersion: 7,
+      expectedVersion: 6,
       actorUserId: "u1",
       reason: "بازگشت برای اصلاح",
     });
     expect(back.status).toBe("imported");
-    expect(back.version).toBe(8);
+    expect(back.version).toBe(7);
 
-    // skip forward requires reason: imported -> copyright_fix (skip editing_youtube) without reason should fail
+    // skip forward requires reason: imported -> highlight_done (skip copyright_fix) without reason should fail
     await expect(
-      repo.updateProductStatus({ id: back.id, status: "copyright_fix", expectedVersion: 8, actorUserId: "u1" }),
+      repo.updateProductStatus({ id: back.id, status: "highlight_done", expectedVersion: 7, actorUserId: "u1" }),
     ).rejects.toMatchObject({ code: "REASON_REQUIRED" });
     // with reason succeeds
     const skip = await repo.updateProductStatus({
       id: back.id,
-      status: "copyright_fix",
-      expectedVersion: 8,
+      status: "highlight_done",
+      expectedVersion: 7,
       actorUserId: "u1",
       reason: "پرش با دلیل",
     });
-    expect(skip.status).toBe("copyright_fix");
+    expect(skip.status).toBe("highlight_done");
   });
 
   it("rejects invalid status and same status", async () => {
@@ -188,7 +183,7 @@ describe("content room repository", () => {
     const port = new InMemoryContentRoomPort();
     const repo = createContentRoomRepository(port);
     await expect(
-      repo.updateProductStatus({ id: "CPR-missing", status: "editing_youtube", expectedVersion: 1, actorUserId: "u1" }),
+      repo.updateProductStatus({ id: "CPR-missing", status: "copyright_fix", expectedVersion: 1, actorUserId: "u1" }),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
   });
 

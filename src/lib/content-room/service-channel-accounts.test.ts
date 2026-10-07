@@ -16,7 +16,7 @@ describe("send uses persisted channel linkage", () => {
     const workflowPort = new InMemoryWorkflowPort();
     const service = createContentRoomService({ contentPort, workflowPort });
     const product = await contentRepo.createProduct({ title: "t", productType: "serial", channel: "zed_revayat", partsCount: 1, actorUserId: "u1" });
-    const statuses = ["editing_youtube", "copyright_fix", "highlight_done", "reel_done", "cover_ready", "ready_to_send"] as const;
+    const statuses = ["copyright_fix", "highlight_done", "reel_done", "cover_ready", "ready_to_send"] as const;
     let version = 1;
     for (const s of statuses) {
       await contentRepo.updateProductStatus({ id: product.id, status: s, expectedVersion: version, actorUserId: "u1" });

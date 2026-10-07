@@ -31,7 +31,7 @@ function makeDeps(overrides: Partial<ProductRouteDependencies> & { user?: unknow
     hasLinkedProgram: (overrides as { hasLinkedProgram?: unknown }).hasLinkedProgram as never,
     repository: overrides.repository ?? {
       getProduct: vi.fn().mockResolvedValue({ id: "CPR-1", title: "a", status: "imported", version: 1, parts: [] }),
-      updateProductStatus: vi.fn().mockResolvedValue({ id: "CPR-1", status: "editing_youtube", version: 2 }),
+      updateProductStatus: vi.fn().mockResolvedValue({ id: "CPR-1", status: "copyright_fix", version: 2 }),
     },
   } as unknown as ProductRouteDependencies;
 }
@@ -108,7 +108,7 @@ describe("GET/PATCH /api/content-room/products/:id", () => {
   it("rejects PATCH without update_assigned_content or manage_content_room (403)", async () => {
     const repository = { getProduct: vi.fn(), updateProductStatus: vi.fn() };
     const response = await handleProductRequest(
-      request("PATCH", { status: "editing_youtube", expectedVersion: 1 }),
+      request("PATCH", { status: "copyright_fix", expectedVersion: 1 }),
       { params: Promise.resolve({ id: "CPR-1" }) },
       makeDeps({
         user: { id: "u2", role: "viewer", allowedActions: [], allowedAccountIds: [] },
@@ -122,7 +122,7 @@ describe("GET/PATCH /api/content-room/products/:id", () => {
   it("returns 401 when unauthenticated on PATCH", async () => {
     const repository = { getProduct: vi.fn(), updateProductStatus: vi.fn() };
     const response = await handleProductRequest(
-      request("PATCH", { status: "editing_youtube", expectedVersion: 1 }),
+      request("PATCH", { status: "copyright_fix", expectedVersion: 1 }),
       { params: Promise.resolve({ id: "CPR-1" }) },
       makeDeps({ user: null, repository: repository as never }),
     );
@@ -133,7 +133,7 @@ describe("GET/PATCH /api/content-room/products/:id", () => {
   it("returns 422 for missing expectedVersion", async () => {
     const repository = { getProduct: vi.fn().mockResolvedValue({ id: "CPR-1", status: "imported", version: 1 }), updateProductStatus: vi.fn() };
     const response = await handleProductRequest(
-      request("PATCH", { status: "editing_youtube" }),
+      request("PATCH", { status: "copyright_fix" }),
       { params: Promise.resolve({ id: "CPR-1" }) },
       makeDeps({ repository: repository as never }),
     );
@@ -168,13 +168,13 @@ describe("GET/PATCH /api/content-room/products/:id", () => {
     expect(repository.updateProductStatus).not.toHaveBeenCalled();
   });
 
-  it("returns 422 for skip without reason (imported -> copyright_fix)", async () => {
+  it("returns 422 for skip without reason (imported -> highlight_done)", async () => {
     const repository = {
       getProduct: vi.fn().mockResolvedValue({ id: "CPR-1", title: "a", status: "imported", version: 1 }),
       updateProductStatus: vi.fn(),
     };
     const response = await handleProductRequest(
-      request("PATCH", { status: "copyright_fix", expectedVersion: 1 }),
+      request("PATCH", { status: "highlight_done", expectedVersion: 1 }),
       { params: Promise.resolve({ id: "CPR-1" }) },
       makeDeps({ repository: repository as never }),
     );
@@ -202,7 +202,7 @@ describe("GET/PATCH /api/content-room/products/:id", () => {
       updateProductStatus: vi.fn().mockRejectedValue({ code: "VERSION_CONFLICT", message: "نسخه قدیمی است." }),
     };
     const response = await handleProductRequest(
-      request("PATCH", { status: "editing_youtube", expectedVersion: 1 }),
+      request("PATCH", { status: "copyright_fix", expectedVersion: 1 }),
       { params: Promise.resolve({ id: "CPR-1" }) },
       makeDeps({ repository: repository as never }),
     );
@@ -227,10 +227,10 @@ describe("GET/PATCH /api/content-room/products/:id", () => {
   it("allows editor with update_assigned_content to patch", async () => {
     const repository = {
       getProduct: vi.fn().mockResolvedValue({ id: "CPR-1", title: "a", status: "imported", version: 1 }),
-      updateProductStatus: vi.fn().mockResolvedValue({ id: "CPR-1", status: "editing_youtube", version: 2 }),
+      updateProductStatus: vi.fn().mockResolvedValue({ id: "CPR-1", status: "copyright_fix", version: 2 }),
     };
     const response = await handleProductRequest(
-      request("PATCH", { status: "editing_youtube", expectedVersion: 1 }),
+      request("PATCH", { status: "copyright_fix", expectedVersion: 1 }),
       { params: Promise.resolve({ id: "CPR-1" }) },
       makeDeps({
         user: { id: "u2", role: "editor", allowedActions: ["update_assigned_content"], allowedAccountIds: [] },
@@ -243,15 +243,15 @@ describe("GET/PATCH /api/content-room/products/:id", () => {
   it("patches forward sequential without reason successfully", async () => {
     const repository = {
       getProduct: vi.fn().mockResolvedValue({ id: "CPR-1", title: "a", status: "imported", version: 1 }),
-      updateProductStatus: vi.fn().mockResolvedValue({ id: "CPR-1", status: "editing_youtube", version: 2 }),
+      updateProductStatus: vi.fn().mockResolvedValue({ id: "CPR-1", status: "copyright_fix", version: 2 }),
     };
     const response = await handleProductRequest(
-      request("PATCH", { status: "editing_youtube", expectedVersion: 1 }),
+      request("PATCH", { status: "copyright_fix", expectedVersion: 1 }),
       { params: Promise.resolve({ id: "CPR-1" }) },
       makeDeps({ repository: repository as never }),
     );
     expect(response.status).toBe(200);
-    expect(repository.updateProductStatus).toHaveBeenCalledWith(expect.objectContaining({ status: "editing_youtube", expectedVersion: 1 }));
+    expect(repository.updateProductStatus).toHaveBeenCalledWith(expect.objectContaining({ status: "copyright_fix", expectedVersion: 1 }));
   });
 });
 

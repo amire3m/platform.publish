@@ -14,6 +14,7 @@ import {
   Images,
   LayoutDashboard,
   ListChecks,
+  ListTodo,
   LogOut,
   Mail,
   Menu,
@@ -37,6 +38,7 @@ type NavGroup = { title: string; items: NavItem[]; defaultOpen?: boolean };
 
 const CORE_NAV: NavItem[] = [
   { href: "/dashboard", label: "داشبورد", icon: LayoutDashboard },
+  { href: "/tasks", label: "کارهای من", icon: ListTodo },
   { href: "/content-room", label: "اتاق محتوا", icon: Package },
   { href: "/workflow", label: "اتاق انتشار", icon: ListChecks },
   { href: "/library", label: "کتابخانه", icon: Images },

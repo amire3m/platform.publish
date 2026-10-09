@@ -17,6 +17,7 @@ interface UserRow {
   telegramId: string;
   name: string;
   username: string | null;
+  phone?: string | null;
   role: Role;
   active: boolean;
   allowedActions: string[];
@@ -157,6 +158,80 @@ export default function UsersPage() {
       if (!json.ok) return showToast(json.error, "error");
       mutate();
       showToast(`کاربر ${u.name} حذف شد.`, "success");
+    } catch (e) {
+      showToast((e as Error).message, "error");
+    }
+  }
+
+  async function hardRemoveUser(u: UserRow) {
+    if (!window.confirm(`«${u.name}» برای همیشه از سامانه پاک شود؟ این عمل قابل بازگشت نیست (سوابق با شناسه می‌ماند، نه نام).`)) return;
+    if (!window.confirm(`تأیید نهایی: حذف دائمی «${u.name}»؟`)) return;
+    try {
+      const res = await fetch(`/api/users/${u.id}/hard`, { method: "DELETE" });
+      const json = await res.json();
+      if (!json.ok) return showToast(json.error, "error");
+      mutate();
+      showToast(`کاربر ${u.name} دائماً حذف شد.`, "success");
+    } catch (e) {
+      showToast((e as Error).message, "error");
+    }
+  }
+
+  async function impersonate(u: UserRow) {
+    if (!window.confirm(`به‌عنوان «${u.name}» وارد شوید؟ همه دسترسی‌ها دقیقاً مثل او خواهد بود (سقف ۶۰ دقیقه).`)) return;
+    try {
+      const res = await fetch("/api/auth/impersonate", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ userId: u.id }),
+      });
+      const json = await res.json();
+      if (!json.ok) return showToast(json.error, "error");
+      window.location.href = "/dashboard";
+    } catch (e) {
+      showToast((e as Error).message, "error");
+    }
+  }
+
+  const [editing, setEditing] = useState<UserRow | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editUsername, setEditUsername] = useState("");
+  const [editPhone, setEditPhone] = useState("");
+  const [editTelegramId, setEditTelegramId] = useState("");
+  const [editActive, setEditActive] = useState(true);
+
+  function openEdit(u: UserRow) {
+    setEditing(u);
+    setEditName(u.name ?? "");
+    setEditUsername(u.username ?? "");
+    setEditPhone((u as unknown as { phone?: string }).phone ?? "");
+    setEditTelegramId(u.telegramId ?? "");
+    setEditActive(u.active);
+  }
+
+  async function saveEdit() {
+    if (!editing) return;
+    if (!editName.trim() || !editTelegramId.trim()) {
+      showToast("نام و شناسه تلگرام الزامی است.", "error");
+      return;
+    }
+    try {
+      const res = await fetch(`/api/users/${editing.id}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          name: editName.trim(),
+          username: editUsername.trim() || null,
+          phone: editPhone.trim() || null,
+          telegramId: editTelegramId.trim(),
+          active: editActive,
+        }),
+      });
+      const json = await res.json();
+      if (!json.ok) return showToast(json.error, "error");
+      setEditing(null);
+      mutate();
+      showToast("مشخصات کاربر به‌روزرسانی شد.", "success");
     } catch (e) {
       showToast((e as Error).message, "error");
     }
@@ -356,15 +431,28 @@ export default function UsersPage() {
                           <Save className="h-3.5 w-3.5" />
                           {saving[u.id] ? "در حال ذخیره..." : "ذخیره"}
                         </Button>
+                        {(isOwner || isManager) && !disabledAll && (
+                          <Button size="sm" variant="secondary" onClick={() => openEdit(u)} aria-label={`ویرایش ${u.name}`}>
+                            ویرایش
+                          </Button>
+                        )}
                         {!u.isOwnerProtected && (
                           <Button size="sm" variant={u.active ? "danger" : "primary"} onClick={() => toggleActive(u)}>
                             {u.active ? "غیرفعال‌سازی" : "فعال‌سازی"}
                           </Button>
                         )}
                         {isOwner && !u.isOwnerProtected && (
-                          <Button size="sm" variant="danger" onClick={() => removeUser(u)} aria-label={`حذف ${u.name}`}>
-                            حذف
-                          </Button>
+                          <>
+                            <Button size="sm" variant="secondary" onClick={() => impersonate(u)} aria-label={`ورود به‌عنوان ${u.name}`}>
+                              ورود به‌عنوان
+                            </Button>
+                            <Button size="sm" variant="secondary" onClick={() => removeUser(u)} aria-label={`حذف ${u.name}`}>
+                              حذف
+                            </Button>
+                            <Button size="sm" variant="danger" onClick={() => hardRemoveUser(u)} aria-label={`حذف دائمی ${u.name}`}>
+                              حذف دائمی
+                            </Button>
+                          </>
                         )}
                         <span className="text-[11px] text-tg-secondary">{formatJalaliDateTime(u.createdAt)}</span>
                       </div>
@@ -426,6 +514,34 @@ export default function UsersPage() {
           </p>
           <Button className="w-full" onClick={createUser} disabled={!telegramId || !name}>
             ایجاد کاربر
+          </Button>
+        </div>
+      </Modal>
+
+      <Modal open={!!editing} onClose={() => setEditing(null)} title={editing ? `ویرایش ${editing.name}` : ""}>
+        <div className="space-y-3">
+          <div>
+            <Label>نام</Label>
+            <Input value={editName} onChange={(e) => setEditName(e.target.value)} />
+          </div>
+          <div>
+            <Label>شناسه عددی تلگرام (هویت ورود)</Label>
+            <Input value={editTelegramId} onChange={(e) => setEditTelegramId(e.target.value)} dir="ltr" />
+          </div>
+          <div>
+            <Label>یوزرنیم تلگرام</Label>
+            <Input value={editUsername} onChange={(e) => setEditUsername(e.target.value)} placeholder="بدون @" dir="ltr" />
+          </div>
+          <div>
+            <Label>تلفن</Label>
+            <Input value={editPhone} onChange={(e) => setEditPhone(e.target.value)} dir="ltr" />
+          </div>
+          <label className="flex items-center gap-2 text-sm text-tg-text">
+            <input type="checkbox" checked={editActive} onChange={(e) => setEditActive(e.target.checked)} className="h-4 w-4" />
+            حساب فعال
+          </label>
+          <Button className="w-full" onClick={saveEdit} disabled={!editName.trim() || !editTelegramId.trim()}>
+            ذخیره تغییرات
           </Button>
         </div>
       </Modal>

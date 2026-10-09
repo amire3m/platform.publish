@@ -24,11 +24,19 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     return jsonError("نقش مالک سیستم قابل تغییر نیست مگر از طریق انتقال مالکیت ویژه.", 400);
   }
 
-  const [row] = await db
-    .update(users)
-    .set({ ...parsed.data, updatedAt: new Date() })
-    .where(eq(users.id, id))
-    .returning();
+  let row;
+  try {
+    [row] = await db
+      .update(users)
+      .set({ ...parsed.data, updatedAt: new Date() })
+      .where(eq(users.id, id))
+      .returning();
+  } catch (e) {
+    if ((e as { code?: string }).code === "23505") {
+      return jsonError("این شناسه تلگرام قبلاً برای کاربر دیگری ثبت شده است.", 409, "DUPLICATE_TELEGRAM_ID");
+    }
+    throw e;
+  }
 
   await appendAuditEvent({
     actorTelegramId: user.telegramId,

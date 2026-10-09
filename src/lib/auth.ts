@@ -6,7 +6,30 @@ import { users } from "@/db/schema";
 import { eq } from "drizzle-orm";
 
 export const SESSION_COOKIE = "emro_session";
+export const IMPERSONATOR_COOKIE = "emro_impersonator";
+/** Owner impersonation auto-expires after this long. */
+export const IMPERSONATION_TTL_MS = 60 * 60 * 1000;
 const JWT_SECRET = process.env.JWT_SECRET || "dev-only-insecure-jwt-secret-change-me";
+
+export interface ImpersonationPayload {
+  ownerId: string;
+  targetId: string;
+  startedAt: number;
+}
+
+export function signImpersonation(payload: ImpersonationPayload): string {
+  return jwt.sign(payload, JWT_SECRET);
+}
+
+export function verifyImpersonation(token: string): (ImpersonationPayload & { expired: boolean }) | null {
+  try {
+    const p = jwt.verify(token, JWT_SECRET) as ImpersonationPayload;
+    if (!p?.ownerId || !p?.targetId || !p?.startedAt) return null;
+    return { ...p, expired: Date.now() - p.startedAt > IMPERSONATION_TTL_MS };
+  } catch {
+    return null;
+  }
+}
 
 export interface SessionPayload {
   userId: string;
@@ -34,7 +57,36 @@ export async function getCurrentUser() {
   if (!payload) return null;
   const [user] = await db.select().from(users).where(eq(users.id, payload.userId)).limit(1);
   if (!user || !user.active) return null;
+  // Enforce impersonation expiry: restore the owner session on next request.
+  const impToken = store.get(IMPERSONATOR_COOKIE)?.value;
+  if (impToken) {
+    const imp = verifyImpersonation(impToken);
+    if (imp && imp.expired && imp.targetId === user.id) {
+      const [owner] = await db.select().from(users).where(eq(users.id, imp.ownerId)).limit(1);
+      if (owner && owner.active) {
+        try {
+          store.set(SESSION_COOKIE, signSession({ userId: owner.id, telegramId: owner.telegramId, role: owner.role }), {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === "production",
+            sameSite: "lax" as const,
+            path: "/",
+            maxAge: 60 * 60 * 24 * 7,
+          });
+          store.delete(IMPERSONATOR_COOKIE);
+        } catch {}
+        return owner;
+      }
+    }
+  }
   return user;
+}
+
+/** Valid (non-expired) impersonation state for the current request, if any. */
+export async function getImpersonation(): Promise<(ImpersonationPayload & { expired: boolean }) | null> {
+  const store = await cookies();
+  const impToken = store.get(IMPERSONATOR_COOKIE)?.value;
+  if (!impToken) return null;
+  return verifyImpersonation(impToken);
 }
 
 /**

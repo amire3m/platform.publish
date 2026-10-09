@@ -85,6 +85,33 @@ export function AppShell({
   const [canManageLive, setCanManageLive] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [impersonation, setImpersonation] = useState<{ byName: string; expiresAt: string | null } | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadImpersonation() {
+      try {
+        const res = await timedFetch("/api/auth/me", undefined, 15000);
+        if (!res.ok) return;
+        const body = await res.json();
+        const data = body?.data ?? body;
+        if (!cancelled && data?.impersonatedBy) {
+          setImpersonation({ byName: data.impersonatedBy.name, expiresAt: data.impersonationExpiresAt ?? null });
+        }
+      } catch {
+        // ignore
+      }
+    }
+    loadImpersonation();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  async function exitImpersonation() {
+    await fetch("/api/auth/impersonate", { method: "DELETE" });
+    window.location.href = "/dashboard";
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -252,6 +279,20 @@ export function AppShell({
       {open && <div className="fixed inset-0 z-30 bg-black/40 lg:hidden" onClick={() => setOpen(false)} />}
 
       <div className="flex min-h-screen flex-1 flex-col lg:mr-0">
+        {impersonation && (
+          <div className="sticky top-0 z-30 flex flex-wrap items-center justify-center gap-2 bg-amber-500 px-4 py-2 text-center text-xs font-bold text-black">
+            <span>حالت مالک: شما به‌جای «{user.name}» وارد شده‌اید</span>
+            {impersonation.expiresAt && (
+              <span>(پایان خودکار: {new Date(impersonation.expiresAt).toLocaleString("fa-IR")})</span>
+            )}
+            <button
+              onClick={exitImpersonation}
+              className="rounded-full bg-black px-3 py-1 text-[11px] font-bold text-amber-400 hover:bg-black/80"
+            >
+              بازگشت به حساب مالک
+            </button>
+          </div>
+        )}
         <header className="sticky top-0 z-20 flex h-16 items-center justify-between border-b border-tg-border bg-tg-surface/80 px-4 backdrop-blur">
           <button
             className="rounded-lg p-2 text-tg-secondary transition hover:bg-tg-hover hover:text-tg-text lg:hidden"

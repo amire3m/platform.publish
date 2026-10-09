@@ -102,7 +102,6 @@ describe("progressFromActivities", () => {
           isActive: true,
           activities: {
             raw_telegram: true,
-            raw_compressed: true,
             yt_check_upload: true,
             copyright_report: true,
             music_replaced: true,
@@ -125,24 +124,24 @@ describe("progressFromActivities", () => {
       parts: [
         {
           isActive: true,
-          activities: { raw_telegram: true, raw_compressed: true, yt_check_upload: false, copyright_report: false, music_replaced: false, final_full: false, cover_ready: false, highlight_done: false, reel_done: false, previously_published: false },
+          activities: { raw_telegram: true, yt_check_upload: false, copyright_report: false, music_replaced: false, final_full: false, cover_ready: false, highlight_done: false, reel_done: false, previously_published: false },
         },
         {
           isActive: true,
-          activities: { raw_telegram: true, raw_compressed: true, yt_check_upload: true, copyright_report: true, music_replaced: false, final_full: false, cover_ready: false, highlight_done: true, reel_done: false, previously_published: false },
+          activities: { raw_telegram: true, yt_check_upload: true, copyright_report: true, music_replaced: false, final_full: false, cover_ready: false, highlight_done: true, reel_done: false, previously_published: false },
         },
       ],
     } as never;
-    // 7 completed out of 18 (2 parts * 9)
-    expect(progressFromActivities(detail)).toBeCloseTo(7 / 18, 5);
-    expect(getProductProgressFromActivities(detail).percent).toBe(39);
+    // 5 completed out of 16 (2 parts * 8)
+    expect(progressFromActivities(detail)).toBeCloseTo(5 / 16, 5);
+    expect(getProductProgressFromActivities(detail).percent).toBe(31);
   });
 
   it("excludes inactive and previously_published parts", () => {
     const detail = {
       parts: [
-        { isActive: false, activities: { raw_telegram: true, raw_compressed: true, yt_check_upload: true, copyright_report: true, music_replaced: true, final_full: true, cover_ready: true, highlight_done: true, reel_done: true, previously_published: false } },
-        { isActive: true, activities: { raw_telegram: false, raw_compressed: false, yt_check_upload: false, copyright_report: false, music_replaced: false, final_full: false, cover_ready: false, highlight_done: false, reel_done: false, previously_published: true } },
+        { isActive: false, activities: { raw_telegram: true, yt_check_upload: true, copyright_report: true, music_replaced: true, final_full: true, cover_ready: true, highlight_done: true, reel_done: true, previously_published: false } },
+        { isActive: true, activities: { raw_telegram: false, yt_check_upload: false, copyright_report: false, music_replaced: false, final_full: false, cover_ready: false, highlight_done: false, reel_done: false, previously_published: true } },
       ],
     } as never;
     expect(progressFromActivities(detail)).toBe(1);

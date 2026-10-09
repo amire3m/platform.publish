@@ -20,7 +20,7 @@ describe("buildChecklistTasks", () => {
     const tasks = buildChecklistTasks([part()], ["full_editor"]);
     expect(tasks).toHaveLength(1);
     expect(tasks[0].activity).toBe("raw_telegram");
-    expect(tasks[0].remainingForJob).toBe(6);
+    expect(tasks[0].remainingForJob).toBe(5);
     expect(tasks[0].href).toBe("/content-room/CPR-1");
   });
 
@@ -44,7 +44,7 @@ describe("buildChecklistTasks", () => {
 
   it("advances to the next missing step", () => {
     const tasks = buildChecklistTasks(
-      [part({ activities: { raw_telegram: true, raw_compressed: true } })],
+      [part({ activities: { raw_telegram: true } })],
       ["full_editor"],
     );
     expect(tasks[0].activity).toBe("yt_check_upload");

@@ -9,7 +9,7 @@ import { TelegramClient } from "@/lib/telegram/client";
 
 export const runtime = "nodejs";
 
-const KINDS: PartMediaKind[] = ["video", "cover", "highlight", "reel", "clean"];
+const KINDS: PartMediaKind[] = ["video", "cover", "highlight", "reel", "clean", "final", "report"];
 
 function toSessionInfo(entry: { partId: string; partNumber: number; kind: string; expiresAt: number }) {
   return {

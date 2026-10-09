@@ -81,14 +81,15 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
 
   if (!(file instanceof File)) return jsonError("فایل ارسال نشده است.", 400, "FILE_REQUIRED");
   const type = typeof typeRaw === "string" ? typeRaw : "";
-  if (type !== "video" && type !== "cover" && type !== "highlight" && type !== "reel" && type !== "clean") {
+  if (type !== "video" && type !== "cover" && type !== "highlight" && type !== "reel" && type !== "clean" && type !== "final" && type !== "report") {
     return jsonError("نوع فایل نامعتبر است.", 400, "INVALID_TYPE");
   }
 
   // Validate size and mime
   const mime = file.type || "";
   const size = file.size;
-  const isVideoType = type === "video" || type === "highlight" || type === "reel" || type === "clean";
+  const isVideoType = type === "video" || type === "highlight" || type === "reel" || type === "clean" || type === "final";
+  const isImageType = type === "cover" || type === "report";
 
   if (isVideoType) {
     if (size > MAX_VIDEO_BYTES) {
@@ -99,10 +100,10 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     }
   } else {
     if (size > MAX_COVER_BYTES) {
-      return jsonError("حجم کاور نباید بیش از ۱۰ مگابایت باشد.", 422, "FILE_TOO_LARGE");
+      return jsonError("حجم کاور/اسکرین‌شات نباید بیش از ۱۰ مگابایت باشد.", 422, "FILE_TOO_LARGE");
     }
     if (!isImageMime(mime)) {
-      return jsonError(`فرمت کاور پشتیبانی نمی‌شود: ${mime || "نامشخص"}. فرمت‌های مجاز: jpeg و png.`, 422, "INVALID_MIME");
+      return jsonError(`فرمت کاور/اسکرین‌شات پشتیبانی نمی‌شود: ${mime || "نامشخص"}. فرمت‌های مجاز: jpeg و png.`, 422, "INVALID_MIME");
     }
   }
 
@@ -203,8 +204,13 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     const currentVersion = (part as unknown as { version?: number }).version ?? 1;
     const nextVersion = currentVersion + 1;
 
-    if (type === "highlight" || type === "reel" || type === "clean" || (type === "cover" && (coverTarget || coverAssetId))) {
+    if (type === "highlight" || type === "reel" || type === "clean" || type === "final" || type === "report" || (type === "cover" && (coverTarget || coverAssetId))) {
       const kind = type;
+      if (type === "final") {
+        const { eq: eqOrm, and: andOrm } = await import("drizzle-orm");
+        const { contentPartAssets: assetsTbl } = await import("@/db/schema");
+        await db.delete(assetsTbl).where(andOrm(eqOrm(assetsTbl.partId, id), eqOrm(assetsTbl.kind, "final")));
+      }
       const { contentPartAssets } = await import("@/db/schema");
       if (coverAssetId) {
         const { eq } = await import("drizzle-orm");

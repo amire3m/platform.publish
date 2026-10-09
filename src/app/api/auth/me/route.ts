@@ -27,6 +27,7 @@ export async function GET() {
     permissions: Array.from(effectivePermissions(user)),
     allowedAccountIds: user.allowedAccountIds,
     allowedChannels: (user as unknown as { allowedChannels?: string[] }).allowedChannels ?? [],
+    jobFunctions: (user as unknown as { jobFunctions?: string[] }).jobFunctions ?? [],
     impersonatedBy,
     impersonationExpiresAt,
   });

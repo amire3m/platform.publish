@@ -127,6 +127,7 @@ export async function GET() {
     };
     for (const asset of assetRows as unknown as Array<{ id: string; partId: string; kind: string; fileRef: string; fileName: string | null; createdAt: Date }>) {
       if (asset.partId !== p.id || !isRealFileId(asset.fileRef)) continue;
+      if (asset.kind !== "highlight" && asset.kind !== "reel") continue;
       const type = asset.kind === "highlight" ? "highlight" : "reel";
       const item = fileOf(asset.id, asset.fileName ?? `${baseTitle} - قسمت ${p.partNumber} - ${type === "highlight" ? "برش" : "ریلز"}`, type, asset.fileRef, "video/mp4", asset.createdAt, p.id);
       if (type === "highlight") node.highlights.push(item);

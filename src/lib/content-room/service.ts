@@ -290,7 +290,7 @@ export function createContentRoomService(options: {
 
       // Latest highlight/reel assets per part (stored in content_part_assets)
       const assetsByPart = await loadPartAssets(sortedParts.map((p) => p.id));
-      const latestAsset = (partId: string, kind: "highlight" | "reel"): string | null => {
+      const latestAsset = (partId: string, kind: "highlight" | "reel" | "final"): string | null => {
         const rows = (assetsByPart[partId] ?? []).filter((a) => a.kind === kind);
         return rows.length > 0 ? rows[rows.length - 1].fileRef : null;
       };
@@ -322,7 +322,7 @@ export function createContentRoomService(options: {
       for (const part of sortedParts) {
         for (const kindDef of DELIVERABLE_KINDS) {
           const fileRef = resolveDeliverableFileRef(kindDef.kind, {
-            fileRef: part.fileRef,
+            fileRef: latestAsset(part.id, "final") ?? part.fileRef,
             highlightFileRef: latestAsset(part.id, "highlight") ?? part.highlightFileRef ?? null,
             reelFileRef: latestAsset(part.id, "reel") ?? part.reelFileRef ?? null,
             coverFileRef: part.coverFileRef,

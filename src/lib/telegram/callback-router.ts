@@ -18,8 +18,8 @@ const PERMISSION_MAP: Record<string, string> = {
 };
 
 const PAGE_SIZE = 10;
-const ALLOWED_KINDS = new Set(["video", "cover", "highlight", "reel", "clean"] as const);
-type LinkKind = "video" | "cover" | "highlight" | "reel" | "clean";
+const ALLOWED_KINDS = new Set(["video", "cover", "highlight", "reel", "clean", "final", "report"] as const);
+type LinkKind = "video" | "cover" | "highlight" | "reel" | "clean" | "final" | "report";
 
 function escapeHtml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -32,6 +32,8 @@ function kindLabel(kind: string): string {
     case "highlight": return "برش";
     case "reel": return "ریلز";
     case "clean": return "نسخه کلین";
+    case "final": return "نسخه نهایی";
+    case "report": return "اسکرین‌شات گزارش";
     default: return kind;
   }
 }
@@ -203,6 +205,10 @@ async function handleLinkPickPart(contentId: string, botMessageId?: number): Pro
       [
         { text: "🎞️ نسخه کلین", callback_data: `link_pick_kind:${messageId}:${partId}:clean` },
       ],
+      [
+        { text: "✅ نسخه نهایی", callback_data: `link_pick_kind:${messageId}:${partId}:final` },
+        { text: "📋 اسکرین‌شات گزارش", callback_data: `link_pick_kind:${messageId}:${partId}:report` },
+      ],
     ],
   };
   // back to the previous step: part list when the product is known, else product list
@@ -343,7 +349,13 @@ async function handleLinkPickKind(contentId: string, actorUserId: string, actorT
     const currentVersion = (part as unknown as { version?: number }).version ?? 1;
     const nextVersion = currentVersion + 1;
 
-    if (kind === "highlight" || kind === "reel" || kind === "clean") {
+    if (kind === "highlight" || kind === "reel" || kind === "clean" || kind === "final" || kind === "report") {
+      if (kind === "final") {
+        try {
+          const { and } = await import("drizzle-orm");
+          await db.delete(contentPartAssets).where(and(eq(contentPartAssets.partId, partId), eq(contentPartAssets.kind, "final")));
+        } catch {}
+      }
       const assetId = generateEntityId("CPP");
       try {
         await db.insert(contentPartAssets).values({

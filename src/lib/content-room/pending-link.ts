@@ -4,7 +4,7 @@ export interface PendingReplyLink {
   userId: string;
   partId: string;
   partNumber: number;
-  kind: "video" | "cover" | "highlight" | "reel" | "clean";
+  kind: "video" | "cover" | "highlight" | "reel" | "clean" | "final" | "report";
   createdAt: number;
   expiresAt: number;
 }

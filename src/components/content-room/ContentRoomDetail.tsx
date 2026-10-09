@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, useMemo } from "react";
+import { useState, useRef, useEffect, useMemo, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import useSWR from "swr";
@@ -79,6 +79,12 @@ export function ContentRoomDetail({ product, onRefresh }: Props) {
     "/api/users/names",
     fetchWorkflowApi<{ names: Array<{ id: string; name: string }> }>,
   );
+  const { data: meData } = useSWR<{ role?: string; jobFunctions?: string[] }>(
+    "/api/auth/me",
+    fetchWorkflowApi<{ role?: string; jobFunctions?: string[] }>,
+  );
+  const myJobs: string[] = meData?.jobFunctions ?? [];
+  const isStaffAdmin = meData?.role === "owner" || meData?.role === "manager" || myJobs.includes("publisher_admin");
   const userNames = useMemo(
     () => Object.fromEntries((staffNames?.names ?? []).map((u) => [u.id, u.name])),
     [staffNames],
@@ -315,8 +321,15 @@ export function ContentRoomDetail({ product, onRefresh }: Props) {
               .filter((p) => (p as { isActive?: boolean }).isActive ?? true)
               .map((part) => (
                 <div key={part.id} className="space-y-2">
-                  <PartUploadCard part={part} onRefresh={onRefresh} onError={setActionError} onToast={setToast} />
-                  <PartMusic partId={part.id} partNumber={part.partNumber} />
+                  <PartUploadCard
+                    part={part}
+                    onRefresh={onRefresh}
+                    onError={setActionError}
+                    onToast={setToast}
+                    onToggle={handleToggle}
+                    myJobs={myJobs}
+                    isStaffAdmin={isStaffAdmin}
+                  />
                 </div>
               ))}
           </div>
@@ -524,11 +537,70 @@ interface ConflictSession {
   ttlSeconds: number;
 }
 
+/** Pipeline steps in order: activity key, fa label, owning jobs, telegram kind. */
+const PIPELINE_STEPS = [
+  { activity: "raw_telegram", label: "خام (هندبریک)", jobs: ["full_editor"], tgKind: "video" },
+  { activity: "yt_check_upload", label: "چک یوتیوب", jobs: ["full_editor"], tgKind: null },
+  { activity: "copyright_report", label: "گزارش کپی‌رایت", jobs: ["full_editor"], tgKind: "report" },
+  { activity: "music_replaced", label: "موسیقی", jobs: ["full_editor"], tgKind: null },
+  { activity: "final_full", label: "نسخه نهایی", jobs: ["full_editor"], tgKind: "final" },
+  { activity: "highlight_done", label: "برش", jobs: ["reel_editor"], tgKind: "highlight" },
+  { activity: "reel_done", label: "ریلز", jobs: ["reel_editor"], tgKind: "reel" },
+  { activity: "cover_ready", label: "کاور", jobs: ["graphic"], tgKind: "cover" },
+] as const;
+
+type PipelineStep = (typeof PIPELINE_STEPS)[number];
+
+/** Step panel wrapper: tick checkbox + label + collapsible body. */
+function StepPanel({
+  step,
+  index,
+  done,
+  open,
+  onOpen,
+  onToggleTick,
+  children,
+}: {
+  step: PipelineStep;
+  index: number;
+  done: boolean;
+  open: boolean;
+  onOpen: () => void;
+  onToggleTick: (activity: string, isDone: boolean) => void;
+  children: ReactNode;
+}) {
+  return (
+    <section className={`rounded-xl border ${open ? "border-tg-accent/50" : "border-tg-border"}`}>
+      <div className="flex items-center gap-2 p-2.5">
+        <input
+          type="checkbox"
+          checked={done}
+          onChange={(e) => onToggleTick(step.activity, e.target.checked)}
+          title={done ? "برداشتن تیک (درج گزارش تفصیلی از تب چک‌لیست)" : "ثبت انجام این قدم"}
+          aria-label={`${step.label} — انجام شد`}
+          className="h-4 w-4 shrink-0 rounded border-tg-border text-tg-accent focus:ring-tg-accent"
+        />
+        <button type="button" onClick={onOpen} className="flex min-w-0 flex-1 items-center gap-2 text-right" aria-expanded={open}>
+          <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${done ? "bg-emerald-500 text-white" : "bg-tg-hover text-tg-secondary"}`}>
+            {done ? "✓" : (index + 1).toLocaleString("fa-IR")}
+          </span>
+          <span className={`truncate text-xs font-bold ${open ? "text-tg-accent" : "text-tg-text"}`}>{step.label}</span>
+          {done && <span className="shrink-0 text-[10px] text-emerald-600">انجام شد</span>}
+        </button>
+      </div>
+      {open && <div className="space-y-3 border-t border-tg-border p-3">{children}</div>}
+    </section>
+  );
+}
+
 function PartUploadCard({
   part,
   onRefresh,
   onError,
   onToast,
+  onToggle,
+  myJobs,
+  isStaffAdmin,
 }: {
   part: {
     id: string;
@@ -542,19 +614,26 @@ function PartUploadCard({
     coverUrl?: string | null;
     highlightUrl?: string | null;
     reelUrl?: string | null;
+    ytCheckUrl?: string | null;
     version?: number | null;
     status?: string | null;
+    activities?: Record<string, boolean>;
   };
   onRefresh: () => Promise<void> | void;
   onError: (msg: string | null) => void;
   onToast: (msg: string | null) => void;
+  onToggle: (partId: string, activity: string, isDone: boolean) => void;
+  myJobs: string[];
+  isStaffAdmin: boolean;
 }) {
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [coverFile, setCoverFile] = useState<File | null>(null);
   const [highlightFile, setHighlightFile] = useState<File | null>(null);
   const [reelFile, setReelFile] = useState<File | null>(null);
   const [cleanFile, setCleanFile] = useState<File | null>(null);
-  const [uploading, setUploading] = useState<"video" | "cover" | "highlight" | "reel" | "clean" | null>(null);
+  const [finalFile, setFinalFile] = useState<File | null>(null);
+  const [reportFile, setReportFile] = useState<File | null>(null);
+  const [uploading, setUploading] = useState<"video" | "cover" | "highlight" | "reel" | "clean" | "final" | "report" | null>(null);
   const [uploadProgress, setUploadProgress] = useState<number>(0);
   const [uploadLoaded, setUploadLoaded] = useState<number>(0);
   const [uploadTotal, setUploadTotal] = useState<number>(0);
@@ -565,6 +644,12 @@ function PartUploadCard({
   const [highlightPreviewUrl, setHighlightPreviewUrl] = useState<string | null>(null);
   const [reelPreviewUrl, setReelPreviewUrl] = useState<string | null>(null);
   const [cleanPreviewUrl, setCleanPreviewUrl] = useState<string | null>(null);
+  const [finalPreviewUrl, setFinalPreviewUrl] = useState<string | null>(null);
+  const [reportPreviewUrl, setReportPreviewUrl] = useState<string | null>(null);
+  const [openStep, setOpenStep] = useState<string | null>(null);
+  const [showAllSteps, setShowAllSteps] = useState(false);
+  const [ytUrl, setYtUrl] = useState<string | null>(null);
+  const [ytSaving, setYtSaving] = useState(false);
   const [playFailed, setPlayFailed] = useState(false);
   const [preparing, setPreparing] = useState(false);
   const [prepareError, setPrepareError] = useState<string | null>(null);
@@ -606,11 +691,39 @@ function PartUploadCard({
   const highlights = assetsData?.data?.assets?.filter((a) => a.kind === "highlight") ?? [];
   const reels = assetsData?.data?.assets?.filter((a) => a.kind === "reel") ?? [];
   const cleans = assetsData?.data?.assets?.filter((a) => a.kind === "clean") ?? [];
+  const finals = assetsData?.data?.assets?.filter((a) => a.kind === "final") ?? [];
+  const reports = assetsData?.data?.assets?.filter((a) => a.kind === "report") ?? [];
+  const hasFinal = finals.length > 0;
+  const hasReport = reports.length > 0;
+
+  async function saveYtUrl() {
+    const v = (ytUrl ?? part.ytCheckUrl ?? "").trim();
+    setYtSaving(true);
+    onError(null);
+    try {
+      const res = await fetch(`/api/content-room/parts/${part.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ytCheckUrl: v }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok || !(body as { ok?: boolean }).ok) throw new Error((body as { error?: string }).error ?? "خطا در ذخیره لینک");
+      onToast("لینک چک یوتیوب ذخیره شد.");
+      setTimeout(() => onToast(null), 2000);
+      await onRefresh();
+    } catch (e) {
+      onError(e instanceof Error ? e.message : "خطا در ذخیره لینک");
+    } finally {
+      setYtSaving(false);
+    }
+  }
   const coverAssets = assetsData?.data?.assets?.filter((a) => a.kind === "cover") ?? [];
   const [coverTarget, setCoverTarget] = useState<"" | "youtube_full" | "highlight" | "reel">("");
   const [coverAsset, setCoverAsset] = useState("");
   const coverTargetLabel = (t: string | null | undefined): string =>
     t === "youtube_full" ? "ویدیوی کامل" : t === "highlight" ? "برش" : t === "reel" ? "ریلز" : "بدون هدف مشخص";
+  const mediaKindLabel = (k: string): string =>
+    k === "video" ? "ویدیو کامل" : k === "cover" ? "کاور" : k === "highlight" ? "برش" : k === "reel" ? "ریلز" : k === "final" ? "نسخه نهایی" : k === "report" ? "اسکرین‌شات گزارش" : "نسخه کلین";
   // keep legacy single-ref badge for migrated rows that haven't been moved
   const hasHighlight = highlights.length > 0 || Boolean(part.highlightFileRef);
   const hasReel = reels.length > 0 || Boolean(part.reelFileRef);
@@ -654,12 +767,12 @@ function PartUploadCard({
   const [linking, setLinking] = useState<string | null>(null);
   // Two-mode attach state: paste link / await reply (with TTL countdown)
   const [attachMode, setAttachMode] = useState<"idle" | "link" | "reply">("idle");
-  const [attachKind, setAttachKind] = useState<"video" | "cover" | "highlight" | "reel" | "clean">("video");
+  const [attachKind, setAttachKind] = useState<"video" | "cover" | "highlight" | "reel" | "clean" | "final" | "report">("video");
   const [tgLink, setTgLink] = useState("");
   const [awaitTtl, setAwaitTtl] = useState(0);
   const [conflict, setConflict] = useState<{ partId: string; partNumber: number; kind: string; ttlSeconds: number } | null>(null);
 
-  function startAttach(kind: "video" | "cover" | "highlight" | "reel" | "clean") {
+  function startAttach(kind: "video" | "cover" | "highlight" | "reel" | "clean" | "final" | "report") {
     if (attachMode === "reply") {
       void cancelAwaitReply({ silent: true });
     }
@@ -783,7 +896,7 @@ function PartUploadCard({
 
   async function handleLinkGroupMedia(
     item: { messageId: string; fileId: string | null; fileName: string | null },
-    kind: "video" | "cover" | "highlight" | "reel" | "clean",
+    kind: "video" | "cover" | "highlight" | "reel" | "clean" | "final" | "report",
   ) {
     const key = `${item.messageId}:${kind}`;
     setLinking(key);
@@ -803,7 +916,7 @@ function PartUploadCard({
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok || !(body as { ok?: boolean }).ok) throw new Error((body as { error?: string }).error ?? `خطا در لینک (${res.status})`);
-      const label = kind === "video" ? "ویدیو کامل" : kind === "cover" ? "کاور" : kind === "highlight" ? "برش" : kind === "reel" ? "ریلز" : "نسخه کلین";
+      const label = mediaKindLabel(kind);
       onToast(`«${item.fileName ?? "ویدیوی گروه"}» به عنوان ${label} لینک شد.`);
       setTimeout(() => onToast(null), 3000);
       await mutateAssets();
@@ -815,8 +928,8 @@ function PartUploadCard({
     }
   }
 
-  async function upload(type: "video" | "cover" | "highlight" | "reel" | "clean") {
-    const file = type === "video" ? videoFile : type === "cover" ? coverFile : type === "highlight" ? highlightFile : type === "reel" ? reelFile : cleanFile;
+  async function upload(type: "video" | "cover" | "highlight" | "reel" | "clean" | "final" | "report") {
+    const file = type === "video" ? videoFile : type === "cover" ? coverFile : type === "highlight" ? highlightFile : type === "reel" ? reelFile : type === "final" ? finalFile : type === "report" ? reportFile : cleanFile;
     if (!file) {
       onError("لطفاً ابتدا فایل را انتخاب کنید.");
       return;
@@ -883,7 +996,7 @@ function PartUploadCard({
         throw new Error(body.error ?? "خطا در آپلود");
       }
       const successMsg =
-        type === "video" ? `ویدیو کامل قسمت ${part.partNumber} با موفقیت آپلود شد.` : type === "cover" ? `کاور قسمت ${part.partNumber} با موفقیت آپلود شد.` : type === "highlight" ? `برش قسمت ${part.partNumber} با موفقیت آپلود شد.` : type === "reel" ? `ریلز قسمت ${part.partNumber} با موفقیت آپلود شد.` : `نسخه کلین قسمت ${part.partNumber} با موفقیت آپلود شد.`;
+        type === "video" ? `ویدیو کامل قسمت ${part.partNumber} با موفقیت آپلود شد.` : type === "cover" ? `کاور قسمت ${part.partNumber} با موفقیت آپلود شد.` : type === "highlight" ? `برش قسمت ${part.partNumber} با موفقیت آپلود شد.` : type === "reel" ? `ریلز قسمت ${part.partNumber} با موفقیت آپلود شد.` : type === "final" ? `نسخه نهایی قسمت ${part.partNumber} با موفقیت آپلود شد.` : type === "report" ? `اسکرین‌شات گزارش قسمت ${part.partNumber} با موفقیت آپلود شد.` : `نسخه کلین قسمت ${part.partNumber} با موفقیت آپلود شد.`;
       onToast(successMsg);
       setTimeout(() => onToast(null), 3000);
       if (type === "video") {
@@ -898,12 +1011,18 @@ function PartUploadCard({
       } else if (type === "reel") {
         setReelFile(null);
         setReelPreviewUrl(null);
+      } else if (type === "final") {
+        setFinalFile(null);
+        setFinalPreviewUrl(null);
+      } else if (type === "report") {
+        setReportFile(null);
+        setReportPreviewUrl(null);
       } else {
         setCleanFile(null);
         setCleanPreviewUrl(null);
       }
       await onRefresh();
-      if (type === "highlight" || type === "reel" || type === "clean") await mutateAssets();
+      if (type === "highlight" || type === "reel" || type === "clean" || type === "final" || type === "report") await mutateAssets();
     } catch (err) {
       const message = err instanceof Error ? err.message : "خطا در آپلود فایل";
       // لغو را به‌عنوان خطا نمایش نده اگر کاربر خودش لغو کرده
@@ -914,7 +1033,7 @@ function PartUploadCard({
         onError(message);
         if (message.includes("نسخه قدیمی") || message.includes("409")) {
           await onRefresh();
-          if (type === "highlight" || type === "reel" || type === "clean") await mutateAssets();
+          if (type === "highlight" || type === "reel" || type === "clean" || type === "final" || type === "report") await mutateAssets();
         }
       }
     } finally {
@@ -946,11 +1065,28 @@ function PartUploadCard({
     }
   }
 
+  const acts = (part as { activities?: Record<string, boolean> }).activities ?? {};
+  const stepDone = (a: string): boolean => Boolean(acts[a]);
+  const canSeeStep = (s: PipelineStep): boolean => {
+    if (showAllSteps || isStaffAdmin) return true;
+    if (myJobs.length === 0) return true;
+    return s.jobs.some((j) => myJobs.includes(j));
+  };
+  const visibleSteps = PIPELINE_STEPS.filter(canSeeStep);
+  const firstOpen = visibleSteps.find((s) => !stepDone(s.activity))?.activity ?? visibleSteps[0]?.activity ?? null;
+  const activeStep = openStep && visibleSteps.some((s) => s.activity === openStep) ? openStep : firstOpen;
+
+  function openStepAndKind(activity: string) {
+    setOpenStep(activity);
+    const st = PIPELINE_STEPS.find((s) => s.activity === activity);
+    if (st?.tgKind) setAttachKind(st.tgKind as "video" | "cover" | "highlight" | "reel" | "clean" | "final" | "report");
+  }
+
   return (
     <div className="flex flex-col gap-3 rounded-lg border border-tg-border bg-tg-hover/20 px-3 py-3">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2">
         <p className="text-sm font-semibold text-tg-text">قسمت {part.partNumber}</p>
-        <div className="flex flex-wrap gap-1">
+        <div className="flex flex-wrap items-center gap-1">
           <span
             className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
               hasVideo
@@ -959,6 +1095,9 @@ function PartUploadCard({
             }`}
           >
             {hasVideo ? "ویدیو کامل ✓" : "بدون ویدیو"}
+          </span>
+          <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${hasFinal ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400" : "bg-slate-500/10 text-slate-500"}`}>
+            {hasFinal ? "نهایی ✓" : "بدون نهایی"}
           </span>
           <span
             className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
@@ -975,13 +1114,47 @@ function PartUploadCard({
           <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${hasReel ? "bg-violet-500/15 text-violet-700" : "bg-slate-500/10 text-slate-500"}`}>
             {hasReel ? "ریلز ✓" : "بدون ریلز"}
           </span>
-          <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${hasClean ? "bg-teal-500/15 text-teal-700 dark:text-teal-400" : "bg-slate-500/10 text-slate-500"}`}>
-            {hasClean ? "نسخه کلین ✓" : "بدون کلین"}
+          <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${hasReport ? "bg-orange-500/15 text-orange-700" : "bg-slate-500/10 text-slate-500"}`}>
+            {hasReport ? "گزارش ✓" : "بدون گزارش"}
           </span>
+          {(isStaffAdmin || myJobs.length > 0) && (
+            <button
+              type="button"
+              onClick={() => setShowAllSteps((v) => !v)}
+              className="rounded-full border border-tg-border px-2 py-0.5 text-[10px] text-tg-secondary hover:text-tg-text"
+              title="نمایش قدم‌های همه سمت‌ها یا فقط سمت من"
+            >
+              {showAllSteps || isStaffAdmin ? "همه" : "فقط سمت من"}
+            </button>
+          )}
         </div>
       </div>
 
-      <TranscriptPanel partId={part.id} hasFile={hasVideo} onToast={onToast} />
+      {/* Stepper */}
+      <div className="flex flex-wrap items-center gap-1" role="tablist" aria-label="قدم‌های تولید">
+        {visibleSteps.map((s, i) => {
+          const done = stepDone(s.activity);
+          const active = activeStep === s.activity;
+          return (
+            <button
+              key={s.activity}
+              type="button"
+              role="tab"
+              aria-selected={active}
+              onClick={() => openStepAndKind(s.activity)}
+              className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors ${
+                active ? "border-tg-accent bg-tg-accent-soft text-tg-accent" : "border-tg-border text-tg-secondary hover:text-tg-text"
+              }`}
+              title={done ? `${s.label} — انجام شده` : `${s.label} — قدم ${i + 1}`}
+            >
+              <span className={`flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-bold ${done ? "bg-emerald-500 text-white" : "bg-tg-hover text-tg-secondary"}`}>
+                {done ? "✓" : (i + 1).toLocaleString("fa-IR")}
+              </span>
+              {s.label}
+            </button>
+          );
+        })}
+      </div>
 
       {part.playbackUrl && (
         <DedicatedPlayer
@@ -1040,6 +1213,8 @@ function PartUploadCard({
       )}
 
       <div className="space-y-3 border-t border-tg-border pt-3">
+        {visibleSteps.some((s) => s.activity === "raw_telegram") && (
+        <StepPanel step={PIPELINE_STEPS[0]} index={visibleSteps.findIndex((s) => s.activity === "raw_telegram")} done={stepDone("raw_telegram")} open={activeStep === "raw_telegram"} onOpen={() => openStepAndKind("raw_telegram")} onToggleTick={(a, v) => onToggle(part.id, a, v)}>
         <UploadZone
           icon={Film}
           title="ویدیو کامل"
@@ -1066,7 +1241,165 @@ function PartUploadCard({
             <DedicatedPlayer src={previewUrl} title={videoFile?.name} className="aspect-video w-full" />
           </div>
         )}
+        </StepPanel>
+        )}
 
+        {visibleSteps.some((s) => s.activity === "yt_check_upload") && (
+        <StepPanel step={PIPELINE_STEPS[1]} index={visibleSteps.findIndex((s) => s.activity === "yt_check_upload")} done={stepDone("yt_check_upload")} open={activeStep === "yt_check_upload"} onOpen={() => openStepAndKind("yt_check_upload")} onToggleTick={(a, v) => onToggle(part.id, a, v)}>
+          <p className="text-[11px] leading-5 text-tg-secondary">
+            ویدیو را در صفحه چک یوتیوب (غیرفهرست‌شده) آپلود کن، صبر کن گزارش کپی‌رایت بیاید، بعد لینکش را اینجا ثبت کن.
+          </p>
+          <div className="flex gap-1.5">
+            <Input
+              value={ytUrl ?? part.ytCheckUrl ?? ""}
+              onChange={(e) => setYtUrl(e.target.value)}
+              placeholder="https://youtube.com/watch?v=... یا youtu.be/..."
+              dir="ltr"
+              className="h-9 flex-1 font-mono text-xs"
+            />
+            <Button size="sm" onClick={saveYtUrl} disabled={ytSaving} className="min-h-[36px] shrink-0 text-xs">
+              {ytSaving ? "…" : "ذخیره لینک"}
+            </Button>
+          </div>
+          {part.ytCheckUrl && (
+            <a href={part.ytCheckUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-tg-accent hover:underline" dir="ltr">
+              باز کردن ویدیوی چک ↗
+            </a>
+          )}
+        </StepPanel>
+        )}
+
+        {visibleSteps.some((s) => s.activity === "copyright_report") && (
+        <StepPanel step={PIPELINE_STEPS[2]} index={visibleSteps.findIndex((s) => s.activity === "copyright_report")} done={stepDone("copyright_report")} open={activeStep === "copyright_report"} onOpen={() => openStepAndKind("copyright_report")} onToggleTick={(a, v) => onToggle(part.id, a, v)}>
+          <UploadZone
+            icon={ImageIcon}
+            title="اسکرین‌شات گزارش کپی‌رایت"
+            hint="از صفحه کپی‌رایت یوتیوب — jpeg، png"
+            accept="image/jpeg,image/png,image/jpg,image/webp"
+            file={reportFile}
+            onSelect={(f) => { setReportFile(f); setReportPreviewUrl(f ? URL.createObjectURL(f) : null); }}
+            onClear={() => { setReportFile(null); setReportPreviewUrl(null); }}
+            onUpload={() => upload("report")}
+            actionLabel="آپلود اسکرین‌شات"
+            accentBg="bg-orange-500/10 text-orange-600"
+            accentText="text-orange-600 dark:text-orange-400"
+            accentBorder="border-orange-500/20"
+            isUploading={uploading === "report"}
+            progress={uploadProgress}
+            loaded={uploadLoaded}
+            total={uploadTotal}
+            speed={uploadSpeed}
+            onCancel={handleCancel}
+          />
+          {reportPreviewUrl && (
+            <img src={reportPreviewUrl} alt="پیش‌نمایش اسکرین‌شات" className="h-28 w-full rounded object-cover" />
+          )}
+          {reports.length > 0 && (
+            <div className="space-y-1">
+              {reports.map((a) => (
+                <div key={a.id} className="flex items-center justify-between rounded bg-tg-surface px-2 py-1 text-[11px]">
+                  <span className="truncate" title={a.fileName ?? a.fileRef}>{a.fileName ?? a.fileRef.slice(0, 24)}</span>
+                  <button onClick={() => handleDeleteAsset(a.id)} className="mr-2 text-rose-600 hover:underline">حذف</button>
+                </div>
+              ))}
+              <p className="text-[11px] text-emerald-600">{reports.length} اسکرین‌شات ثبت شده</p>
+            </div>
+          )}
+        </StepPanel>
+        )}
+
+        {visibleSteps.some((s) => s.activity === "music_replaced") && (
+        <StepPanel step={PIPELINE_STEPS[3]} index={visibleSteps.findIndex((s) => s.activity === "music_replaced")} done={stepDone("music_replaced")} open={activeStep === "music_replaced"} onOpen={() => openStepAndKind("music_replaced")} onToggleTick={(a, v) => onToggle(part.id, a, v)}>
+          <PartMusic partId={part.id} partNumber={part.partNumber} />
+        </StepPanel>
+        )}
+
+        {visibleSteps.some((s) => s.activity === "final_full") && (
+        <StepPanel step={PIPELINE_STEPS[4]} index={visibleSteps.findIndex((s) => s.activity === "final_full")} done={stepDone("final_full")} open={activeStep === "final_full"} onOpen={() => openStepAndKind("final_full")} onToggleTick={(a, v) => onToggle(part.id, a, v)}>
+          <p className="text-[11px] leading-5 text-tg-secondary">
+            نسخه تمیز و نهایی (بدون کپی‌رایت + لوگو/اینترو/آترو کانال). فایل خام دست‌نخورده می‌ماند؛ ارسال یوتیوب از همین نسخه می‌خواند.
+          </p>
+          <UploadZone
+            icon={Clapperboard}
+            title="نسخه نهایی"
+            hint="تک‌فایل هر قسمت (جایگزین نسخه قبلی) — حداکثر ۲ گیگابایت"
+            accept="video/mp4,video/quicktime,video/webm,video/*"
+            file={finalFile}
+            onSelect={(f) => { setFinalFile(f); setFinalPreviewUrl(f ? URL.createObjectURL(f) : null); }}
+            onClear={() => { setFinalFile(null); setFinalPreviewUrl(null); }}
+            onUpload={() => upload("final")}
+            actionLabel={hasFinal ? "جایگزینی نسخه نهایی" : "آپلود نسخه نهایی"}
+            accentBg="bg-emerald-500/10 text-emerald-600"
+            accentText="text-emerald-600 dark:text-emerald-400"
+            accentBorder="border-emerald-500/20"
+            isUploading={uploading === "final"}
+            progress={uploadProgress}
+            loaded={uploadLoaded}
+            total={uploadTotal}
+            speed={uploadSpeed}
+            onCancel={handleCancel}
+          >
+            {finals.length > 0 && (
+              <div className="space-y-1">
+                {finals.map((a) => (
+                  <div key={a.id} className="flex items-center justify-between rounded bg-tg-surface px-2 py-1 text-[11px]">
+                    <span className="truncate" title={a.fileName ?? a.fileRef}>{a.fileName ?? a.fileRef.slice(0, 24)}</span>
+                    <button onClick={() => handleDeleteAsset(a.id)} className="mr-2 text-rose-600 hover:underline">حذف</button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </UploadZone>
+          {finalPreviewUrl && (
+            <DedicatedPlayer src={finalPreviewUrl} title={finalFile?.name} className="aspect-video w-full" />
+          )}
+          <details>
+            <summary className="cursor-pointer text-[11px] font-medium text-tg-secondary hover:text-tg-text">
+              نسخه کلین {cleans.length > 0 ? `(${cleans.length} ثبت شده)` : ""} — نسخه تمیز هر قسمت
+            </summary>
+            <div className="mt-2 space-y-2">
+              <UploadZone
+                icon={Clapperboard}
+                title="نسخه کلین"
+                hint="هر کدام حداکثر ۲ گیگابایت"
+                accept="video/mp4,video/quicktime,video/webm,video/*"
+                file={cleanFile}
+                onSelect={(f) => { setCleanFile(f); setCleanPreviewUrl(f ? URL.createObjectURL(f) : null); }}
+                onClear={() => { setCleanFile(null); setCleanPreviewUrl(null); }}
+                onUpload={() => upload("clean")}
+                actionLabel="افزودن نسخه کلین"
+                accentBg="bg-teal-500/10 text-teal-600"
+                accentText="text-teal-600 dark:text-teal-400"
+                accentBorder="border-teal-500/20"
+                isUploading={uploading === "clean"}
+                progress={uploadProgress}
+                loaded={uploadLoaded}
+                total={uploadTotal}
+                speed={uploadSpeed}
+                onCancel={handleCancel}
+              >
+                {cleans.length > 0 && (
+                  <div className="space-y-1">
+                    {cleans.map((a) => (
+                      <div key={a.id} className="flex items-center justify-between rounded bg-tg-surface px-2 py-1 text-[11px]">
+                        <span className="truncate" title={a.fileName ?? a.fileRef}>{a.fileName ?? a.fileRef.slice(0, 24)}</span>
+                        <button onClick={() => handleDeleteAsset(a.id)} className="mr-2 text-rose-600 hover:underline">حذف</button>
+                      </div>
+                    ))}
+                    <p className="text-[11px] text-emerald-600">{cleans.length} نسخه کلین ثبت شده</p>
+                  </div>
+                )}
+              </UploadZone>
+              {cleanPreviewUrl && (
+                <DedicatedPlayer src={cleanPreviewUrl} title={cleanFile?.name} className="aspect-video w-full" />
+              )}
+            </div>
+          </details>
+        </StepPanel>
+        )}
+
+        {visibleSteps.some((s) => s.activity === "cover_ready") && (
+        <StepPanel step={PIPELINE_STEPS[7]} index={visibleSteps.findIndex((s) => s.activity === "cover_ready")} done={stepDone("cover_ready")} open={activeStep === "cover_ready"} onOpen={() => openStepAndKind("cover_ready")} onToggleTick={(a, v) => onToggle(part.id, a, v)}>
         <UploadZone
           icon={ImageIcon}
           title="کاور"
@@ -1138,7 +1471,11 @@ function PartUploadCard({
             <img src={coverPreviewUrl} alt={`پیش‌نمایش کاور ${part.partNumber}`} className="h-28 w-full rounded object-cover" />
           </div>
         )}
+        </StepPanel>
+        )}
 
+        {visibleSteps.some((s) => s.activity === "highlight_done") && (
+        <StepPanel step={PIPELINE_STEPS[5]} index={visibleSteps.findIndex((s) => s.activity === "highlight_done")} done={stepDone("highlight_done")} open={activeStep === "highlight_done"} onOpen={() => openStepAndKind("highlight_done")} onToggleTick={(a, v) => onToggle(part.id, a, v)}>
         <UploadZone
           icon={Scissors}
           title="برش‌ها"
@@ -1174,7 +1511,11 @@ function PartUploadCard({
         {highlightPreviewUrl && (
           <DedicatedPlayer src={highlightPreviewUrl} title={highlightFile?.name} className="aspect-video w-full" />
         )}
+        </StepPanel>
+        )}
 
+        {visibleSteps.some((s) => s.activity === "reel_done") && (
+        <StepPanel step={PIPELINE_STEPS[6]} index={visibleSteps.findIndex((s) => s.activity === "reel_done")} done={stepDone("reel_done")} open={activeStep === "reel_done"} onOpen={() => openStepAndKind("reel_done")} onToggleTick={(a, v) => onToggle(part.id, a, v)}>
         <UploadZone
           icon={Smartphone}
           title="ریلزها"
@@ -1210,44 +1551,15 @@ function PartUploadCard({
         {reelPreviewUrl && (
           <DedicatedPlayer src={reelPreviewUrl} title={reelFile?.name} className="aspect-video w-full" />
         )}
-
-        <UploadZone
-          icon={Clapperboard}
-          title="نسخه کلین"
-          hint="نسخه تمیز هر قسمت — هر کدام حداکثر ۲ گیگابایت"
-          accept="video/mp4,video/quicktime,video/webm,video/*"
-          file={cleanFile}
-          onSelect={(f) => { setCleanFile(f); setCleanPreviewUrl(f ? URL.createObjectURL(f) : null); }}
-          onClear={() => { setCleanFile(null); setCleanPreviewUrl(null); }}
-          onUpload={() => upload("clean")}
-          actionLabel="افزودن نسخه کلین"
-          accentBg="bg-teal-500/10 text-teal-600"
-          accentText="text-teal-600 dark:text-teal-400"
-          accentBorder="border-teal-500/20"
-          isUploading={uploading === "clean"}
-          progress={uploadProgress}
-          loaded={uploadLoaded}
-          total={uploadTotal}
-          speed={uploadSpeed}
-          onCancel={handleCancel}
-        >
-          {cleans.length > 0 && (
-            <div className="space-y-1">
-              {cleans.map((a) => (
-                <div key={a.id} className="flex items-center justify-between rounded bg-tg-surface px-2 py-1 text-[11px]">
-                  <span className="truncate" title={a.fileName ?? a.fileRef}>{a.fileName ?? a.fileRef.slice(0, 24)}</span>
-                  <button onClick={() => handleDeleteAsset(a.id)} className="mr-2 text-rose-600 hover:underline">حذف</button>
-                </div>
-              ))}
-              <p className="text-[11px] text-emerald-600">{cleans.length} نسخه کلین ثبت شده</p>
-            </div>
-          )}
-        </UploadZone>
-        {cleanPreviewUrl && (
-          <DedicatedPlayer src={cleanPreviewUrl} title={cleanFile?.name} className="aspect-video w-full" />
+        </StepPanel>
         )}
       </div>
 
+      <details className="rounded-xl border border-tg-border">
+        <summary className="cursor-pointer p-3 text-xs font-bold text-tg-text hover:text-tg-accent">
+          افزودن فایل از تلگرام (بدون آپلود مجدد) — نوع فایل از قدم باز انتخاب می‌شود
+        </summary>
+        <div className="space-y-2 border-t border-tg-border p-3">
       <div className="rounded-xl border border-tg-border bg-tg-surface/50 p-3">
         <p className="text-xs font-bold text-tg-text">افزودن فایل از تلگرام (بدون آپلود مجدد ۲ گیگ)</p>
 
@@ -1256,9 +1568,11 @@ function PartUploadCard({
           <div className="mt-2 grid grid-cols-5 gap-1.5">
             {([
               { kind: "video" as const, label: "ویدیو کامل", cls: "hover:border-rose-500/50 hover:text-rose-600" },
+              { kind: "final" as const, label: "نسخه نهایی", cls: "hover:border-emerald-500/50 hover:text-emerald-600" },
               { kind: "cover" as const, label: "کاور", cls: "hover:border-sky-500/50 hover:text-sky-600" },
               { kind: "highlight" as const, label: "برش", cls: "hover:border-amber-500/50 hover:text-amber-600" },
               { kind: "reel" as const, label: "ریلز", cls: "hover:border-violet-500/50 hover:text-violet-600" },
+              { kind: "report" as const, label: "اسکرین‌شات", cls: "hover:border-orange-500/50 hover:text-orange-600" },
               { kind: "clean" as const, label: "نسخه کلین", cls: "hover:border-teal-500/50 hover:text-teal-600" },
             ]).map(({ kind, label, cls }) => (
               <button
@@ -1276,7 +1590,7 @@ function PartUploadCard({
             {attachMode === "link" && (
               <div className="space-y-2 rounded-lg border border-tg-border p-2.5">
                 <p className="text-[11px] font-semibold text-tg-text">
-                  لینک پیام تلگرام را برای «{attachKind === "video" ? "ویدیو کامل" : attachKind === "cover" ? "کاور" : attachKind === "highlight" ? "برش" : attachKind === "reel" ? "ریلز" : "نسخه کلین"}» وارد کنید:
+                  لینک پیام تلگرام را برای «{mediaKindLabel(attachKind)}» وارد کنید:
                 </p>
                 <Input
                   value={tgLink}
@@ -1309,7 +1623,7 @@ function PartUploadCard({
                   ⏱ منتظر ریپلای شما — {Math.floor(awaitTtl / 60)}:{String(awaitTtl % 60).padStart(2, "0")} مانده
                 </p>
                 <p className="text-[11px] leading-relaxed text-tg-secondary">
-                  در گروه تلگرام، روی ویدیو <b>ریپلای</b> کنید و بنویسید <code className="rounded bg-tg-hover px-1">لینک</code> — همان ویدیو به‌عنوان «{attachKind === "video" ? "ویدیو کامل" : attachKind === "cover" ? "کاور" : attachKind === "highlight" ? "برش" : attachKind === "reel" ? "ریلز" : "نسخه کلین"}» به قسمت {part.partNumber} لینک می‌شود.
+                  در گروه تلگرام، روی ویدیو <b>ریپلای</b> کنید و بنویسید <code className="rounded bg-tg-hover px-1">لینک</code> — همان ویدیو به‌عنوان «{mediaKindLabel(attachKind)}» به قسمت {part.partNumber} لینک می‌شود.
                 </p>
                 <div className="h-1 w-full overflow-hidden rounded-full bg-tg-hover">
                   <div className="h-full bg-amber-500 transition-all duration-1000" style={{ width: `${(awaitTtl / 300) * 100}%` }} />
@@ -1390,6 +1704,16 @@ function PartUploadCard({
           </details>
         )}
       </div>
+        </div>
+        <details className="mt-2">
+          <summary className="cursor-pointer text-[11px] font-medium text-tg-secondary hover:text-tg-text">
+            رونوشت / زیرنویس
+          </summary>
+          <div className="mt-2">
+            <TranscriptPanel partId={part.id} hasFile={hasVideo} onToast={onToast} />
+          </div>
+        </details>
+      </details>
     </div>
   );
 }

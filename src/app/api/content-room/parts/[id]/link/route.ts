@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { contentParts, contentPartAssets, workflowEvents } from "@/db/schema";
 import { jsonError, jsonInternalError, jsonOk } from "@/lib/api-helpers";
@@ -9,8 +9,8 @@ import { TelegramClient } from "@/lib/telegram/client";
 
 export const runtime = "nodejs";
 
-const ALLOWED_KINDS = new Set(["video", "cover", "highlight", "reel", "clean"] as const);
-type Kind = "video" | "cover" | "highlight" | "reel" | "clean";
+const ALLOWED_KINDS = new Set(["video", "cover", "highlight", "reel", "clean", "final", "report"] as const);
+type Kind = "video" | "cover" | "highlight" | "reel" | "clean" | "final" | "report";
 
 export interface LinkRouteDependencies {
   getCurrentUser: typeof getCurrentUser;
@@ -130,7 +130,10 @@ export async function handleLinkRequest(
     const nextVersion = currentVersion + 1;
     const actorUserId = (user as unknown as { id?: string }).id ?? null;
 
-    if (kind === "highlight" || kind === "reel" || kind === "clean" || (kind === "cover" && (coverTarget || targetAssetId))) {
+    if (kind === "highlight" || kind === "reel" || kind === "clean" || kind === "final" || kind === "report" || (kind === "cover" && (coverTarget || targetAssetId))) {
+      if (kind === "final") {
+        await deps.db.delete(contentPartAssets).where(and(eq(contentPartAssets.partId, id), eq(contentPartAssets.kind, "final")));
+      }
       if (targetAssetId) {
         const [target] = await deps.db
           .select({ id: contentPartAssets.id, partId: contentPartAssets.partId })

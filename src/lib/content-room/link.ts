@@ -1,11 +1,11 @@
 // Shared logic for attaching a Telegram file to a content-room part.
 // Used by the panel link API and the webhook "pending reply" flow.
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { contentParts, contentPartAssets, workflowEvents } from "@/db/schema";
 import { generateEntityId } from "@/lib/ids";
 
-export type PartMediaKind = "video" | "cover" | "highlight" | "reel" | "clean";
+export type PartMediaKind = "video" | "cover" | "highlight" | "reel" | "clean" | "final" | "report";
 
 export interface LinkPartMediaOptions {
   partId: string;
@@ -47,7 +47,11 @@ export async function linkPartMedia(opts: LinkPartMediaOptions): Promise<LinkPar
       .limit(1);
     if (!target || target.partId !== partId) throw new Error("برش/ریلز هدف در همین قسمت یافت نشد.");
   }
-  if (kind === "highlight" || kind === "reel" || kind === "clean" || (kind === "cover" && (coverTarget || coverAsset))) {
+  if (kind === "highlight" || kind === "reel" || kind === "clean" || kind === "final" || kind === "report" || (kind === "cover" && (coverTarget || coverAsset))) {
+    // final is single per part: replace previous finals
+    if (kind === "final") {
+      await db.delete(contentPartAssets).where(and(eq(contentPartAssets.partId, partId), eq(contentPartAssets.kind, "final")));
+    }
     const assetId = generateEntityId("CPP");
     await db.insert(contentPartAssets).values({
       id: assetId,

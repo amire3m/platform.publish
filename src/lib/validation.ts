@@ -34,6 +34,7 @@ export const createUserSchema = z.object({
   role: z.enum(["owner", "manager", "editor", "publisher", "analyst", "viewer"]).default("viewer"),
   allowedAccountIds: z.array(z.string()).default([]),
   allowedActions: z.array(z.string()).default([]),
+  jobFunctions: z.array(z.string()).default([]),
 });
 
 export const updateUserSchema = createUserSchema.partial().extend({

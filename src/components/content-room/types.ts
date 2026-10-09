@@ -39,6 +39,7 @@ export interface ContentPart {
   coverFileRef?: string | null;
   highlightFileRef?: string | null;
   reelFileRef?: string | null;
+  ytCheckUrl?: string | null;
   playbackUrl?: string | null;
   coverUrl?: string | null;
   highlightUrl?: string | null;

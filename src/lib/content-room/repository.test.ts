@@ -237,21 +237,21 @@ describe("content room repository", () => {
     const repo = createContentRoomRepository(port);
     const created = await repo.createProduct({ title: "X", productType: "serial", channel: "tamashin", partsCount: 1, actorUserId: "u1" });
     const partId = created.parts[0].id;
-    const toggled = await repo.togglePartActivity({ partId, activity: "raw_done", isDone: true, expectedProductVersion: 1, actorUserId: "u9" });
-    expect(toggled.activityMeta?.raw_done?.completedBy).toBe("u9");
-    expect(toggled.activityMeta?.raw_done?.completedAt).toBeInstanceOf(Date);
-    expect(toggled.activityMeta?.copyright_fix?.completedBy).toBeNull();
-    const untoggled = await repo.togglePartActivity({ partId, activity: "raw_done", isDone: false, expectedProductVersion: 2, actorUserId: "u9" });
-    expect(untoggled.activityMeta?.raw_done?.completedBy).toBeNull();
-    expect(untoggled.activityMeta?.raw_done?.completedAt).toBeNull();
+    const toggled = await repo.togglePartActivity({ partId, activity: "raw_telegram", isDone: true, expectedProductVersion: 1, actorUserId: "u9" });
+    expect(toggled.activityMeta?.raw_telegram?.completedBy).toBe("u9");
+    expect(toggled.activityMeta?.raw_telegram?.completedAt).toBeInstanceOf(Date);
+    expect(toggled.activityMeta?.copyright_report?.completedBy).toBeNull();
+    const untoggled = await repo.togglePartActivity({ partId, activity: "raw_telegram", isDone: false, expectedProductVersion: 2, actorUserId: "u9" });
+    expect(untoggled.activityMeta?.raw_telegram?.completedBy).toBeNull();
+    expect(untoggled.activityMeta?.raw_telegram?.completedAt).toBeNull();
   });
 
   it("activityMetaFromRows tolerates snake_case rows", () => {
     const m = activityMetaFromRows([
-      { part_id: "p1", activity: "raw_done", is_done: true, completed_at: "2026-01-01T00:00:00.000Z", completed_by: "u1" },
+      { part_id: "p1", activity: "raw_telegram", is_done: true, completed_at: "2026-01-01T00:00:00.000Z", completed_by: "u1" },
     ]);
-    expect(m.p1.raw_done.completedBy).toBe("u1");
-    expect(m.p1.raw_done.completedAt).toBeInstanceOf(Date);
+    expect(m.p1.raw_telegram.completedBy).toBe("u1");
+    expect(m.p1.raw_telegram.completedAt).toBeInstanceOf(Date);
   });
 
   it("metadata edit toggles isActive instead of deleting and reactivates", async () => {

@@ -10,6 +10,7 @@ import { VISIBLE_CHANNEL_GROUPS } from "@/lib/channels";
 import { fetchWorkflowApi } from "@/lib/workflow/client";
 import { formatJalaliDateTime } from "@/lib/date/jalali";
 import { roleLabelFa } from "@/lib/presentation-fa";
+import { JOB_FUNCTIONS, JOB_FUNCTION_LABELS_FA, type JobFunction } from "@/lib/job-functions";
 
 interface UserRow {
   id: string;
@@ -21,6 +22,7 @@ interface UserRow {
   allowedActions: string[];
   allowedChannels?: string[];
   allowedAccountIds?: string[];
+  jobFunctions?: string[];
   isOwnerProtected: boolean;
   createdAt: string;
 }
@@ -52,21 +54,23 @@ export default function UsersPage() {
   const [telegramId, setTelegramId] = useState("");
   const [name, setName] = useState("");
   const [role, setRole] = useState<Role>("viewer");
+  const [newJobs, setNewJobs] = useState<JobFunction[]>([]);
 
   const rows = data ?? [];
-  // drafts: map userId -> { allowedActions, allowedChannels, saving }
-  const [drafts, setDrafts] = useState<Record<string, { allowedActions: string[]; allowedChannels: string[] }>>({});
+  // drafts: map userId -> { allowedActions, allowedChannels, jobFunctions, saving }
+  const [drafts, setDrafts] = useState<Record<string, { allowedActions: string[]; allowedChannels: string[]; jobFunctions: string[] }>>({});
   const [saving, setSaving] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     if (!rows.length) return;
     setDrafts((prev) => {
-      const next: Record<string, { allowedActions: string[]; allowedChannels: string[] }> = { ...prev };
+      const next: Record<string, { allowedActions: string[]; allowedChannels: string[]; jobFunctions: string[] }> = { ...prev };
       for (const u of rows) {
         if (!next[u.id]) {
           next[u.id] = {
             allowedActions: u.allowedActions ?? [],
             allowedChannels: (u.allowedChannels as string[]) ?? [],
+            jobFunctions: (u.jobFunctions as string[]) ?? [],
           };
         }
       }
@@ -99,12 +103,13 @@ export default function UsersPage() {
       await fetchWorkflowApi("/api/users", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ telegramId, name, role }),
+        body: JSON.stringify({ telegramId, name, role, jobFunctions: newJobs }),
       });
       showToast("کاربر ایجاد شد.", "success");
       setOpen(false);
       setTelegramId("");
       setName("");
+      setNewJobs([]);
       mutate();
     } catch (e) {
       showToast((e as Error).message, "error");
@@ -165,7 +170,7 @@ export default function UsersPage() {
       await fetchWorkflowApi(`/api/users/${userId}/permissions`, {
         method: "PUT",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ allowedActions: draft.allowedActions, allowedChannels: draft.allowedChannels }),
+        body: JSON.stringify({ allowedActions: draft.allowedActions, allowedChannels: draft.allowedChannels, jobFunctions: draft.jobFunctions }),
       });
       showToast("دسترسی‌ها به‌روزرسانی شد.", "success");
       mutate();
@@ -178,15 +183,23 @@ export default function UsersPage() {
 
   function togglePerm(userId: string, perm: string, checked: boolean) {
     setDrafts((prev) => {
-      const cur = prev[userId] ?? { allowedActions: [], allowedChannels: [] };
+      const cur = prev[userId] ?? { allowedActions: [], allowedChannels: [], jobFunctions: [] };
       const nextActions = checked ? [...new Set([...cur.allowedActions, perm])] : cur.allowedActions.filter((x) => x !== perm);
       return { ...prev, [userId]: { ...cur, allowedActions: nextActions } };
     });
   }
 
+  function toggleJob(userId: string, job: JobFunction, checked: boolean) {
+    setDrafts((prev) => {
+      const cur = prev[userId] ?? { allowedActions: [], allowedChannels: [], jobFunctions: [] };
+      const next = checked ? [...new Set([...cur.jobFunctions, job])] : cur.jobFunctions.filter((x) => x !== job);
+      return { ...prev, [userId]: { ...cur, jobFunctions: next } };
+    });
+  }
+
   function toggleChannel(userId: string, channelId: string, checked: boolean) {
     setDrafts((prev) => {
-      const cur = prev[userId] ?? { allowedActions: [], allowedChannels: [] };
+      const cur = prev[userId] ?? { allowedActions: [], allowedChannels: [], jobFunctions: [] };
       const next = checked ? [...new Set([...cur.allowedChannels, channelId])] : cur.allowedChannels.filter((x) => x !== channelId);
       return { ...prev, [userId]: { ...cur, allowedChannels: next } };
     });
@@ -244,12 +257,13 @@ export default function UsersPage() {
                   </th>
                 ))}
                 <th scope="col" className="p-3 min-w-[200px]">کانال‌های مجاز</th>
+                <th scope="col" className="p-3 min-w-[150px]">سمت شغلی</th>
                 <th scope="col" className="p-3">عملیات</th>
               </tr>
             </thead>
             <tbody>
               {rows.map((u) => {
-                const draft = drafts[u.id] ?? { allowedActions: u.allowedActions ?? [], allowedChannels: (u.allowedChannels as string[]) ?? [] };
+                const draft = drafts[u.id] ?? { allowedActions: u.allowedActions ?? [], allowedChannels: (u.allowedChannels as string[]) ?? [], jobFunctions: (u.jobFunctions as string[]) ?? [] };
                 const disabledAll = !isOwner && u.isOwnerProtected;
                 return (
                   <tr key={u.id} className="border-b border-tg-border last:border-0">
@@ -316,6 +330,26 @@ export default function UsersPage() {
                         ))}
                       </fieldset>
                     </td>
+                    <td className="p-2">
+                      <fieldset disabled={isChannelDisabled(u)} className="flex flex-col gap-1.5" aria-label={`سمت‌های ${u.name}`}>
+                        {JOB_FUNCTIONS.map((job) => {
+                          const checked = draft.jobFunctions.includes(job);
+                          return (
+                            <label key={job} className="inline-flex cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-full border border-tg-border px-2 py-1 text-xs has-[input:checked]:border-tg-accent has-[input:checked]:bg-tg-accent-soft has-[input:disabled]:opacity-40">
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                disabled={isChannelDisabled(u)}
+                                onChange={(e) => toggleJob(u.id, job, e.target.checked)}
+                                aria-label={`${u.name} - ${JOB_FUNCTION_LABELS_FA[job]}`}
+                                className="h-3 w-3"
+                              />
+                              {JOB_FUNCTION_LABELS_FA[job]}
+                            </label>
+                          );
+                        })}
+                      </fieldset>
+                    </td>
                     <td className="p-2 whitespace-nowrap">
                       <div className="flex flex-col gap-1.5">
                         <Button size="sm" onClick={() => saveRow(u.id)} disabled={saving[u.id] || disabledAll || (!isOwner && !isManager)} aria-label={`ذخیره دسترسی‌های ${u.name}`}>
@@ -367,6 +401,25 @@ export default function UsersPage() {
                 </option>
               ))}
             </Select>
+          </div>
+          <div>
+            <Label>سمت شغلی (چندگانه)</Label>
+            <div className="flex flex-wrap gap-1.5">
+              {JOB_FUNCTIONS.map((job) => (
+                <label key={job} className="inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-tg-border px-2 py-1 text-xs has-[input:checked]:border-tg-accent has-[input:checked]:bg-tg-accent-soft">
+                  <input
+                    type="checkbox"
+                    checked={newJobs.includes(job)}
+                    onChange={(e) =>
+                      setNewJobs((prev) => (e.target.checked ? [...new Set([...prev, job])] : prev.filter((x) => x !== job)))
+                    }
+                    aria-label={JOB_FUNCTION_LABELS_FA[job]}
+                    className="h-3 w-3"
+                  />
+                  {JOB_FUNCTION_LABELS_FA[job]}
+                </label>
+              ))}
+            </div>
           </div>
           <p className="text-[11px] text-tg-secondary/80">
             توجه: اعضای گروه Telegram ممکن است بتوانند تاپیک‌های دیگر را در خود Telegram مشاهده کنند؛ محدودیت دسترسی واقعی همیشه در همین پنل و API اعمال می‌شود.

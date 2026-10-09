@@ -12,7 +12,7 @@ export async function GET() {
   const { user, response } = await requireUser();
   if (!user) return response;
   const rows = await db
-    .select({ id: users.id, name: users.name })
+    .select({ id: users.id, name: users.name, jobFunctions: users.jobFunctions })
     .from(users)
     .where(eq(users.active, true));
   return jsonOk({ names: rows });

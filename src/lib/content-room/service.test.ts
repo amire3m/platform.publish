@@ -198,7 +198,7 @@ describe("content room sendToPublication service", () => {
     // Product is still "imported" — NOT ready_to_send. Complete part 1's checklist only.
     const part1 = contentPort.parts.filter((p) => p.productId === product.id).sort((a, b) => a.partNumber - b.partNumber)[0];
     let version = 1;
-    for (const activity of ["raw_done", "copyright_fix", "editing_full_done", "cover_ready", "highlight_done", "reel_done"]) {
+    for (const activity of ["raw_telegram", "raw_compressed", "yt_check_upload", "copyright_report", "music_replaced", "final_full", "cover_ready", "highlight_done", "reel_done"]) {
       await contentRepo.togglePartActivity({ partId: part1.id, activity, isDone: true, expectedProductVersion: version, actorUserId: "u1" });
       version += 1;
     }

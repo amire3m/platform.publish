@@ -31,6 +31,7 @@ export async function POST(req: Request) {
       role: parsed.data.role,
       allowedAccountIds: parsed.data.allowedAccountIds,
       allowedActions: parsed.data.allowedActions,
+      jobFunctions: parsed.data.jobFunctions,
       active: true,
     })
     .returning();

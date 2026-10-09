@@ -1,7 +1,10 @@
 export const PART_ACTIVITIES = [
-  "raw_done",
-  "copyright_fix",
-  "editing_full_done",
+  "raw_telegram",
+  "raw_compressed",
+  "yt_check_upload",
+  "copyright_report",
+  "music_replaced",
+  "final_full",
   "cover_ready",
   "highlight_done",
   "reel_done",
@@ -11,9 +14,12 @@ export const PART_ACTIVITIES = [
 export type PartActivity = (typeof PART_ACTIVITIES)[number];
 
 export const REQUIRED_FOR_SEND: PartActivity[] = [
-  "raw_done",
-  "copyright_fix",
-  "editing_full_done",
+  "raw_telegram",
+  "raw_compressed",
+  "yt_check_upload",
+  "copyright_report",
+  "music_replaced",
+  "final_full",
   "cover_ready",
   "highlight_done",
   "reel_done",
@@ -21,13 +27,29 @@ export const REQUIRED_FOR_SEND: PartActivity[] = [
 
 /** Canonical Persian labels for part activities (single source of truth). */
 export const ACTIVITY_LABELS_FA: Record<PartActivity, string> = {
-  raw_done: "خام",
-  copyright_fix: "رفع کپی‌رایت",
-  editing_full_done: "تدوین کامل",
+  raw_telegram: "خام تلگرام",
+  raw_compressed: "نسخه هندبریک",
+  yt_check_upload: "آپلود چک یوتیوب",
+  copyright_report: "گزارش کپی‌رایت",
+  music_replaced: "موسیقی جایگزین",
+  final_full: "نسخه نهایی",
   cover_ready: "کاور",
   highlight_done: "برش",
   reel_done: "ریلز",
   previously_published: "قبلاً منتشر شده",
+};
+
+/** Which job function owns each activity (drives the task queue). */
+export const ACTIVITY_JOB_MAP: Record<string, string[]> = {
+  raw_telegram: ["full_editor"],
+  raw_compressed: ["full_editor"],
+  yt_check_upload: ["full_editor"],
+  copyright_report: ["full_editor"],
+  music_replaced: ["full_editor"],
+  final_full: ["full_editor"],
+  highlight_done: ["reel_editor"],
+  reel_done: ["reel_editor"],
+  cover_ready: ["graphic"],
 };
 
 export function deriveProductStatusFromParts(

@@ -6,6 +6,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { appendAuditEvent } from "@/lib/telegram/tgdb";
 import { ALL_PERMISSIONS } from "@/lib/permissions";
 import { CHANNEL_IDS } from "@/lib/channels";
+import { normalizeJobFunctions } from "@/lib/job-functions";
 
 const MANAGER_LIMITED_PERMISSIONS = new Set<string>([
   "manage_users",
@@ -39,6 +40,7 @@ async function handlePermissionsUpdate(req: Request, params: Promise<{ id: strin
     allowedActions?: string[];
     allowedAccountIds?: string[];
     allowedChannels?: string[];
+    jobFunctions?: string[];
   };
   const [existing] = await db.select().from(users).where(eq(users.id, id)).limit(1);
   if (!existing) return jsonError("کاربر یافت نشد.", 404);
@@ -79,6 +81,7 @@ async function handlePermissionsUpdate(req: Request, params: Promise<{ id: strin
   };
   if (body.allowedAccountIds !== undefined) updatePayload.allowedAccountIds = body.allowedAccountIds;
   if (allowedChannels !== undefined) updatePayload.allowedChannels = allowedChannels;
+  if (body.jobFunctions !== undefined) updatePayload.jobFunctions = normalizeJobFunctions(body.jobFunctions);
 
   const [row] = await db
     .update(users)

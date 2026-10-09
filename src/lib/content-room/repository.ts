@@ -91,6 +91,7 @@ export interface ContentPartRecord {
   coverFileRef: string | null;
   highlightFileRef: string | null;
   reelFileRef: string | null;
+  ytCheckUrl?: string | null;
   version: number;
   status: string | null;
   isActive: boolean;
@@ -1057,6 +1058,7 @@ function mapPartRow(row: Record<string, unknown>): ContentPartRecord {
     coverFileRef: (row.coverFileRef as string | null) ?? (row.cover_file_ref as string | null) ?? null,
     highlightFileRef: (row.highlightFileRef as string | null) ?? (row.highlight_file_ref as string | null) ?? null,
     reelFileRef: (row.reelFileRef as string | null) ?? (row.reel_file_ref as string | null) ?? null,
+    ytCheckUrl: (row.ytCheckUrl as string | null) ?? (row.yt_check_url as string | null) ?? null,
     version: (row.version as number) ?? 1,
     status: (row.status as string | null) ?? null,
     isActive: (row.isActive as boolean) ?? (row.is_active as boolean) ?? true,

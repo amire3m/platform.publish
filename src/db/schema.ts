@@ -678,6 +678,7 @@ export const contentPartActivities = pgTable(
     isDone: boolean("is_done").notNull().default(false),
     completedAt: timestamp("completed_at", { withTimezone: true }),
     completedBy: text("completed_by"),
+    note: text("note"),
   },
   (t) => ({
     uniq: uniqueIndex("cpa_part_activity_unique").on(t.partId, t.activity),

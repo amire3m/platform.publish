@@ -87,13 +87,13 @@ export function ContentRoomDetail({ product, onRefresh }: Props) {
   const igId = liveChannel?.instagramAccountId ?? channelAccounts.instagramAccountId;
   const tgId = liveChannel?.telegramTopicId ?? channelAccounts.telegramTopicId;
 
-  async function handleToggle(partId: string, activity: string, isDone: boolean) {
+  async function handleToggle(partId: string, activity: string, isDone: boolean, note?: string | null) {
     setActionError(null);
     try {
       await fetchContentRoomApi(`/api/content-room/parts/${partId}/activities`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ activity, isDone, expectedProductVersion: product.version }),
+        body: JSON.stringify({ activity, isDone, expectedProductVersion: product.version, note: note ?? null }),
       });
       await onRefresh();
     } catch (e) {

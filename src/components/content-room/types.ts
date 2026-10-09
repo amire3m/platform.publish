@@ -48,8 +48,8 @@ export interface ContentPart {
   status?: string | null;
   isActive?: boolean;
   activities?: Partial<Record<PartActivity, boolean>> & Record<string, boolean>;
-  /** Per-activity audit: who checked each box and when. */
-  activityMeta?: Record<string, { completedAt?: string | Date | null; completedBy?: string | null }>;
+  /** Per-activity audit: who checked each box, when, and with what report note. */
+  activityMeta?: Record<string, { completedAt?: string | Date | null; completedBy?: string | null; note?: string | null }>;
   createdAt?: string | Date | null;
   updatedAt?: string | Date | null;
 }

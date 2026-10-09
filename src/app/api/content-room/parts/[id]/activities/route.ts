@@ -52,13 +52,14 @@ export async function handleActivitiesRequest(
     return jsonError("درخواست نامعتبر است.", 422, "VALIDATION_ERROR");
   }
 
-  // body expected { activity, isDone, expectedProductVersion }
+  // body expected { activity, isDone, expectedProductVersion, note? }
   const raw = body as Record<string, unknown>;
   const toValidate = {
     partId,
     activity: raw.activity,
     isDone: raw.isDone,
     expectedProductVersion: raw.expectedProductVersion,
+    note: raw.note ?? null,
   };
 
   const parsed = toggleActivitySchema.safeParse(toValidate);
@@ -73,6 +74,7 @@ export async function handleActivitiesRequest(
       isDone: parsed.data.isDone,
       expectedProductVersion: parsed.data.expectedProductVersion,
       actorUserId: (user as unknown as { id?: string }).id ?? "unknown",
+      note: parsed.data.note ?? null,
     });
     return jsonOk(updated);
   } catch (error) {

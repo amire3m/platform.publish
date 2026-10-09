@@ -93,6 +93,7 @@ export const toggleActivitySchema = z.object({
   activity: z.enum(PART_ACTIVITIES),
   isDone: z.boolean(),
   expectedProductVersion: z.number().int().positive(),
+  note: z.string().trim().max(2000).nullable().optional(),
 });
 
 export type BatchCreateInput = z.infer<typeof batchCreateSchema>;

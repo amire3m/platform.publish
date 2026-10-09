@@ -1,11 +1,14 @@
 "use client";
 
 import { useState } from "react";
+import useSWR from "swr";
 import type { ContentPart } from "./types";
 import { ACTIVITY_LABELS } from "./room-model";
 import { PART_ACTIVITIES, REQUIRED_FOR_SEND } from "@/lib/content-room/activities";
 import { formatJalaliDateTime } from "@/lib/date/jalali";
-import { Send } from "lucide-react";
+import { fetchContentRoomApi } from "@/lib/content-room/client";
+import { Button, Modal } from "@/components/ui";
+import { History, MessageSquare, Send } from "lucide-react";
 
 const ACTIVITY_ORDER = PART_ACTIVITIES;
 
@@ -14,7 +17,46 @@ function tickTitle(label: string, partNumber: number, meta: ContentPart["activit
   if (!m?.completedBy) return `${label} برای قسمت ${partNumber}`;
   const who = userNames?.[m.completedBy] ?? m.completedBy;
   const when = m.completedAt ? formatJalaliDateTime(m.completedAt) : "";
-  return `${label} برای قسمت ${partNumber} — ثبت: ${who}${when ? ` · ${when}` : ""}`;
+  const note = m.note ? ` — گزارش: ${m.note}` : "";
+  return `${label} برای قسمت ${partNumber} — ثبت: ${who}${when ? ` · ${when}` : ""}${note}`;
+}
+
+interface HistoryItem {
+  id: string;
+  activity: string | null;
+  isDone: boolean | null;
+  note: string | null;
+  actorName: string | null;
+  createdAt: string | null;
+}
+
+function PartHistory({ partId, partNumber, userNames }: { partId: string; partNumber: number; userNames?: Record<string, string> }) {
+  const { data, isLoading } = useSWR<{ history: HistoryItem[] }>(
+    `/api/content-room/parts/${partId}/history`,
+    fetchContentRoomApi<{ history: HistoryItem[] }>,
+  );
+  const rows = data?.history ?? [];
+  return (
+    <div className="space-y-2">
+      <p className="text-xs text-tg-secondary">تاریخچه تیک‌های قسمت {partNumber} (جدیدترین اول)</p>
+      {isLoading && <p className="text-sm text-tg-secondary">در حال بارگذاری…</p>}
+      {!isLoading && rows.length === 0 && <p className="text-sm text-tg-secondary">هنوز فعالیتی ثبت نشده است.</p>}
+      <ul className="max-h-80 space-y-2 overflow-y-auto">
+        {rows.map((h) => (
+          <li key={h.id} className="rounded-lg border border-tg-border p-2 text-xs">
+            <p className="font-semibold text-tg-text">
+              {h.isDone ? "تیک خورد" : "تیک برداشته شد"}: {ACTIVITY_LABELS[h.activity ?? ""] ?? h.activity}
+            </p>
+            <p className="text-tg-secondary">
+              {h.actorName ?? "—"}
+              {h.createdAt ? ` · ${formatJalaliDateTime(h.createdAt)}` : ""}
+            </p>
+            {h.note && <p className="mt-1 text-tg-text">گزارش: {h.note}</p>}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
 }
 
 export function PartActivitiesGrid({
@@ -24,7 +66,7 @@ export function PartActivitiesGrid({
   userNames,
 }: {
   parts: ContentPart[];
-  onToggle: (partId: string, activity: string, isDone: boolean) => void;
+  onToggle: (partId: string, activity: string, isDone: boolean, note?: string | null) => void;
   /** Optional: publish a single ready part right away (selective send). */
   onSendPart?: (partId: string, partNumber: number) => Promise<void> | void;
   /** userId → display name for audit tooltips. */
@@ -33,6 +75,16 @@ export function PartActivitiesGrid({
   const activities = ACTIVITY_ORDER;
   const activeParts = parts.filter((p) => (p.isActive ?? true));
   const [sendingId, setSendingId] = useState<string | null>(null);
+  const [pending, setPending] = useState<{ partId: string; activity: string; label: string } | null>(null);
+  const [note, setNote] = useState("");
+  const [historyPart, setHistoryPart] = useState<{ id: string; partNumber: number } | null>(null);
+
+  function confirmPending() {
+    if (!pending) return;
+    onToggle(pending.partId, pending.activity, true, note.trim() || null);
+    setPending(null);
+    setNote("");
+  }
 
   function isPartReady(p: ContentPart): boolean {
     const acts = p.activities ?? {};
@@ -59,6 +111,7 @@ export function PartActivitiesGrid({
         <thead className="bg-tg-hover/40 text-xs text-tg-secondary">
           <tr>
             <th className="px-3 py-2 text-right font-semibold">قسمت</th>
+            <th className="px-2 py-2 text-center font-semibold">سابقه</th>
             {activities.map((a) => (
               <th
                 key={a}
@@ -79,6 +132,17 @@ export function PartActivitiesGrid({
               return (
                 <tr key={p.id} className={`border-t border-tg-border hover:bg-tg-hover/30 ${ready ? "bg-emerald-500/5" : ""}`}>
                   <td className="px-3 py-2 font-medium text-tg-text">قسمت {p.partNumber}</td>
+                  <td className="px-2 py-2 text-center">
+                    <button
+                      type="button"
+                      onClick={() => setHistoryPart({ id: p.id, partNumber: p.partNumber })}
+                      title={`سابقه تیک‌های قسمت ${p.partNumber}`}
+                      aria-label={`سابقه تیک‌های قسمت ${p.partNumber}`}
+                      className="inline-flex h-6 w-6 items-center justify-center rounded-full text-tg-secondary hover:bg-tg-hover hover:text-tg-text"
+                    >
+                      <History className="h-3.5 w-3.5" />
+                    </button>
+                  </td>
                   {activities.map((a) => {
                     const checked = Boolean(p.activities?.[a]);
                     const disabled = a !== "previously_published" && isPreviouslyPublished;
@@ -95,11 +159,23 @@ export function PartActivitiesGrid({
                             type="checkbox"
                             checked={checked}
                             disabled={disabled}
-                            onChange={(e) => onToggle(p.id, a, e.target.checked)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setPending({ partId: p.id, activity: a, label });
+                                setNote("");
+                              } else {
+                                onToggle(p.id, a, false);
+                              }
+                            }}
                             className="h-4 w-4 rounded border-tg-border text-tg-accent focus:ring-tg-accent disabled:opacity-40"
                             aria-label={title}
                             title={title}
                           />
+                          {checked && meta?.note && (
+                            <span title={`گزارش: ${meta.note}`} className="inline-flex h-4 w-4 items-center justify-center text-tg-accent">
+                              <MessageSquare className="h-3 w-3" />
+                            </span>
+                          )}
                           {checked && byName && (
                             <span
                               title={title}
@@ -137,8 +213,34 @@ export function PartActivitiesGrid({
         </tbody>
       </table>
       <p className="px-3 py-2 text-[11px] text-tg-secondary">
-        ردیف سبز = همه فعالیت‌های آن قسمت کامل است و دکمه «انتشار» فعال می‌شود — انتشار هر قسمت مستقل از بقیه است و نیازی به آماده‌بودن کل برنامه ندارد. تیک «قبلاً منتشر شده» سایر فعالیت‌های همان قسمت را غیرفعال می‌کند و در ارسال نادیده گرفته می‌شود. حرف کنار هر تیک = حرف اول نام ثبت‌کننده؛ نگه‌داشتن نشانگر جزئیات (نام و تاریخ ثبت) را نشان می‌دهد.
+        ردیف سبز = همه فعالیت‌های آن قسمت کامل است و دکمه «انتشار» فعال می‌شود — انتشار هر قسمت مستقل از بقیه است و نیازی به آماده‌بودن کل برنامه ندارد. تیک «قبلاً منتشر شده» سایر فعالیت‌های همان قسمت را غیرفعال می‌کند و در ارسال نادیده گرفته می‌شود. حرف کنار هر تیک = حرف اول نام ثبت‌کننده؛ نگه‌داشتن نشانگر جزئیات (نام، تاریخ و گزارش) را نشان می‌دهد.
       </p>
+
+      <Modal open={!!pending} onClose={() => setPending(null)} title={pending ? `ثبت «${pending.label}»` : ""}>
+        <div className="space-y-3">
+          <p className="text-xs text-tg-secondary">می‌توانید گزارش کوتاهی از کاری که انجام شد بنویسید (اختیاری — در سابقه قسمت می‌ماند).</p>
+          <textarea
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            rows={3}
+            maxLength={2000}
+            placeholder="مثلاً: نسخه هندبریک با پریست کانال ساخته و لینک شد"
+            className="w-full rounded-lg border border-tg-border bg-transparent p-2 text-sm text-tg-text"
+          />
+          <div className="flex gap-2">
+            <Button className="flex-1" onClick={confirmPending}>
+              ثبت تیک
+            </Button>
+            <Button variant="secondary" onClick={() => setPending(null)}>
+              انصراف
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal open={!!historyPart} onClose={() => setHistoryPart(null)} title={historyPart ? `سابقه قسمت ${historyPart.partNumber}` : ""}>
+        {historyPart && <PartHistory partId={historyPart.id} partNumber={historyPart.partNumber} userNames={userNames} />}
+      </Modal>
     </div>
   );
 }

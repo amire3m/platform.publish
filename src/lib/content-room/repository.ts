@@ -102,15 +102,16 @@ export interface ContentPartRecord {
   updatedAt: Date;
 }
 
-/** Who checked a part-activity box and when. */
+/** Who checked a part-activity box, when, and with what report note. */
 export interface PartActivityMeta {
   completedAt: Date | null;
   completedBy: string | null;
+  note: string | null;
 }
 
 export function emptyActivityMeta(): Record<string, PartActivityMeta> {
   const out: Record<string, PartActivityMeta> = {};
-  for (const a of PART_ACTIVITIES) out[a] = { completedAt: null, completedBy: null };
+  for (const a of PART_ACTIVITIES) out[a] = { completedAt: null, completedBy: null, note: null };
   return out;
 }
 
@@ -126,9 +127,11 @@ export function activityMetaFromRows(
     const atRaw = (ar.completedAt as unknown) ?? ar.completed_at;
     const byRaw = (ar.completedBy as unknown) ?? ar.completed_by;
     if (!byPart[pid]) byPart[pid] = {};
+    const noteRaw = (ar.note as unknown) ?? ar.note_text;
     byPart[pid][act] = {
       completedAt: atRaw ? new Date(atRaw as string | Date) : null,
       completedBy: (byRaw as string | null) ?? null,
+      note: (typeof noteRaw === "string" && noteRaw) || null,
     };
   }
   return byPart;
@@ -190,6 +193,7 @@ export interface TogglePartActivityCommand {
   isDone: boolean;
   expectedProductVersion: number;
   actorUserId: string;
+  note?: string | null;
 }
 
 export interface ContentRoomEventRecord {
@@ -266,7 +270,7 @@ export class InMemoryContentRoomPort implements ContentRoomDatabasePort {
   private productMap = new Map<string, ContentProductRecord>();
   private partsByProduct = new Map<string, ContentPartRecord[]>();
   private activitiesByPart = new Map<string, Record<string, boolean>>();
-  private activityMeta = new Map<string, Map<string, { completedAt: Date | null; completedBy: string | null }>>();
+  private activityMeta = new Map<string, Map<string, PartActivityMeta>>();
 
   private ensureActivities(partId: string) {
     if (!this.activitiesByPart.has(partId)) {
@@ -283,7 +287,7 @@ export class InMemoryContentRoomPort implements ContentRoomDatabasePort {
     const metaMap = this.activityMeta.get(p.id)!;
     const activityMeta: Record<string, PartActivityMeta> = {};
     for (const a of PART_ACTIVITIES) {
-      activityMeta[a] = metaMap.get(a) ?? { completedAt: null, completedBy: null };
+      activityMeta[a] = metaMap.get(a) ?? { completedAt: null, completedBy: null, note: null };
     }
     return { ...p, activities, activityMeta, isActive: p.isActive ?? true };
   }
@@ -511,10 +515,11 @@ export class InMemoryContentRoomPort implements ContentRoomDatabasePort {
     }
     activities[activity] = isDone;
     const metaMap = this.activityMeta.get(partId)!;
+    const note = ((event.after as unknown as { note?: unknown } | null)?.note as string) || null;
     if (isDone) {
-      metaMap.set(activity, { completedAt: new Date(), completedBy: event.actorUserId ?? null });
+      metaMap.set(activity, { completedAt: new Date(), completedBy: event.actorUserId ?? null, note });
     } else {
-      metaMap.set(activity, { completedAt: null, completedBy: null });
+      metaMap.set(activity, { completedAt: null, completedBy: null, note: null });
     }
     // recalc product status and bump version
     const allParts = (this.partsByProduct.get(product.id) ?? []).map((p) => {
@@ -862,6 +867,7 @@ export function createDrizzleContentRoomPort(): ContentRoomDatabasePort {
           if (isPrevDone && isDone) throw new ContentRoomRepositoryError("INVALID_TRANSITION", "قسمت قبلاً منتشر شده است.");
         }
         // upsert activity
+        const note = ((event.after as unknown as { note?: unknown } | null)?.note as string) || null;
         const [existingAct] = await tx
           .select()
           .from(contentPartActivities)
@@ -870,7 +876,7 @@ export function createDrizzleContentRoomPort(): ContentRoomDatabasePort {
         if (existingAct) {
           await tx
             .update(contentPartActivities)
-            .set({ isDone, completedAt: isDone ? new Date() : null, completedBy: isDone ? event.actorUserId : null } as never)
+            .set({ isDone, completedAt: isDone ? new Date() : null, completedBy: isDone ? event.actorUserId : null, note: isDone ? note : null } as never)
             .where(and(eq(contentPartActivities.partId, partId), eq(contentPartActivities.activity, activity)));
         } else {
           await tx.insert(contentPartActivities).values({
@@ -880,6 +886,7 @@ export function createDrizzleContentRoomPort(): ContentRoomDatabasePort {
             isDone,
             completedAt: isDone ? new Date() : null,
             completedBy: isDone ? event.actorUserId : null,
+            note: isDone ? note : null,
           } as never);
         }
         // derive status
@@ -1579,7 +1586,7 @@ export function createContentRoomRepository(port?: ContentRoomDatabasePort): Con
         entityId: command.partId,
         action: "activity_toggled",
         before: { activity: command.activity, isDone: !command.isDone } as unknown as Record<string, unknown>,
-        after: { activity: command.activity, isDone: command.isDone } as unknown as Record<string, unknown>,
+        after: { activity: command.activity, isDone: command.isDone, note: command.note ?? null } as unknown as Record<string, unknown>,
         actorUserId: command.actorUserId,
         source: "api",
         reason: null,

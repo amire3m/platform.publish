@@ -3,9 +3,9 @@ import { useMemo, useState } from "react";
 import useSWR, { useSWRConfig } from "swr";
 import {
   Search, Film, Image as ImageIcon, Scissors, Smartphone, ChevronDown, ChevronLeft,
-  FolderOpen, Folder, Package, Tv, Users, Play,
+  FolderOpen, Folder, Package, Tv, Users, Play, Music, Plus,
 } from "lucide-react";
-import { Card, Input, Select, EmptyState, Skeleton } from "@/components/ui";
+import { Button, Card, Input, Label, Select, EmptyState, Skeleton, Modal } from "@/components/ui";
 import { ChannelOptions } from "@/components/ChannelOptions";
 import { MirrorStatusBox } from "@/components/library/MirrorStatus";
 import { DedicatedPlayer } from "@/components/media/DedicatedPlayer";
@@ -246,6 +246,104 @@ function ChannelSection({ channel, defaultOpen }: { channel: ChannelNode; defaul
   );
 }
 
+interface MusicItem {
+  id: string;
+  title: string;
+  fileRef: string;
+  fileName: string | null;
+  telegramLink: string | null;
+  usedInParts: number;
+  playbackUrl: string | null;
+  createdAt: string | null;
+}
+
+function MusicSection() {
+  const [open, setOpen] = useState(false);
+  const [formOpen, setFormOpen] = useState(false);
+  const [title, setTitle] = useState("");
+  const [link, setLink] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+  const { data, isLoading, mutate } = useSWR<{ items: MusicItem[] }>("/api/music", fetcher);
+  const items = data?.items ?? [];
+
+  async function register() {
+    if (!title.trim() || !link.trim()) {
+      setFormError("عنوان و لینک تلگرام الزامی است.");
+      return;
+    }
+    setSaving(true);
+    setFormError(null);
+    try {
+      const res = await timedFetch("/api/music", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ title: title.trim(), telegramLink: link.trim() }),
+      });
+      const body = await res.json();
+      if (!res.ok || !body.ok) throw new Error(body.error ?? "خطا در ثبت موسیقی");
+      setTitle("");
+      setLink("");
+      setFormOpen(false);
+      mutate();
+    } catch (e) {
+      setFormError((e as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Card className="space-y-2 p-3">
+      <button onClick={() => setOpen((v) => !v)} className="flex w-full items-center gap-2 text-right">
+        {open ? <ChevronDown className="h-4 w-4 shrink-0 text-tg-secondary" /> : <ChevronLeft className="h-4 w-4 shrink-0 text-tg-secondary" />}
+        <Music className="h-4 w-4 shrink-0 text-tg-secondary" />
+        <span className="text-sm font-bold text-tg-text">کتابخانه موسیقی (مشترک همه کانال‌ها)</span>
+        <span className="mr-auto rounded-full bg-tg-hover px-2 py-0.5 text-[10px] text-tg-secondary">{items.length} فایل</span>
+      </button>
+      {open && (
+        <div className="space-y-2 border-t border-tg-border pt-2">
+          <Button size="sm" onClick={() => setFormOpen(true)}>
+            <Plus className="h-3.5 w-3.5" />
+            ثبت موسیقی جدید
+          </Button>
+          {isLoading && <p className="text-xs text-tg-secondary">در حال بارگذاری…</p>}
+          {items.map((m) => (
+            <div key={m.id} className="rounded-lg border border-tg-border p-2">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-sm font-medium text-tg-text">{m.title}</p>
+                <span className="shrink-0 text-[10px] text-tg-secondary">استفاده در {m.usedInParts} قسمت</span>
+              </div>
+              {m.playbackUrl ? (
+                <audio controls preload="none" src={m.playbackUrl} className="mt-1 w-full" />
+              ) : (
+                <p className="mt-1 text-[11px] text-tg-secondary">پخش مستقیم در دسترس نیست.</p>
+              )}
+            </div>
+          ))}
+          {!isLoading && items.length === 0 && <p className="text-xs text-tg-secondary">هنوز موسیقی ثبت نشده است.</p>}
+        </div>
+      )}
+      <Modal open={formOpen} onClose={() => setFormOpen(false)} title="ثبت موسیقی جدید">
+        <div className="space-y-3">
+          <div>
+            <Label>عنوان</Label>
+            <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="مثلاً: پس‌زمینه حماسی ۱" />
+          </div>
+          <div>
+            <Label>لینک پیام تلگرام (حاوی فایل صوتی)</Label>
+            <Input value={link} onChange={(e) => setLink(e.target.value)} placeholder="https://t.me/c/..." dir="ltr" />
+          </div>
+          {formError && <p className="text-xs text-rose-600">{formError}</p>}
+          <Button className="w-full" onClick={register} disabled={saving}>
+            {saving ? "در حال ثبت…" : "ثبت در کتابخانه"}
+          </Button>
+        </div>
+      </Modal>
+    </Card>
+  );
+}
+
 export default function LibraryPage() {
   const [q, setQ] = useState("");
   const [channel, setChannel] = useState("");
@@ -268,6 +366,8 @@ export default function LibraryPage() {
       </div>
 
       <MirrorStatusBox />
+
+      <MusicSection />
 
       <Card className="space-y-3">
         <div className="grid gap-3 md:grid-cols-2">

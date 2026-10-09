@@ -667,6 +667,32 @@ export const contentParts = pgTable(
   }),
 );
 
+export const musicLibrary = pgTable("music_library", {
+  id: text("id").primaryKey(),
+  title: text("title").notNull(),
+  fileRef: text("file_ref").notNull(),
+  fileName: text("file_name"),
+  telegramLink: text("telegram_link"),
+  createdBy: text("created_by"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const contentPartMusic = pgTable(
+  "content_part_music",
+  {
+    partId: text("part_id")
+      .notNull()
+      .references(() => contentParts.id, { onDelete: "cascade" }),
+    musicId: text("music_id")
+      .notNull()
+      .references(() => musicLibrary.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.partId, t.musicId] }),
+  }),
+);
+
 export const contentPartActivities = pgTable(
   "content_part_activities",
   {

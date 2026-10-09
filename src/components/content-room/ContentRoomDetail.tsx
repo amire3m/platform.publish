@@ -15,6 +15,7 @@ import type { ContentRoomProductDetail } from "./types";
 import { channelLabelFa, productTypeLabelFa, getProductProgressFromActivities, getNextActionFromActivities } from "./room-model";
 import { getChannelAccounts } from "@/lib/channels";
 import { PartActivitiesGrid } from "./PartActivitiesGrid";
+import { PartMusic } from "./PartMusic";
 import { TranscriptPanel } from "./TranscriptPanel";
 import { ChannelLinkDialog } from "./ChannelLinkDialog";
 import { EditProductDialog } from "./EditProductDialog";
@@ -313,7 +314,10 @@ export function ContentRoomDetail({ product, onRefresh }: Props) {
               .sort((a, b) => a.partNumber - b.partNumber)
               .filter((p) => (p as { isActive?: boolean }).isActive ?? true)
               .map((part) => (
-                <PartUploadCard key={part.id} part={part} onRefresh={onRefresh} onError={setActionError} onToast={setToast} />
+                <div key={part.id} className="space-y-2">
+                  <PartUploadCard part={part} onRefresh={onRefresh} onError={setActionError} onToast={setToast} />
+                  <PartMusic partId={part.id} partNumber={part.partNumber} />
+                </div>
               ))}
           </div>
         ) : (

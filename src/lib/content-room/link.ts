@@ -16,6 +16,8 @@ export interface LinkPartMediaOptions {
   fileName: string | null;
   actorUserId: string | null;
   source: "api" | "telegram";
+  /** For kind=cover: which output this cover belongs to (else legacy single part cover). */
+  targetKind?: "youtube_full" | "highlight" | "reel" | null;
 }
 
 export interface LinkPartMediaResult {
@@ -33,7 +35,8 @@ export async function linkPartMedia(opts: LinkPartMediaOptions): Promise<LinkPar
   const currentVersion = (part as unknown as { version?: number }).version ?? 1;
   const nextVersion = currentVersion + 1;
 
-  if (kind === "highlight" || kind === "reel" || kind === "clean") {
+  const coverTarget = kind === "cover" ? (opts.targetKind ?? null) : null;
+  if (kind === "highlight" || kind === "reel" || kind === "clean" || (kind === "cover" && coverTarget)) {
     const assetId = generateEntityId("CPP");
     await db.insert(contentPartAssets).values({
       id: assetId,
@@ -41,6 +44,7 @@ export async function linkPartMedia(opts: LinkPartMediaOptions): Promise<LinkPar
       kind,
       fileRef: storedRef,
       fileName: fileName ?? `${kind}_${messageId}`,
+      targetKind: coverTarget,
       createdBy: actorUserId,
       createdAt: now,
     } as never);
@@ -52,7 +56,7 @@ export async function linkPartMedia(opts: LinkPartMediaOptions): Promise<LinkPar
         entityId: partId,
         action: "linked_from_telegram",
         before: { kind, file_ref: null } as unknown as Record<string, unknown>,
-        after: { kind, messageId, fileId: storedRef, fileName: fileName ?? null, assetId, version: nextVersion } as unknown as Record<string, unknown>,
+        after: { kind, targetKind: coverTarget, messageId, fileId: storedRef, fileName: fileName ?? null, assetId, version: nextVersion } as unknown as Record<string, unknown>,
         actorUserId,
         source,
         reason: null,

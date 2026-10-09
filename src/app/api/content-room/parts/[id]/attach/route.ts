@@ -81,6 +81,11 @@ export async function POST(req: Request) {
       const parsed = parseTelegramMessageLink(body.telegramLink ?? "");
       if (!parsed.messageId) return jsonError("لینک پیام تلگرام معتبر نیست. مثال: https://t.me/c/…/123", 422, "VALIDATION_ERROR");
       const { fileId } = await resolveLinkFileId(parsed.chatId, parsed.messageId);
+      const targetRaw = (body as { targetKind?: unknown }).targetKind;
+      const targetKind =
+        kind === "cover" && typeof targetRaw === "string" && ["youtube_full", "highlight", "reel"].includes(targetRaw)
+          ? (targetRaw as "youtube_full" | "highlight" | "reel")
+          : null;
       const result = await linkPartMedia({
         partId: body.partId,
         kind,
@@ -89,6 +94,7 @@ export async function POST(req: Request) {
         fileName: null,
         actorUserId: actor.id ?? null,
         source: "api",
+        targetKind,
       });
       return jsonOk({ mode: "linked", storedRef: result.storedRef, resolved: !!fileId });
     }

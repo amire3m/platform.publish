@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import useSWR from "swr";
 import { Pencil, UploadCloud, Film, Image as ImageIcon, Scissors, Smartphone, Clapperboard, Hash, X, Play } from "lucide-react";
-import { Button, Card, ConfirmModal, Input } from "@/components/ui";
+import { Button, Card, ConfirmModal, Input, Select } from "@/components/ui";
 import { DedicatedPlayer } from "@/components/media/DedicatedPlayer";
 import { fetchContentRoomApi, ContentRoomApiError } from "@/lib/content-room/client";
 import { fetchWorkflowApi } from "@/lib/workflow/client";
@@ -595,7 +595,7 @@ function PartUploadCard({
 
   const hasVideo = Boolean(part.fileRef);
   const hasCover = Boolean(part.coverFileRef);
-  const { data: assetsData, mutate: mutateAssets } = useSWR<{ ok: boolean; data: { assets: Array<{ id: string; kind: string; fileRef: string; fileName: string | null; createdAt: string }> } }>(
+  const { data: assetsData, mutate: mutateAssets } = useSWR<{ ok: boolean; data: { assets: Array<{ id: string; kind: string; fileRef: string; fileName: string | null; targetKind?: string | null; createdAt: string }> } }>(
     `/api/content-room/parts/${part.id}/assets`,
     async (url: string) => {
       const res = await fetch(url);
@@ -606,6 +606,10 @@ function PartUploadCard({
   const highlights = assetsData?.data?.assets?.filter((a) => a.kind === "highlight") ?? [];
   const reels = assetsData?.data?.assets?.filter((a) => a.kind === "reel") ?? [];
   const cleans = assetsData?.data?.assets?.filter((a) => a.kind === "clean") ?? [];
+  const coverAssets = assetsData?.data?.assets?.filter((a) => a.kind === "cover") ?? [];
+  const [coverTarget, setCoverTarget] = useState<"" | "youtube_full" | "highlight" | "reel">("");
+  const coverTargetLabel = (t: string | null | undefined): string =>
+    t === "youtube_full" ? "ویدیوی کامل" : t === "highlight" ? "برش" : t === "reel" ? "ریلز" : "بدون هدف مشخص";
   // keep legacy single-ref badge for migrated rows that haven't been moved
   const hasHighlight = highlights.length > 0 || Boolean(part.highlightFileRef);
   const hasReel = reels.length > 0 || Boolean(part.reelFileRef);
@@ -670,7 +674,13 @@ function PartUploadCard({
       const res = await fetch(`/api/content-room/parts/${part.id}/attach`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ partId: part.id, kind: attachKind, mode: "link", telegramLink: tgLink.trim() }),
+        body: JSON.stringify({
+          partId: part.id,
+          kind: attachKind,
+          mode: "link",
+          telegramLink: tgLink.trim(),
+          targetKind: attachKind === "cover" && coverTarget ? coverTarget : undefined,
+        }),
       });
       const body = await res.json();
       if (!res.ok || !body.ok) throw new Error(body.error ?? "خطا در لینک");
@@ -780,7 +790,13 @@ function PartUploadCard({
       const res = await fetch(`/api/content-room/parts/${part.id}/link`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messageId: item.messageId, fileId: item.fileId ?? undefined, fileName: item.fileName ?? undefined, kind }),
+        body: JSON.stringify({
+          messageId: item.messageId,
+          fileId: item.fileId ?? undefined,
+          fileName: item.fileName ?? undefined,
+          kind,
+          targetKind: kind === "cover" && coverTarget ? coverTarget : undefined,
+        }),
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok || !(body as { ok?: boolean }).ok) throw new Error((body as { error?: string }).error ?? `خطا در لینک (${res.status})`);
@@ -812,6 +828,7 @@ function PartUploadCard({
       const form = new FormData();
       form.set("file", file);
       form.set("type", type);
+      if (type === "cover" && coverTarget) form.set("targetKind", coverTarget);
       if (part.version) form.set("expectedVersion", String(part.version));
       const body = await new Promise<{ ok: boolean; error?: string }>((resolve, reject) => {
         const xhr = new XMLHttpRequest();
@@ -1055,7 +1072,7 @@ function PartUploadCard({
           onSelect={(f) => { setCoverFile(f); setCoverPreviewUrl(f ? URL.createObjectURL(f) : null); }}
           onClear={() => { setCoverFile(null); setCoverPreviewUrl(null); }}
           onUpload={() => upload("cover")}
-          actionLabel={hasCover ? "جایگزینی کاور" : "آپلود کاور"}
+          actionLabel={coverTarget ? `آپلود کاور ${coverTargetLabel(coverTarget)}` : hasCover ? "جایگزینی کاور اصلی" : "آپلود کاور اصلی"}
           accentBg="bg-sky-500/10 text-sky-600"
           accentText="text-sky-600 dark:text-sky-400"
           accentBorder="border-sky-500/20"
@@ -1065,7 +1082,30 @@ function PartUploadCard({
           total={uploadTotal}
           speed={uploadSpeed}
           onCancel={handleCancel}
-        />
+        >
+          <div className="space-y-1">
+            <p className="text-[11px] font-medium text-tg-secondary">این کاور برای کدام خروجی است؟</p>
+            <Select value={coverTarget} onChange={(e) => setCoverTarget(e.target.value as "" | "youtube_full" | "highlight" | "reel")} className="text-xs" aria-label="هدف کاور">
+              <option value="">کاور اصلی قسمت (پیش‌فرض همه خروجی‌ها)</option>
+              <option value="youtube_full">کاور ویدیوی کامل</option>
+              <option value="highlight">کاور برش</option>
+              <option value="reel">کاور ریلز</option>
+            </Select>
+          </div>
+          {coverAssets.length > 0 && (
+            <div className="space-y-1">
+              {coverAssets.map((a) => (
+                <div key={a.id} className="flex items-center justify-between rounded bg-tg-surface px-2 py-1 text-[11px]">
+                  <span className="truncate" title={a.fileName ?? a.fileRef}>
+                    {coverTargetLabel(a.targetKind)} — {a.fileName ?? a.fileRef.slice(0, 24)}
+                  </span>
+                  <button onClick={() => handleDeleteAsset(a.id)} className="mr-2 text-rose-600 hover:underline">حذف</button>
+                </div>
+              ))}
+              <p className="text-[11px] text-emerald-600">{coverAssets.length} کاور مخصوص ثبت شده</p>
+            </div>
+          )}
+        </UploadZone>
         {coverPreviewUrl && !part.coverFileRef && (
           <div className="space-y-1">
             <p className="text-xs font-medium text-tg-secondary">پیش‌نمایش کاور:</p>
@@ -1219,6 +1259,14 @@ function PartUploadCard({
                   dir="ltr"
                   className="h-9 font-mono text-xs"
                 />
+                {attachKind === "cover" && (
+                  <Select value={coverTarget} onChange={(e) => setCoverTarget(e.target.value as "" | "youtube_full" | "highlight" | "reel")} className="text-xs" aria-label="هدف کاور">
+                    <option value="">کاور اصلی قسمت</option>
+                    <option value="youtube_full">کاور ویدیوی کامل</option>
+                    <option value="highlight">کاور برش</option>
+                    <option value="reel">کاور ریلز</option>
+                  </Select>
+                )}
                 <div className="flex gap-1.5">
                   <Button size="sm" onClick={submitAttachLink} disabled={linking === "attach" || !tgLink.trim()} className="min-h-[32px] flex-1 text-xs">
                     {linking === "attach" ? "در حال لینک…" : "لینک کن"}

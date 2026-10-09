@@ -358,6 +358,8 @@ export const workflowDeliverables = pgTable(
     contentId: text("content_id").references(() => content.id),
     /** Telegram media token of the actual file for this deliverable (from content_parts). */
     fileRef: text("file_ref"),
+    /** Per-output cover override (picked in send page; worker prefers it as YT thumbnail). */
+    coverFileRef: text("cover_file_ref"),
     archivedAt: timestamp("archived_at", { withTimezone: true }),
     version: integer("version").notNull().default(1),
     createdBy: text("created_by").references(() => users.id, {
@@ -718,9 +720,10 @@ export const contentPartAssets = pgTable(
     partId: text("part_id")
       .notNull()
       .references(() => contentParts.id, { onDelete: "cascade" }),
-    kind: text("kind").notNull(), // highlight | reel | clean
+    kind: text("kind").notNull(), // highlight | reel | clean | cover
     fileRef: text("file_ref").notNull(),
     fileName: text("file_name"),
+    targetKind: text("target_kind"), // for kind=cover: youtube_full | highlight | reel | null
     createdBy: text("created_by"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },

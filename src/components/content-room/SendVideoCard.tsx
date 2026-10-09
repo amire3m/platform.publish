@@ -10,6 +10,11 @@ export interface PlaylistOption {
 
 export type SendKind = "youtube_full" | "highlight" | "reel";
 
+export interface CoverOption {
+  fileRef: string;
+  label: string;
+}
+
 export interface SendVideoValue {
   title: string;
   description: string;
@@ -19,6 +24,7 @@ export interface SendVideoValue {
   instagramAt: string;
   caption: string;
   publishToInstagram: boolean;
+  coverFileRef: string;
 }
 
 interface Props {
@@ -34,6 +40,7 @@ interface Props {
   playlists: PlaylistOption[];
   playlistsLoading: boolean;
   playlistsError: string | null;
+  covers: CoverOption[];
 }
 
 export function SendVideoCard({
@@ -49,6 +56,7 @@ export function SendVideoCard({
   playlists,
   playlistsLoading,
   playlistsError,
+  covers,
 }: Props) {
   const isReel = kind === "reel";
   return (
@@ -122,6 +130,19 @@ export function SendVideoCard({
             <Input type="datetime-local" value={value.youtubeAt} onChange={(e) => onChange("youtubeAt", e.target.value)} className="mt-1 text-xs" />
             <p className="mt-1 text-[10px] text-tg-secondary">خالی = انتشار فوری پس از ارسال</p>
           </div>
+        </div>
+
+        <div>
+          <Label>کاور این خروجی (تامبنیل یوتیوب)</Label>
+          <Select value={value.coverFileRef} onChange={(e) => onChange("coverFileRef", e.target.value)} className="mt-1 text-xs">
+            <option value="">— خودکار (کاور مخصوص همین خروجی، وگرنه کاور اصلی) —</option>
+            {covers.map((c) => (
+              <option key={c.fileRef} value={c.fileRef}>
+                {c.label}
+              </option>
+            ))}
+          </Select>
+          {covers.length === 0 && <p className="mt-1 text-[10px] text-tg-secondary">کاوری ثبت نشده است.</p>}
         </div>
 
         {isReel && (

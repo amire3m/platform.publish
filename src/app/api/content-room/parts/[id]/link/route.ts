@@ -84,6 +84,11 @@ export async function handleLinkRequest(
 
   const fileId = typeof fileIdRaw === "string" && fileIdRaw.trim() !== "" && !fileIdRaw.startsWith("tg_msg_") ? fileIdRaw.trim() : null;
   const fileName = typeof fileNameRaw === "string" && fileNameRaw.trim() !== "" ? fileNameRaw.trim() : null;
+  const targetKindRaw = raw.targetKind;
+  const coverTarget =
+    kind === "cover" && typeof targetKindRaw === "string" && ["youtube_full", "highlight", "reel"].includes(targetKindRaw)
+      ? (targetKindRaw as "youtube_full" | "highlight" | "reel")
+      : null;
 
   // Note: no blocking getFile validation here — the file_id comes from Telegram
   // directly (group media list) or is forward-resolved below, and the check
@@ -123,7 +128,7 @@ export async function handleLinkRequest(
     const nextVersion = currentVersion + 1;
     const actorUserId = (user as unknown as { id?: string }).id ?? null;
 
-    if (kind === "highlight" || kind === "reel" || kind === "clean") {
+    if (kind === "highlight" || kind === "reel" || kind === "clean" || (kind === "cover" && coverTarget)) {
       const assetId = generateEntityId("CPP");
       const [asset] = await deps.db
         .insert(contentPartAssets)
@@ -133,6 +138,7 @@ export async function handleLinkRequest(
           kind,
           fileRef: storedRef,
           fileName: fileName ?? (fileId ? `${kind}_${messageId}` : `video_${messageId}`),
+          targetKind: coverTarget,
           createdBy: actorUserId,
           createdAt: now,
         } as never)
@@ -160,7 +166,7 @@ export async function handleLinkRequest(
         } as never);
       } catch {}
 
-      return jsonOk({ part: updated ?? part, asset, fileRef: storedRef, kind, messageId });
+      return jsonOk({ part: updated ?? part, asset, fileRef: storedRef, kind, targetKind: coverTarget, messageId });
     }
 
     // video / cover -> update single column

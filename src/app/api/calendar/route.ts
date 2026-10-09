@@ -129,6 +129,7 @@ export async function GET(req: Request) {
       events.push({
         contentId: d.id,
         publicationId: p.id,
+        programId: prog.id,
         title: d.name || prog.title || "(بدون عنوان)",
         platform: p.platform,
         accountId: p.socialAccountId ?? "",

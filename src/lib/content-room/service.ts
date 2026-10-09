@@ -44,7 +44,7 @@ export interface SendToPublicationCommand {
    * youtubeAccountId/instagramAccountId: explicit destination override (validated, fallback to channel default)
    * publishToInstagram: reel-only toggle (default true = dual publish YT+IG)
    */
-  partOverrides?: Array<{ partId: string; kind?: string; title?: string; description?: string; playlistId?: string | null; instagramCaption?: string; youtubeTitle?: string; youtubeDescription?: string; youtubeAccountId?: string | null; instagramAccountId?: string | null; publishToInstagram?: boolean }>;
+  partOverrides?: Array<{ partId: string; kind?: string; title?: string; description?: string; playlistId?: string | null; instagramCaption?: string; youtubeTitle?: string; youtubeDescription?: string; youtubeAccountId?: string | null; instagramAccountId?: string | null; publishToInstagram?: boolean; coverFileRef?: string | null }>;
   /** If set, publications are created as scheduled (simple flow), otherwise waiting. */
   scheduledAt?: string | null;
   /** Optional per-part per-platform schedule (overrides global scheduledAt). Keys are partId+kind aware. */
@@ -291,6 +291,15 @@ export function createContentRoomService(options: {
         const rows = (assetsByPart[partId] ?? []).filter((a) => a.kind === kind);
         return rows.length > 0 ? rows[rows.length - 1].fileRef : null;
       };
+      // Cover for a specific output: exact target match → untargeted cover → part main cover
+      const coverForKind = (partId: string, target: string, partCover: string | null): string | null => {
+        const rows = (assetsByPart[partId] ?? []).filter((a) => a.kind === "cover");
+        const exact = rows.filter((a) => (a as unknown as { targetKind?: string | null }).targetKind === target);
+        if (exact.length > 0) return exact[exact.length - 1].fileRef;
+        const untargeted = rows.filter((a) => !(a as unknown as { targetKind?: string | null }).targetKind);
+        if (untargeted.length > 0) return untargeted[untargeted.length - 1].fileRef;
+        return partCover;
+      };
 
       // Build lookup: partId+kind -> override, and partId -> schedule, and partId+kind -> schedule
       const overridesByKey = new Map((command.partOverrides ?? []).map((o) => [`${o.partId}:${o.kind}`, o] as const));
@@ -326,6 +335,8 @@ export function createContentRoomService(options: {
           const hasFile = Boolean(fileRef);
           // Cover is thumbnail-only: ready if file exists, but no publication
           const isCover = kindDef.kind === COVER_KIND;
+          const overrideFull = override as unknown as { publishToInstagram?: boolean; youtubeAccountId?: string | null; instagramAccountId?: string | null; coverFileRef?: string | null } | undefined;
+          const coverPick = (overrideFull?.coverFileRef?.trim() || null) ?? (isCover ? null : coverForKind(part.id, kindDef.kind, part.coverFileRef ?? null));
           const deliverable: WorkflowDeliverableRecord = {
             id: deliverableId,
             programId,
@@ -338,6 +349,7 @@ export function createContentRoomService(options: {
             notes: deliverableNotes,
             contentId: null,
             fileRef,
+            coverFileRef: coverPick,
             archivedAt: null,
             version: 1,
             createdBy: command.actorUserId,
@@ -360,7 +372,6 @@ export function createContentRoomService(options: {
 
           if (isCover) continue; // No publication for cover — used as thumbnail for YouTube videos
           // Create publication(s) per deliverable — reel dual-publishes YT+IG unless toggled off
-          const overrideFull = override as unknown as { publishToInstagram?: boolean; youtubeAccountId?: string | null; instagramAccountId?: string | null } | undefined;
           const wantsInstagram = kindDef.kind === "reel" ? (overrideFull?.publishToInstagram ?? true) : true;
           let platforms: Array<(typeof PUBLICATION_PLATFORMS)[number]> = (KIND_PLATFORMS_MULTI[kindDef.kind] ??
             [(KIND_PLATFORM_MAP[kindDef.kind] ?? DELIVERABLE_KIND_TO_PLATFORM[kindDef.kind as keyof typeof DELIVERABLE_KIND_TO_PLATFORM] ?? "youtube") as (typeof PUBLICATION_PLATFORMS)[number]]);

@@ -144,11 +144,15 @@ async function doTick(): Promise<{ processed: number; errors: number }> {
       const filePath = payload.kind === "file" ? payload.path : null;
       const fileSize = payloadSize(payload);
 
-      // Try to fetch cover thumbnail for this program (same program, kind=cover)
+      // Cover thumbnail: this deliverable's own pick first, then program cover
       try {
         const programId = (del as unknown as { programId: string }).programId;
-        const covers = await db.select().from(workflowDeliverables).where(and(eq(workflowDeliverables.programId, programId), eq(workflowDeliverables.kind, "cover"))).limit(1);
-        const coverRef = (covers[0] as unknown as { fileRef?: string | null })?.fileRef;
+        const ownCover = (del as unknown as { coverFileRef?: string | null }).coverFileRef ?? null;
+        let coverRef: string | null = ownCover;
+        if (!coverRef) {
+          const covers = await db.select().from(workflowDeliverables).where(and(eq(workflowDeliverables.programId, programId), eq(workflowDeliverables.kind, "cover"))).limit(1);
+          coverRef = (covers[0] as unknown as { fileRef?: string | null })?.fileRef ?? null;
+        }
         if (coverRef && !coverRef.startsWith("tg_msg_") && !coverRef.startsWith("sample_")) {
           const cPayload = await getMediaPayload(client, coverRef);
           if (cPayload.kind === "buffer") thumbBuffer = cPayload.buffer as Buffer;

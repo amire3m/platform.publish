@@ -55,6 +55,8 @@ export interface WorkflowDeliverableRecord {
   contentId: string | null;
   /** Telegram media token / playable URL of the actual file (set when created from content_room). */
   fileRef: string | null;
+  /** Per-output cover override (picked in send page; preferred YT thumbnail). */
+  coverFileRef: string | null;
   archivedAt: Date | null;
   version: number;
   createdBy: string | null;
@@ -873,6 +875,7 @@ function mapDeliverableRow(row: Record<string, unknown>): WorkflowDeliverableRec
     notes: (row.notes as string | null) ?? null,
     contentId: (row.contentId as string | null) ?? (row.content_id as string | null) ?? null,
     fileRef: (row.fileRef as string | null) ?? (row.file_ref as string | null) ?? null,
+    coverFileRef: (row.coverFileRef as string | null) ?? (row.cover_file_ref as string | null) ?? null,
     archivedAt: (row.archivedAt as Date | null) ?? (row.archived_at as Date | null) ?? null,
     version: row.version as number,
     createdBy: (row.createdBy as string | null) ?? (row.created_by as string | null) ?? null,
@@ -972,6 +975,7 @@ function toDeliverableInsert(d: WorkflowDeliverableRecord): Record<string, unkno
     notes: d.notes,
     contentId: d.contentId,
     fileRef: d.fileRef,
+    coverFileRef: d.coverFileRef,
     archivedAt: d.archivedAt,
     version: d.version,
     createdBy: d.createdBy,
@@ -1240,6 +1244,7 @@ export function createWorkflowRepository(port?: WorkflowDatabasePort): WorkflowR
         notes: command.notes ?? null,
         contentId: null,
         fileRef: null,
+        coverFileRef: null,
         archivedAt: null,
         version: 1,
         createdBy: command.actorUserId,
@@ -1658,6 +1663,7 @@ export function createWorkflowRepository(port?: WorkflowDatabasePort): WorkflowR
           notes: null,
           contentId: null,
           fileRef: null,
+          coverFileRef: null,
           archivedAt: null,
           version: 1,
           createdBy: command.actorUserId,

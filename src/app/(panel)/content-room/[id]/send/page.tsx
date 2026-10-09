@@ -44,7 +44,7 @@ function keyOf(partId: string, kind: SendKind) {
 }
 
 function emptyValue(): SendVideoValue {
-  return { title: "", description: "", playlistId: "", manualPlaylistId: "", youtubeAt: "", instagramAt: "", caption: "", publishToInstagram: true };
+  return { title: "", description: "", playlistId: "", manualPlaylistId: "", youtubeAt: "", instagramAt: "", caption: "", publishToInstagram: true, coverFileRef: "" };
 }
 
 export default function ContentRoomSendPage({ params }: { params: Promise<{ id: string }> }) {
@@ -95,6 +95,12 @@ export default function ContentRoomSendPage({ params }: { params: Promise<{ id: 
   );
   const playlists = playlistsData?.playlists ?? [];
 
+  const { data: coversData } = useSWR<{ covers: Record<string, Array<{ fileRef: string; label: string }>> }>(
+    id ? `/api/content-room/products/${id}/covers` : null,
+    jsonFetcher,
+  );
+  const coversByPart = coversData?.covers ?? {};
+
   function update(partId: string, kind: SendKind, field: keyof SendVideoValue, v: string | boolean) {
     const k = keyOf(partId, kind);
     setValues((prev) => ({ ...prev, [k]: { ...emptyValue(), ...prev[k], [field]: v } }));
@@ -142,7 +148,8 @@ export default function ContentRoomSendPage({ params }: { params: Promise<{ id: 
           const v = values[keyOf(p.id, k.kind)] ?? emptyValue();
           const publishToInstagram = k.kind === "reel" ? v.publishToInstagram : undefined;
           const playlistId = v.playlistId === "__manual" ? v.manualPlaylistId.trim() || null : v.playlistId || null;
-          if (v.title.trim() || v.description.trim() || playlistId || (k.kind === "reel" && v.caption.trim())) {
+          const coverFileRef = v.coverFileRef.trim() || undefined;
+          if (v.title.trim() || v.description.trim() || playlistId || (k.kind === "reel" && v.caption.trim()) || coverFileRef) {
             partOverrides.push({
               partId: p.id,
               kind: k.kind,
@@ -153,6 +160,7 @@ export default function ContentRoomSendPage({ params }: { params: Promise<{ id: 
               youtubeAccountId,
               instagramAccountId: k.kind === "reel" && v.publishToInstagram ? instagramAccountId : undefined,
               publishToInstagram,
+              coverFileRef,
             });
           } else {
             // Still send account + toggle so defaults apply per video
@@ -246,7 +254,7 @@ export default function ContentRoomSendPage({ params }: { params: Promise<{ id: 
                 <div className="flex items-center justify-between">
                   <p className="text-sm font-bold text-tg-text">قسمت {p.partNumber}</p>
                   <span className={`rounded-full px-2 py-0.5 text-[10px] ${hasCover ? "bg-emerald-500/15 text-emerald-700" : "bg-amber-500/15 text-amber-700"}`}>
-                    {hasCover ? "کاور ✓ (تامبنیل همه ویدیوها)" : "کاور: در انتظار فایل"}
+                    {hasCover ? "کاور اصلی ✓" : "کاور اصلی: در انتظار فایل"}
                   </span>
                 </div>
                 {KINDS.map((k) => (
@@ -264,6 +272,7 @@ export default function ContentRoomSendPage({ params }: { params: Promise<{ id: 
                     playlists={playlists}
                     playlistsLoading={playlistsLoading}
                     playlistsError={playlistsError ? "خواندن پلی‌لیست ناموفق بود؛ ID دستی وارد کنید." : null}
+                    covers={coversByPart[p.id] ?? []}
                   />
                 ))}
               </Card>

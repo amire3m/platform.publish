@@ -71,6 +71,11 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   const file = form.get("file");
   const typeRaw = form.get("type");
   const expectedVersionRaw = form.get("expectedVersion");
+  const targetKindRaw = form.get("targetKind");
+  const coverTarget =
+    typeRaw === "cover" && typeof targetKindRaw === "string" && ["youtube_full", "highlight", "reel"].includes(targetKindRaw)
+      ? (targetKindRaw as "youtube_full" | "highlight" | "reel")
+      : null;
 
   if (!(file instanceof File)) return jsonError("فایل ارسال نشده است.", 400, "FILE_REQUIRED");
   const type = typeof typeRaw === "string" ? typeRaw : "";
@@ -196,7 +201,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     const currentVersion = (part as unknown as { version?: number }).version ?? 1;
     const nextVersion = currentVersion + 1;
 
-    if (type === "highlight" || type === "reel" || type === "clean") {
+    if (type === "highlight" || type === "reel" || type === "clean" || (type === "cover" && coverTarget)) {
       const kind = type;
       const { contentPartAssets } = await import("@/db/schema");
       const assetId = generateEntityId("CPP");
@@ -208,6 +213,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
           kind,
           fileRef: storedRef,
           fileName: file.name,
+          targetKind: coverTarget,
           createdBy: (user as unknown as { id?: string }).id ?? null,
           createdAt: now,
         } as never)
@@ -245,7 +251,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
           createdAt: now,
         } as never);
       } catch {}
-      return jsonOk({ part: updated, asset, telegramFileId: fileId, telegramMessageId: messageId, type });
+      return jsonOk({ part: updated, asset, telegramFileId: fileId, telegramMessageId: messageId, type, targetKind: coverTarget });
     }
 
     const filePatch: Record<string, string> = type === "video" ? { fileRef: storedRef } : { coverFileRef: storedRef };

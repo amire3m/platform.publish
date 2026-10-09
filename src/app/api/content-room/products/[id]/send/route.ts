@@ -58,6 +58,7 @@ const sendSchema = z.object({
         youtubeAccountId: z.string().min(1).max(64).nullable().optional(),
         instagramAccountId: z.string().min(1).max(64).nullable().optional(),
         publishToInstagram: z.boolean().optional(),
+        coverFileRef: z.string().min(1).max(500).nullable().optional(),
         // legacy
         youtubeTitle: z.string().max(100).optional(),
         youtubeDescription: z.string().max(5000).optional(),

@@ -389,7 +389,7 @@ export default function CalendarPage() {
               return (
                 <Link
                   key={`${e.contentId}-${e.platform}-${e.publicationId ?? ""}`}
-                  href={`/content/${e.contentId}`}
+                  href={(e as { programId?: string }).programId ? `/workflow/${(e as { programId?: string }).programId}` : `/content/${e.contentId}`}
                   className={`flex flex-col gap-1 p-3 text-sm hover:bg-tg-hover sm:flex-row sm:items-center sm:justify-between ${
                     isConflict ? "bg-orange-500/5" : ""
                   }`}

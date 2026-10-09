@@ -81,8 +81,8 @@ describe("panel group media", () => {
     const filesTab = await screen.findByRole("button", { name: /فایل‌ها/ });
     filesTab.click();
 
-    await waitFor(() => expect(screen.getByText("افزودن فایل از تلگرام (بدون آپلود مجدد ۲ گیگ)")).toBeInTheDocument());
-    expect(screen.getAllByText("ویدیو کامل").length).toBeGreaterThan(0);
+    await waitFor(() => expect(screen.getByText(/افزودن از تلگرام/)).toBeInTheDocument());
+    expect(screen.getAllByText("خام (هندبریک)").length).toBeGreaterThan(0);
     expect(screen.getAllByText(/فایل را بکشید یا/).length).toBeGreaterThan(0);
 
     global.fetch = originalFetch;
@@ -263,8 +263,8 @@ describe("panel group media", () => {
     const filesTab = await screen.findByRole("button", { name: /فایل‌ها/ });
     filesTab.click();
 
-    const videoBtn = await screen.findByRole("button", { name: "ویدیو کامل" });
-    videoBtn.click();
+    const tgBtn = await screen.findByRole("button", { name: /لینک پیام تلگرام یا ریپلای/ });
+    tgBtn.click();
 
     const input = await screen.findByPlaceholderText("https://t.me/c/2326782937/2577");
     fireEvent.change(input, { target: { value: "https://t.me/emamyt/28/1081" } });
@@ -405,8 +405,8 @@ describe("panel group media", () => {
     const filesTab = await screen.findByRole("button", { name: /فایل‌ها/ });
     filesTab.click();
 
-    const videoBtn = await screen.findByRole("button", { name: "ویدیو کامل" });
-    videoBtn.click();
+    const tgBtn = await screen.findByRole("button", { name: /لینک پیام تلگرام یا ریپلای/ });
+    tgBtn.click();
 
     const armBtn = await screen.findByRole("button", { name: /دکمه ریپلای/ });
     armBtn.click();

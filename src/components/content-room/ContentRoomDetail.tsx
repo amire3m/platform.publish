@@ -559,6 +559,7 @@ function StepPanel({
   open,
   onOpen,
   onToggleTick,
+  telegram,
   children,
 }: {
   step: PipelineStep;
@@ -567,6 +568,7 @@ function StepPanel({
   open: boolean;
   onOpen: () => void;
   onToggleTick: (activity: string, isDone: boolean) => void;
+  telegram?: ReactNode;
   children: ReactNode;
 }) {
   return (
@@ -588,7 +590,7 @@ function StepPanel({
           {done && <span className="shrink-0 text-[10px] text-emerald-600">انجام شد</span>}
         </button>
       </div>
-      {open && <div className="space-y-3 border-t border-tg-border p-3">{children}</div>}
+      {open && <div className="space-y-3 border-t border-tg-border p-3">{children}{telegram}</div>}
     </section>
   );
 }
@@ -1079,8 +1081,144 @@ function PartUploadCard({
   function openStepAndKind(activity: string) {
     setOpenStep(activity);
     const st = PIPELINE_STEPS.find((s) => s.activity === activity);
-    if (st?.tgKind) setAttachKind(st.tgKind as "video" | "cover" | "highlight" | "reel" | "clean" | "final" | "report");
+    if (st?.tgKind) {
+      setAttachKind(st.tgKind as "video" | "cover" | "highlight" | "reel" | "clean" | "final" | "report");
+      setAttachMode("idle");
+      setTgLink("");
+    }
   }
+
+  const wantImage = attachKind === "cover" || attachKind === "report";
+  const telegramVisibleItems = (groupOnlyUnlinked ? groupItems.filter((m) => !m.linked) : groupItems).filter((m) => {
+    if (!m.mime) return true;
+    const isImg = m.mime.startsWith("image/");
+    return wantImage ? isImg : !isImg;
+  });
+
+  const telegramBlock = (
+    <div className="space-y-2 rounded-xl border border-dashed border-tg-border bg-tg-surface/40 p-3">
+      <p className="text-xs font-bold text-tg-text">
+        افزودن از تلگرام — {mediaKindLabel(attachKind)} <span className="font-normal text-tg-secondary">(بدون آپلود مجدد)</span>
+      </p>
+      {attachMode === "idle" ? (
+        <button
+          type="button"
+          onClick={() => startAttach(attachKind)}
+          className="w-full rounded-lg border border-tg-border bg-tg-hover/40 px-2 py-2 text-xs font-medium text-tg-text transition-colors hover:border-tg-accent/60 hover:text-tg-accent"
+        >
+          لینک پیام تلگرام یا ریپلای در گروه
+        </button>
+      ) : (
+        <div className="space-y-2">
+          {attachMode === "link" && (
+            <div className="space-y-2 rounded-lg border border-tg-border p-2.5">
+              <Input
+                value={tgLink}
+                onChange={(e) => setTgLink(e.target.value)}
+                placeholder="https://t.me/c/2326782937/2577"
+                dir="ltr"
+                className="h-9 font-mono text-xs"
+              />
+              {attachKind === "cover" && (
+                <Select value={coverTarget} onChange={(e) => setCoverTarget(e.target.value as "" | "youtube_full" | "highlight" | "reel")} className="text-xs" aria-label="هدف کاور">
+                  <option value="">کاور اصلی قسمت</option>
+                  <option value="youtube_full">کاور ویدیوی کامل</option>
+                  <option value="highlight">کاور برش</option>
+                  <option value="reel">کاور ریلز</option>
+                </Select>
+              )}
+              <div className="flex gap-1.5">
+                <Button size="sm" onClick={submitAttachLink} disabled={linking === "attach" || !tgLink.trim()} className="min-h-[32px] flex-1 text-xs">
+                  {linking === "attach" ? "در حال لینک…" : "لینک کن"}
+                </Button>
+                <Button size="sm" variant="secondary" onClick={() => setAttachMode("idle")} className="min-h-[32px] text-xs">انصراف</Button>
+              </div>
+              <button onClick={armAwaitReply} disabled={linking === "arm"} className="w-full rounded-lg border border-dashed border-tg-border px-2 py-1.5 text-[11px] text-tg-secondary transition-colors hover:border-tg-accent/60 hover:text-tg-accent disabled:opacity-40">
+                یا <b>دکمه ریپلای</b> — در گروه ریپلای کنید و «لینک» بنویسید (اعتبار ۵ دقیقه)
+              </button>
+            </div>
+          )}
+          {attachMode === "reply" && (
+            <div className="space-y-2 rounded-lg border border-amber-500/30 bg-amber-500/5 p-2.5">
+              <p className="text-[11px] font-semibold text-amber-700 dark:text-amber-300">
+                ⏱ منتظر ریپلای شما — {Math.floor(awaitTtl / 60)}:{String(awaitTtl % 60).padStart(2, "0")} مانده
+              </p>
+              <p className="text-[11px] leading-relaxed text-tg-secondary">
+                در گروه تلگرام، روی {wantImage ? "عکس" : "ویدیو"} <b>ریپلای</b> کنید و بنویسید <code className="rounded bg-tg-hover px-1">لینک</code> — همان فایل به‌عنوان «{mediaKindLabel(attachKind)}» به قسمت {part.partNumber} لینک می‌شود.
+              </p>
+              <div className="h-1 w-full overflow-hidden rounded-full bg-tg-hover">
+                <div className="h-full bg-amber-500 transition-all duration-1000" style={{ width: `${(awaitTtl / 300) * 100}%` }} />
+              </div>
+              <div className="flex gap-1.5">
+                <Button size="sm" variant="secondary" onClick={() => cancelAwaitReply()} className="min-h-[30px] flex-1 text-xs">لغو حالت ریپلای</Button>
+                <Button size="sm" variant="secondary" onClick={() => setAttachMode("idle")} className="min-h-[30px] text-xs">انصراف</Button>
+              </div>
+            </div>
+          )}
+          <ConfirmModal
+            open={conflict !== null}
+            onClose={() => setConflict(null)}
+            onConfirm={confirmConflictTakeover}
+            title="لینک فعال دیگری در جریان است"
+            description={
+              conflict
+                ? `قسمت ${conflict.partNumber} (${conflict.kind}) هم‌اکنون در حالت ریپلای است — حدود ${Math.max(1, Math.round(conflict.ttlSeconds / 60))} دقیقه مانده. با ادامه، آن لغو و این قسمت مسلح می‌شود.`
+                : ""
+            }
+            confirmLabel="لغو قبلی و ادامه"
+          />
+        </div>
+      )}
+      {groupItems.length > 0 && (
+        <details className="mt-1">
+          <summary className="cursor-pointer text-[11px] font-medium text-tg-secondary hover:text-tg-text">
+            انتخاب از ویدیوهای گروه ({telegramVisibleItems.length})
+          </summary>
+          <div className="mt-2 space-y-1.5">
+            <label className="flex items-center gap-1.5 text-[10px] text-tg-secondary">
+              <input type="checkbox" checked={groupOnlyUnlinked} onChange={(e) => setGroupOnlyUnlinked(e.target.checked)} className="h-3 w-3" />
+              فقط لینک‌نشده‌ها
+            </label>
+            {telegramVisibleItems.map((m) => {
+              const dur = m.durationSec ? `${Math.floor(m.durationSec / 60)}:${String(m.durationSec % 60).padStart(2, "0")}` : null;
+              return (
+                <div key={m.messageId} className={`flex items-center gap-2 rounded-lg border p-1.5 ${m.linked ? "border-emerald-500/25 bg-emerald-500/5" : "border-tg-border bg-tg-surface"}`}>
+                  {m.thumbUrl ? (
+                    <button type="button" onClick={() => setPreviewItem(previewItem === m.messageId ? null : m.messageId)} className="relative h-12 w-20 shrink-0 overflow-hidden rounded-md border border-tg-border bg-black" title="پیش‌نمایش">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={m.thumbUrl} alt={m.fileName ?? "ویدیوی گروه"} className="h-full w-full object-cover" />
+                      {dur && <span className="absolute bottom-0.5 left-0.5 rounded bg-black/70 px-1 text-[8px] text-white" dir="ltr">{dur}</span>}
+                    </button>
+                  ) : (
+                    <div className="flex h-12 w-20 shrink-0 items-center justify-center rounded-md border border-tg-border bg-tg-hover">
+                      <Film className="h-4 w-4 text-tg-secondary" />
+                    </div>
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-[11px] font-medium text-tg-text" title={m.fileName ?? undefined}>{m.fileName ?? (m.caption ? m.caption.slice(0, 30) : "ویدیوی گروه")}</p>
+                    <p className="flex items-center gap-1 text-[10px] text-tg-secondary">
+                      {m.topicName && <span className="rounded-full bg-tg-accent/10 px-1 font-medium text-tg-accent">{m.topicName}</span>}
+                      {m.linked && <span className="rounded-full bg-emerald-500/15 px-1 font-medium text-emerald-700">✓ لینک شده</span>}
+                      {m.telegramLink && <a href={m.telegramLink} target="_blank" rel="noopener noreferrer" className="text-tg-accent hover:underline">↗</a>}
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 flex-col gap-0.5">
+                    <button onClick={() => handleLinkGroupMedia(m, attachKind)} disabled={linking === `${m.messageId}:${attachKind}`} className="rounded border border-tg-border px-1.5 py-0.5 text-[10px] text-tg-text hover:bg-tg-accent/10 disabled:opacity-40">
+                      لینک به قسمت
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+            {previewItem && (() => {
+              const item = groupItems.find((m) => m.messageId === previewItem);
+              return item?.playUrl ? <DedicatedPlayer src={item.playUrl} title={item.fileName ?? undefined} className="aspect-video w-full" /> : null;
+            })()}
+          </div>
+        </details>
+      )}
+    </div>
+  );
 
   return (
     <div className="flex flex-col gap-3 rounded-lg border border-tg-border bg-tg-hover/20 px-3 py-3">
@@ -1214,7 +1352,7 @@ function PartUploadCard({
 
       <div className="space-y-3 border-t border-tg-border pt-3">
         {visibleSteps.some((s) => s.activity === "raw_telegram") && (
-        <StepPanel step={PIPELINE_STEPS[0]} index={visibleSteps.findIndex((s) => s.activity === "raw_telegram")} done={stepDone("raw_telegram")} open={activeStep === "raw_telegram"} onOpen={() => openStepAndKind("raw_telegram")} onToggleTick={(a, v) => onToggle(part.id, a, v)}>
+        <StepPanel step={PIPELINE_STEPS[0]} index={visibleSteps.findIndex((s) => s.activity === "raw_telegram")} done={stepDone("raw_telegram")} open={activeStep === "raw_telegram"} onOpen={() => openStepAndKind("raw_telegram")} onToggleTick={(a, v) => onToggle(part.id, a, v)} telegram={telegramBlock}>
         <UploadZone
           icon={Film}
           title="ویدیو کامل"
@@ -1270,7 +1408,7 @@ function PartUploadCard({
         )}
 
         {visibleSteps.some((s) => s.activity === "copyright_report") && (
-        <StepPanel step={PIPELINE_STEPS[2]} index={visibleSteps.findIndex((s) => s.activity === "copyright_report")} done={stepDone("copyright_report")} open={activeStep === "copyright_report"} onOpen={() => openStepAndKind("copyright_report")} onToggleTick={(a, v) => onToggle(part.id, a, v)}>
+        <StepPanel step={PIPELINE_STEPS[2]} index={visibleSteps.findIndex((s) => s.activity === "copyright_report")} done={stepDone("copyright_report")} open={activeStep === "copyright_report"} onOpen={() => openStepAndKind("copyright_report")} onToggleTick={(a, v) => onToggle(part.id, a, v)} telegram={telegramBlock}>
           <UploadZone
             icon={ImageIcon}
             title="اسکرین‌شات گزارش کپی‌رایت"
@@ -1315,7 +1453,7 @@ function PartUploadCard({
         )}
 
         {visibleSteps.some((s) => s.activity === "final_full") && (
-        <StepPanel step={PIPELINE_STEPS[4]} index={visibleSteps.findIndex((s) => s.activity === "final_full")} done={stepDone("final_full")} open={activeStep === "final_full"} onOpen={() => openStepAndKind("final_full")} onToggleTick={(a, v) => onToggle(part.id, a, v)}>
+        <StepPanel step={PIPELINE_STEPS[4]} index={visibleSteps.findIndex((s) => s.activity === "final_full")} done={stepDone("final_full")} open={activeStep === "final_full"} onOpen={() => openStepAndKind("final_full")} onToggleTick={(a, v) => onToggle(part.id, a, v)} telegram={telegramBlock}>
           <p className="text-[11px] leading-5 text-tg-secondary">
             نسخه تمیز و نهایی (بدون کپی‌رایت + لوگو/اینترو/آترو کانال). فایل خام دست‌نخورده می‌ماند؛ ارسال یوتیوب از همین نسخه می‌خواند.
           </p>
@@ -1399,7 +1537,7 @@ function PartUploadCard({
         )}
 
         {visibleSteps.some((s) => s.activity === "cover_ready") && (
-        <StepPanel step={PIPELINE_STEPS[7]} index={visibleSteps.findIndex((s) => s.activity === "cover_ready")} done={stepDone("cover_ready")} open={activeStep === "cover_ready"} onOpen={() => openStepAndKind("cover_ready")} onToggleTick={(a, v) => onToggle(part.id, a, v)}>
+        <StepPanel step={PIPELINE_STEPS[7]} index={visibleSteps.findIndex((s) => s.activity === "cover_ready")} done={stepDone("cover_ready")} open={activeStep === "cover_ready"} onOpen={() => openStepAndKind("cover_ready")} onToggleTick={(a, v) => onToggle(part.id, a, v)} telegram={telegramBlock}>
         <UploadZone
           icon={ImageIcon}
           title="کاور"
@@ -1475,7 +1613,7 @@ function PartUploadCard({
         )}
 
         {visibleSteps.some((s) => s.activity === "highlight_done") && (
-        <StepPanel step={PIPELINE_STEPS[5]} index={visibleSteps.findIndex((s) => s.activity === "highlight_done")} done={stepDone("highlight_done")} open={activeStep === "highlight_done"} onOpen={() => openStepAndKind("highlight_done")} onToggleTick={(a, v) => onToggle(part.id, a, v)}>
+        <StepPanel step={PIPELINE_STEPS[5]} index={visibleSteps.findIndex((s) => s.activity === "highlight_done")} done={stepDone("highlight_done")} open={activeStep === "highlight_done"} onOpen={() => openStepAndKind("highlight_done")} onToggleTick={(a, v) => onToggle(part.id, a, v)} telegram={telegramBlock}>
         <UploadZone
           icon={Scissors}
           title="برش‌ها"
@@ -1515,7 +1653,7 @@ function PartUploadCard({
         )}
 
         {visibleSteps.some((s) => s.activity === "reel_done") && (
-        <StepPanel step={PIPELINE_STEPS[6]} index={visibleSteps.findIndex((s) => s.activity === "reel_done")} done={stepDone("reel_done")} open={activeStep === "reel_done"} onOpen={() => openStepAndKind("reel_done")} onToggleTick={(a, v) => onToggle(part.id, a, v)}>
+        <StepPanel step={PIPELINE_STEPS[6]} index={visibleSteps.findIndex((s) => s.activity === "reel_done")} done={stepDone("reel_done")} open={activeStep === "reel_done"} onOpen={() => openStepAndKind("reel_done")} onToggleTick={(a, v) => onToggle(part.id, a, v)} telegram={telegramBlock}>
         <UploadZone
           icon={Smartphone}
           title="ریلزها"
@@ -1555,156 +1693,7 @@ function PartUploadCard({
         )}
       </div>
 
-      <details className="rounded-xl border border-tg-border">
-        <summary className="cursor-pointer p-3 text-xs font-bold text-tg-text hover:text-tg-accent">
-          افزودن فایل از تلگرام (بدون آپلود مجدد) — نوع فایل از قدم باز انتخاب می‌شود
-        </summary>
-        <div className="space-y-2 border-t border-tg-border p-3">
-      <div className="rounded-xl border border-tg-border bg-tg-surface/50 p-3">
-        <p className="text-xs font-bold text-tg-text">افزودن فایل از تلگرام (بدون آپلود مجدد ۲ گیگ)</p>
 
-        {/* Kind selector */}
-        {attachMode === "idle" ? (
-          <div className="mt-2 grid grid-cols-5 gap-1.5">
-            {([
-              { kind: "video" as const, label: "ویدیو کامل", cls: "hover:border-rose-500/50 hover:text-rose-600" },
-              { kind: "final" as const, label: "نسخه نهایی", cls: "hover:border-emerald-500/50 hover:text-emerald-600" },
-              { kind: "cover" as const, label: "کاور", cls: "hover:border-sky-500/50 hover:text-sky-600" },
-              { kind: "highlight" as const, label: "برش", cls: "hover:border-amber-500/50 hover:text-amber-600" },
-              { kind: "reel" as const, label: "ریلز", cls: "hover:border-violet-500/50 hover:text-violet-600" },
-              { kind: "report" as const, label: "اسکرین‌شات", cls: "hover:border-orange-500/50 hover:text-orange-600" },
-              { kind: "clean" as const, label: "نسخه کلین", cls: "hover:border-teal-500/50 hover:text-teal-600" },
-            ]).map(({ kind, label, cls }) => (
-              <button
-                key={kind}
-                onClick={() => startAttach(kind)}
-                className={`min-h-[38px] rounded-lg border border-tg-border bg-tg-hover/40 text-xs font-medium text-tg-text transition-colors ${cls}`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-        ) : (
-          <div className="mt-2 space-y-2">
-            {/* Mode: paste link */}
-            {attachMode === "link" && (
-              <div className="space-y-2 rounded-lg border border-tg-border p-2.5">
-                <p className="text-[11px] font-semibold text-tg-text">
-                  لینک پیام تلگرام را برای «{mediaKindLabel(attachKind)}» وارد کنید:
-                </p>
-                <Input
-                  value={tgLink}
-                  onChange={(e) => setTgLink(e.target.value)}
-                  placeholder="https://t.me/c/2326782937/2577"
-                  dir="ltr"
-                  className="h-9 font-mono text-xs"
-                />
-                {attachKind === "cover" && (
-                  <Select value={coverTarget} onChange={(e) => setCoverTarget(e.target.value as "" | "youtube_full" | "highlight" | "reel")} className="text-xs" aria-label="هدف کاور">
-                    <option value="">کاور اصلی قسمت</option>
-                    <option value="youtube_full">کاور ویدیوی کامل</option>
-                    <option value="highlight">کاور برش</option>
-                    <option value="reel">کاور ریلز</option>
-                  </Select>
-                )}
-                <div className="flex gap-1.5">
-                  <Button size="sm" onClick={submitAttachLink} disabled={linking === "attach" || !tgLink.trim()} className="min-h-[32px] flex-1 text-xs">
-                    {linking === "attach" ? "در حال لینک…" : "لینک کن"}
-                  </Button>
-                  <Button size="sm" variant="secondary" onClick={() => setAttachMode("idle")} className="min-h-[32px] text-xs">انصراف</Button>
-                </div>
-              </div>
-            )}
-
-            {/* Mode: await reply */}
-            {attachMode === "reply" && (
-              <div className="space-y-2 rounded-lg border border-amber-500/30 bg-amber-500/5 p-2.5">
-                <p className="text-[11px] font-semibold text-amber-700 dark:text-amber-300">
-                  ⏱ منتظر ریپلای شما — {Math.floor(awaitTtl / 60)}:{String(awaitTtl % 60).padStart(2, "0")} مانده
-                </p>
-                <p className="text-[11px] leading-relaxed text-tg-secondary">
-                  در گروه تلگرام، روی ویدیو <b>ریپلای</b> کنید و بنویسید <code className="rounded bg-tg-hover px-1">لینک</code> — همان ویدیو به‌عنوان «{mediaKindLabel(attachKind)}» به قسمت {part.partNumber} لینک می‌شود.
-                </p>
-                <div className="h-1 w-full overflow-hidden rounded-full bg-tg-hover">
-                  <div className="h-full bg-amber-500 transition-all duration-1000" style={{ width: `${(awaitTtl / 300) * 100}%` }} />
-                </div>
-                <Button size="sm" variant="secondary" onClick={() => cancelAwaitReply()} className="min-h-[30px] text-xs">لغو حالت ریپلای</Button>
-              </div>
-            )}
-
-            <ConfirmModal
-              open={conflict !== null}
-              onClose={() => setConflict(null)}
-              onConfirm={confirmConflictTakeover}
-              title="لینک فعال دیگری در جریان است"
-              description={
-                conflict
-                  ? `قسمت ${conflict.partNumber} (${conflict.kind}) هم‌اکنون در حالت ریپلای است — حدود ${Math.max(1, Math.round(conflict.ttlSeconds / 60))} دقیقه مانده. با ادامه، آن لغو و این قسمت مسلح می‌شود.`
-                  : ""
-              }
-              confirmLabel="لغو قبلی و ادامه"
-            />
-
-            {/* Mode switch row (link ↔ reply) */}
-            {attachMode === "link" && (
-              <button onClick={armAwaitReply} disabled={linking === "arm"} className="w-full rounded-lg border border-dashed border-tg-border px-2 py-1.5 text-[11px] text-tg-secondary transition-colors hover:border-tg-accent/60 hover:text-tg-accent disabled:opacity-40">
-                یا <b>دکمه ریپلای</b> — در گروه ریپلای کنید و «لینک» بنویسید (اعتبار ۵ دقیقه)
-              </button>
-            )}
-          </div>
-        )}
-
-        {/* Recent group videos — quick visual reference (unchanged visuals, secondary now) */}
-        {groupItems.length > 0 && (
-          <details className="mt-2">
-            <summary className="cursor-pointer text-[11px] font-medium text-tg-secondary hover:text-tg-text">
-              ویدیوهای اخیر گروه ({groupOnlyUnlinked ? groupItems.filter((m) => !m.linked).length : groupItems.length})
-            </summary>
-            <div className="mt-2 space-y-1.5">
-              <label className="flex items-center gap-1.5 text-[10px] text-tg-secondary">
-                <input type="checkbox" checked={groupOnlyUnlinked} onChange={(e) => setGroupOnlyUnlinked(e.target.checked)} className="h-3 w-3" />
-                فقط لینک‌نشده‌ها
-              </label>
-              {(groupOnlyUnlinked ? groupItems.filter((m) => !m.linked) : groupItems).map((m) => {
-                const dur = m.durationSec ? `${Math.floor(m.durationSec / 60)}:${String(m.durationSec % 60).padStart(2, "0")}` : null;
-                return (
-                  <div key={m.messageId} className={`flex items-center gap-2 rounded-lg border p-1.5 ${m.linked ? "border-emerald-500/25 bg-emerald-500/5" : "border-tg-border bg-tg-surface"}`}>
-                    {m.thumbUrl ? (
-                      <button type="button" onClick={() => setPreviewItem(previewItem === m.messageId ? null : m.messageId)} className="relative h-12 w-20 shrink-0 overflow-hidden rounded-md border border-tg-border bg-black" title="پیش‌نمایش">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={m.thumbUrl} alt={m.fileName ?? "ویدیوی گروه"} className="h-full w-full object-cover" />
-                        {dur && <span className="absolute bottom-0.5 left-0.5 rounded bg-black/70 px-1 text-[8px] text-white" dir="ltr">{dur}</span>}
-                      </button>
-                    ) : (
-                      <div className="flex h-12 w-20 shrink-0 items-center justify-center rounded-md border border-tg-border bg-tg-hover">
-                        <Film className="h-4 w-4 text-tg-secondary" />
-                      </div>
-                    )}
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-[11px] font-medium text-tg-text" title={m.fileName ?? undefined}>{m.fileName ?? (m.caption ? m.caption.slice(0, 30) : "ویدیوی گروه")}</p>
-                      <p className="flex items-center gap-1 text-[10px] text-tg-secondary">
-                        {m.topicName && <span className="rounded-full bg-tg-accent/10 px-1 font-medium text-tg-accent">{m.topicName}</span>}
-                        {m.linked && <span className="rounded-full bg-emerald-500/15 px-1 font-medium text-emerald-700">✓ لینک شده</span>}
-                        {m.telegramLink && <a href={m.telegramLink} target="_blank" rel="noopener noreferrer" className="text-tg-accent hover:underline">↗</a>}
-                      </p>
-                    </div>
-                    <div className="flex shrink-0 flex-col gap-0.5">
-                      <button onClick={() => handleLinkGroupMedia(m, attachKind)} disabled={linking === `${m.messageId}:${attachKind}`} className="rounded border border-tg-border px-1.5 py-0.5 text-[10px] text-tg-text hover:bg-tg-accent/10 disabled:opacity-40">
-                        لینک به قسمت
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-              {previewItem && (() => {
-                const item = groupItems.find((m) => m.messageId === previewItem);
-                return item?.playUrl ? <DedicatedPlayer src={item.playUrl} title={item.fileName ?? undefined} className="aspect-video w-full" /> : null;
-              })()}
-            </div>
-          </details>
-        )}
-      </div>
-        </div>
         <details className="mt-2">
           <summary className="cursor-pointer text-[11px] font-medium text-tg-secondary hover:text-tg-text">
             رونوشت / زیرنویس
@@ -1713,7 +1702,6 @@ function PartUploadCard({
             <TranscriptPanel partId={part.id} hasFile={hasVideo} onToast={onToast} />
           </div>
         </details>
-      </details>
     </div>
   );
 }

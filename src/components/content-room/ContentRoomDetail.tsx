@@ -595,7 +595,7 @@ function PartUploadCard({
 
   const hasVideo = Boolean(part.fileRef);
   const hasCover = Boolean(part.coverFileRef);
-  const { data: assetsData, mutate: mutateAssets } = useSWR<{ ok: boolean; data: { assets: Array<{ id: string; kind: string; fileRef: string; fileName: string | null; targetKind?: string | null; createdAt: string }> } }>(
+  const { data: assetsData, mutate: mutateAssets } = useSWR<{ ok: boolean; data: { assets: Array<{ id: string; kind: string; fileRef: string; fileName: string | null; targetKind?: string | null; targetAssetId?: string | null; createdAt: string }> } }>(
     `/api/content-room/parts/${part.id}/assets`,
     async (url: string) => {
       const res = await fetch(url);
@@ -608,6 +608,7 @@ function PartUploadCard({
   const cleans = assetsData?.data?.assets?.filter((a) => a.kind === "clean") ?? [];
   const coverAssets = assetsData?.data?.assets?.filter((a) => a.kind === "cover") ?? [];
   const [coverTarget, setCoverTarget] = useState<"" | "youtube_full" | "highlight" | "reel">("");
+  const [coverAsset, setCoverAsset] = useState("");
   const coverTargetLabel = (t: string | null | undefined): string =>
     t === "youtube_full" ? "ویدیوی کامل" : t === "highlight" ? "برش" : t === "reel" ? "ریلز" : "بدون هدف مشخص";
   // keep legacy single-ref badge for migrated rows that haven't been moved
@@ -680,6 +681,7 @@ function PartUploadCard({
           mode: "link",
           telegramLink: tgLink.trim(),
           targetKind: attachKind === "cover" && coverTarget ? coverTarget : undefined,
+          targetAssetId: attachKind === "cover" && coverAsset ? coverAsset : undefined,
         }),
       });
       const body = await res.json();
@@ -796,6 +798,7 @@ function PartUploadCard({
           fileName: item.fileName ?? undefined,
           kind,
           targetKind: kind === "cover" && coverTarget ? coverTarget : undefined,
+          targetAssetId: kind === "cover" && coverAsset ? coverAsset : undefined,
         }),
       });
       const body = await res.json().catch(() => ({}));
@@ -829,6 +832,7 @@ function PartUploadCard({
       form.set("file", file);
       form.set("type", type);
       if (type === "cover" && coverTarget) form.set("targetKind", coverTarget);
+      if (type === "cover" && coverAsset) form.set("targetAssetId", coverAsset);
       if (part.version) form.set("expectedVersion", String(part.version));
       const body = await new Promise<{ ok: boolean; error?: string }>((resolve, reject) => {
         const xhr = new XMLHttpRequest();
@@ -1085,23 +1089,45 @@ function PartUploadCard({
         >
           <div className="space-y-1">
             <p className="text-[11px] font-medium text-tg-secondary">این کاور برای کدام خروجی است؟</p>
-            <Select value={coverTarget} onChange={(e) => setCoverTarget(e.target.value as "" | "youtube_full" | "highlight" | "reel")} className="text-xs" aria-label="هدف کاور">
+            <Select
+              value={coverTarget}
+              onChange={(e) => {
+                setCoverTarget(e.target.value as "" | "youtube_full" | "highlight" | "reel");
+                setCoverAsset("");
+              }}
+              className="text-xs"
+              aria-label="هدف کاور"
+            >
               <option value="">کاور اصلی قسمت (پیش‌فرض همه خروجی‌ها)</option>
               <option value="youtube_full">کاور ویدیوی کامل</option>
               <option value="highlight">کاور برش</option>
               <option value="reel">کاور ریلز</option>
             </Select>
+            {(coverTarget === "highlight" || coverTarget === "reel") && (
+              <Select value={coverAsset} onChange={(e) => setCoverAsset(e.target.value)} className="text-xs" aria-label="برش یا ریلز مشخص">
+                <option value="">همه {coverTarget === "highlight" ? "برش‌ها" : "ریلزها"} (بدون سنجاق به یکی مشخص)</option>
+                {(coverTarget === "highlight" ? highlights : reels).map((a) => (
+                  <option key={a.id} value={a.id}>
+                    سنجاق به: {a.fileName ?? a.fileRef.slice(0, 24)}
+                  </option>
+                ))}
+              </Select>
+            )}
           </div>
           {coverAssets.length > 0 && (
             <div className="space-y-1">
-              {coverAssets.map((a) => (
-                <div key={a.id} className="flex items-center justify-between rounded bg-tg-surface px-2 py-1 text-[11px]">
-                  <span className="truncate" title={a.fileName ?? a.fileRef}>
-                    {coverTargetLabel(a.targetKind)} — {a.fileName ?? a.fileRef.slice(0, 24)}
-                  </span>
-                  <button onClick={() => handleDeleteAsset(a.id)} className="mr-2 text-rose-600 hover:underline">حذف</button>
-                </div>
-              ))}
+              {coverAssets.map((a) => {
+                const pinned = a.targetAssetId ? [...highlights, ...reels].find((x) => x.id === a.targetAssetId) : null;
+                return (
+                  <div key={a.id} className="flex items-center justify-between rounded bg-tg-surface px-2 py-1 text-[11px]">
+                    <span className="truncate" title={a.fileName ?? a.fileRef}>
+                      {coverTargetLabel(a.targetKind)} — {a.fileName ?? a.fileRef.slice(0, 24)}
+                      {pinned && <span className="text-tg-accent"> (سنجاق: {pinned.fileName ?? pinned.fileRef.slice(0, 18)})</span>}
+                    </span>
+                    <button onClick={() => handleDeleteAsset(a.id)} className="mr-2 text-rose-600 hover:underline">حذف</button>
+                  </div>
+                );
+              })}
               <p className="text-[11px] text-emerald-600">{coverAssets.length} کاور مخصوص ثبت شده</p>
             </div>
           )}

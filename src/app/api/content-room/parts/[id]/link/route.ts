@@ -89,6 +89,8 @@ export async function handleLinkRequest(
     kind === "cover" && typeof targetKindRaw === "string" && ["youtube_full", "highlight", "reel"].includes(targetKindRaw)
       ? (targetKindRaw as "youtube_full" | "highlight" | "reel")
       : null;
+  const targetAssetRaw = raw.targetAssetId;
+  const targetAssetId = kind === "cover" && typeof targetAssetRaw === "string" && targetAssetRaw.trim() !== "" ? targetAssetRaw.trim() : null;
 
   // Note: no blocking getFile validation here — the file_id comes from Telegram
   // directly (group media list) or is forward-resolved below, and the check
@@ -128,7 +130,17 @@ export async function handleLinkRequest(
     const nextVersion = currentVersion + 1;
     const actorUserId = (user as unknown as { id?: string }).id ?? null;
 
-    if (kind === "highlight" || kind === "reel" || kind === "clean" || (kind === "cover" && coverTarget)) {
+    if (kind === "highlight" || kind === "reel" || kind === "clean" || (kind === "cover" && (coverTarget || targetAssetId))) {
+      if (targetAssetId) {
+        const [target] = await deps.db
+          .select({ id: contentPartAssets.id, partId: contentPartAssets.partId })
+          .from(contentPartAssets)
+          .where(eq(contentPartAssets.id, targetAssetId))
+          .limit(1);
+        if (!target || target.partId !== id) {
+          return jsonError("برش/ریلز هدف در همین قسمت یافت نشد.", 422, "INVALID_TARGET_ASSET");
+        }
+      }
       const assetId = generateEntityId("CPP");
       const [asset] = await deps.db
         .insert(contentPartAssets)
@@ -139,6 +151,7 @@ export async function handleLinkRequest(
           fileRef: storedRef,
           fileName: fileName ?? (fileId ? `${kind}_${messageId}` : `video_${messageId}`),
           targetKind: coverTarget,
+          targetAssetId,
           createdBy: actorUserId,
           createdAt: now,
         } as never)
@@ -166,7 +179,7 @@ export async function handleLinkRequest(
         } as never);
       } catch {}
 
-      return jsonOk({ part: updated ?? part, asset, fileRef: storedRef, kind, targetKind: coverTarget, messageId });
+      return jsonOk({ part: updated ?? part, asset, fileRef: storedRef, kind, targetKind: coverTarget, targetAssetId, messageId });
     }
 
     // video / cover -> update single column

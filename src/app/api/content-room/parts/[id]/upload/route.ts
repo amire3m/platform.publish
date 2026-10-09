@@ -76,6 +76,8 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     typeRaw === "cover" && typeof targetKindRaw === "string" && ["youtube_full", "highlight", "reel"].includes(targetKindRaw)
       ? (targetKindRaw as "youtube_full" | "highlight" | "reel")
       : null;
+  const targetAssetRaw = form.get("targetAssetId");
+  const coverAssetId = typeRaw === "cover" && typeof targetAssetRaw === "string" && targetAssetRaw.trim() !== "" ? targetAssetRaw.trim() : null;
 
   if (!(file instanceof File)) return jsonError("فایل ارسال نشده است.", 400, "FILE_REQUIRED");
   const type = typeof typeRaw === "string" ? typeRaw : "";
@@ -201,9 +203,20 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     const currentVersion = (part as unknown as { version?: number }).version ?? 1;
     const nextVersion = currentVersion + 1;
 
-    if (type === "highlight" || type === "reel" || type === "clean" || (type === "cover" && coverTarget)) {
+    if (type === "highlight" || type === "reel" || type === "clean" || (type === "cover" && (coverTarget || coverAssetId))) {
       const kind = type;
       const { contentPartAssets } = await import("@/db/schema");
+      if (coverAssetId) {
+        const { eq } = await import("drizzle-orm");
+        const [target] = await db
+          .select({ id: contentPartAssets.id, partId: contentPartAssets.partId })
+          .from(contentPartAssets)
+          .where(eq(contentPartAssets.id, coverAssetId))
+          .limit(1);
+        if (!target || target.partId !== id) {
+          return jsonError("برش/ریلز هدف در همین قسمت یافت نشد.", 422, "INVALID_TARGET_ASSET");
+        }
+      }
       const assetId = generateEntityId("CPP");
       const [asset] = await db
         .insert(contentPartAssets)
@@ -214,6 +227,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
           fileRef: storedRef,
           fileName: file.name,
           targetKind: coverTarget,
+          targetAssetId: coverAssetId,
           createdBy: (user as unknown as { id?: string }).id ?? null,
           createdAt: now,
         } as never)
@@ -251,7 +265,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
           createdAt: now,
         } as never);
       } catch {}
-      return jsonOk({ part: updated, asset, telegramFileId: fileId, telegramMessageId: messageId, type, targetKind: coverTarget });
+      return jsonOk({ part: updated, asset, telegramFileId: fileId, telegramMessageId: messageId, type, targetKind: coverTarget, targetAssetId: coverAssetId });
     }
 
     const filePatch: Record<string, string> = type === "video" ? { fileRef: storedRef } : { coverFileRef: storedRef };

@@ -35,6 +35,7 @@ import {
   timestamp,
   uniqueIndex,
   varchar,
+  type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 
 // ---------------------------------------------------------------------------
@@ -724,7 +725,7 @@ export const contentPartAssets = pgTable(
     fileRef: text("file_ref").notNull(),
     fileName: text("file_name"),
     targetKind: text("target_kind"), // for kind=cover: youtube_full | highlight | reel | null
-    createdBy: text("created_by"),
+    targetAssetId: text("target_asset_id").references((): AnyPgColumn => contentPartAssets.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => ({

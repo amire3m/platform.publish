@@ -143,14 +143,17 @@ async function loadPartAssets(
       .from(contentPartAssets)
       .where(inArray(contentPartAssets.partId, partIds))
       .orderBy(asc(contentPartAssets.createdAt))) as unknown as Array<{
+      id: string;
       partId: string;
       kind: string;
       fileRef: string;
+      targetKind: string | null;
+      targetAssetId: string | null;
       createdAt: Date;
     }>;
-    const out: Record<string, Array<{ kind: string; fileRef: string; createdAt: Date }>> = {};
+    const out: Record<string, Array<{ id: string; kind: string; fileRef: string; targetKind: string | null; targetAssetId: string | null; createdAt: Date }>> = {};
     for (const r of rows) {
-      (out[r.partId] ??= []).push({ kind: r.kind, fileRef: r.fileRef, createdAt: r.createdAt });
+      (out[r.partId] ??= []).push({ id: r.id, kind: r.kind, fileRef: r.fileRef, targetKind: r.targetKind ?? null, targetAssetId: r.targetAssetId ?? null, createdAt: r.createdAt });
     }
     return out;
   } catch {
@@ -291,14 +294,22 @@ export function createContentRoomService(options: {
         const rows = (assetsByPart[partId] ?? []).filter((a) => a.kind === kind);
         return rows.length > 0 ? rows[rows.length - 1].fileRef : null;
       };
-      // Cover for a specific output: exact target match → untargeted cover → part main cover
-      const coverForKind = (partId: string, target: string, partCover: string | null): string | null => {
+      // Cover for a specific output: exact asset match → kind match → untargeted → part main cover
+      const coverForKind = (partId: string, target: string, partCover: string | null, targetAssetId?: string | null): string | null => {
         const rows = (assetsByPart[partId] ?? []).filter((a) => a.kind === "cover");
+        if (targetAssetId) {
+          const pinned = rows.filter((a) => (a as unknown as { targetAssetId?: string | null }).targetAssetId === targetAssetId);
+          if (pinned.length > 0) return pinned[pinned.length - 1].fileRef;
+        }
         const exact = rows.filter((a) => (a as unknown as { targetKind?: string | null }).targetKind === target);
         if (exact.length > 0) return exact[exact.length - 1].fileRef;
         const untargeted = rows.filter((a) => !(a as unknown as { targetKind?: string | null }).targetKind);
         if (untargeted.length > 0) return untargeted[untargeted.length - 1].fileRef;
         return partCover;
+      };
+      const latestVideoAssetId = (partId: string, kind: "highlight" | "reel"): string | null => {
+        const rows = (assetsByPart[partId] ?? []).filter((a) => a.kind === kind);
+        return rows.length > 0 ? (rows[rows.length - 1] as unknown as { id: string }).id ?? null : null;
       };
 
       // Build lookup: partId+kind -> override, and partId -> schedule, and partId+kind -> schedule
@@ -336,7 +347,9 @@ export function createContentRoomService(options: {
           // Cover is thumbnail-only: ready if file exists, but no publication
           const isCover = kindDef.kind === COVER_KIND;
           const overrideFull = override as unknown as { publishToInstagram?: boolean; youtubeAccountId?: string | null; instagramAccountId?: string | null; coverFileRef?: string | null } | undefined;
-          const coverPick = (overrideFull?.coverFileRef?.trim() || null) ?? (isCover ? null : coverForKind(part.id, kindDef.kind, part.coverFileRef ?? null));
+          const coverPick =
+            (overrideFull?.coverFileRef?.trim() || null) ??
+            (isCover ? null : coverForKind(part.id, kindDef.kind, part.coverFileRef ?? null, kindDef.kind === "highlight" || kindDef.kind === "reel" ? latestVideoAssetId(part.id, kindDef.kind) : null));
           const deliverable: WorkflowDeliverableRecord = {
             id: deliverableId,
             programId,

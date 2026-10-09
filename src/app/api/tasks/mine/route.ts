@@ -2,6 +2,7 @@ import { and, desc, eq, gte, inArray, isNotNull, isNull } from "drizzle-orm";
 import { db } from "@/db";
 import {
   contentPartActivities,
+  contentPartAssets,
   contentParts,
   contentProducts,
   users,
@@ -12,7 +13,7 @@ import {
 import { requireUser, jsonOk } from "@/lib/api-helpers";
 import { normalizeJobFunctions } from "@/lib/job-functions";
 import { isChannelHidden, getChannelLabelFa } from "@/lib/channels";
-import { buildChecklistTasks, isTasksAdmin, type PartTaskInput } from "@/lib/tasks";
+import { buildAssetCoverTasks, buildChecklistTasks, isTasksAdmin, type AssetCoverInput, type PartTaskInput } from "@/lib/tasks";
 
 /**
  * Task queue for the signed-in user.
@@ -204,10 +205,65 @@ export async function GET(req: Request) {
     perPerson.set(r.completedBy, e);
   }
 
+  // --- graphic queue: highlight/reel assets with no pinned cover ---
+  // (includes already-published products: their YouTube versions still need thumbnails)
+  let assetCovers: ReturnType<typeof buildAssetCoverTasks> = [];
+  if (productIds.length && (admin || jobs.includes("graphic"))) {
+    const gParts = (await db
+      .select({ id: contentParts.id, productId: contentParts.productId, partNumber: contentParts.partNumber })
+      .from(contentParts)
+      .where(and(inArray(contentParts.productId, productIds), eq(contentParts.isActive, true)))
+      .limit(2000)) as unknown as Array<{ id: string; productId: string; partNumber: number }>;
+    const gPartIds = gParts.map((r) => r.id);
+    const gPartById = new Map(gParts.map((r) => [r.id, r]));
+    if (gPartIds.length) {
+      const gAssets = (await db
+        .select({
+          id: contentPartAssets.id,
+          partId: contentPartAssets.partId,
+          kind: contentPartAssets.kind,
+          fileName: contentPartAssets.fileName,
+          targetAssetId: contentPartAssets.targetAssetId,
+        })
+        .from(contentPartAssets)
+        .where(inArray(contentPartAssets.partId, gPartIds))
+        .limit(3000)) as unknown as Array<{
+        id: string;
+        partId: string;
+        kind: string;
+        fileName: string | null;
+        targetAssetId: string | null;
+      }>;
+      const covered = new Set(gAssets.filter((a) => a.kind === "cover" && a.targetAssetId).map((a) => a.targetAssetId as string));
+      const orderIdx = new Map(productIds.map((id, i) => [id, i]));
+      const inputs: AssetCoverInput[] = [];
+      for (const a of gAssets) {
+        if (a.kind !== "highlight" && a.kind !== "reel") continue;
+        const part = gPartById.get(a.partId);
+        const prod = part ? productById.get(part.productId) : undefined;
+        if (!part || !prod) continue;
+        inputs.push({
+          assetId: a.id,
+          assetKind: a.kind,
+          assetLabel: a.fileName || (a.kind === "highlight" ? "برش" : "ریلز"),
+          partId: part.id,
+          productId: part.productId,
+          productTitle: prod.title,
+          channel: prod.channel,
+          channelLabel: getChannelLabelFa(prod.channel),
+          partNumber: part.partNumber,
+        });
+      }
+      inputs.sort((x, y) => (orderIdx.get(x.productId) ?? 9999) - (orderIdx.get(y.productId) ?? 9999));
+      assetCovers = buildAssetCoverTasks(inputs, covered);
+    }
+  }
+
   return jsonOk({
     jobs,
     isAdmin: admin,
     checklist: checklist.slice(0, 300),
+    assetCovers: assetCovers.slice(0, 300),
     publications: publications.slice(0, 200),
     today: [...perPerson.values()].sort((a, b) => b.count - a.count),
     todayTotal: todayRows.length,

@@ -43,10 +43,25 @@ interface TodayPerson {
   count: number;
 }
 
+interface AssetCoverTask {
+  kind: "asset_cover";
+  assetId: string;
+  assetKind: string;
+  assetLabel: string;
+  partId: string;
+  productId: string;
+  productTitle: string;
+  channel: string;
+  channelLabel: string;
+  partNumber: number;
+  href: string;
+}
+
 interface TasksResponse {
   jobs: JobFunction[];
   isAdmin: boolean;
   checklist: ChecklistTask[];
+  assetCovers: AssetCoverTask[];
   publications: PublicationTask[];
   today: TodayPerson[];
   todayTotal: number;
@@ -65,9 +80,12 @@ const PUB_STATUS_FA: Record<string, string> = {
   waiting_for_production: "منتظر تولید",
 };
 
-function JobSection({ job, tasks }: { job: JobFunction; tasks: ChecklistTask[] }) {
+function JobSection({ job, tasks, assetTasks }: { job: JobFunction; tasks: ChecklistTask[]; assetTasks?: AssetCoverTask[] }) {
   const [done, setDone] = useState<Record<string, boolean>>({});
+  const [doneAssets, setDoneAssets] = useState<Record<string, boolean>>({});
   const visible = tasks.filter((t) => !done[`${t.partId}:${t.activity}`]);
+  const visibleAssets = (assetTasks ?? []).filter((t) => !doneAssets[t.assetId]);
+  const total = visible.length + visibleAssets.length;
   return (
     <Card className="p-0 overflow-hidden">
       <div className="p-4 border-b border-tg-border flex items-center justify-between">
@@ -75,15 +93,39 @@ function JobSection({ job, tasks }: { job: JobFunction; tasks: ChecklistTask[] }
           <ListTodo className="h-4 w-4 text-tg-accent" />
           {JOB_FUNCTION_LABELS_FA[job]}
         </h2>
-        <span className="text-xs text-tg-secondary">{visible.length} کار باز</span>
+        <span className="text-xs text-tg-secondary">{total} کار باز</span>
       </div>
-      {visible.length === 0 ? (
+      {total === 0 ? (
         <p className="p-4 text-sm text-tg-secondary flex items-center gap-1.5">
           <CheckCircle2 className="h-4 w-4 text-emerald-500" />
           چیزی برای این سمت باقی نمانده است.
         </p>
       ) : (
         <ul className="divide-y divide-tg-border">
+          {visibleAssets.map((t) => (
+            <li key={t.assetId} className="p-3 flex items-center gap-3 bg-amber-500/5">
+              <input
+                type="checkbox"
+                checked={false}
+                onChange={() => setDoneAssets((d) => ({ ...d, [t.assetId]: true }))}
+                title="پنهان‌کردن موقت از این فهرست"
+                aria-label={`پنهان‌کردن ${t.assetLabel}`}
+                className="h-4 w-4 shrink-0 rounded border-tg-border text-tg-accent focus:ring-tg-accent"
+              />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium text-tg-text">
+                  {t.productTitle} · قسمت {t.partNumber} · {t.assetKind === "highlight" ? "برش" : "ریلز"}: {t.assetLabel}
+                </p>
+                <p className="text-xs text-tg-secondary">
+                  {t.channelLabel} — این {t.assetKind === "highlight" ? "برش" : "ریلز"} هنوز کاور مخصوص ندارد (برای یوتیوب لازم است)
+                </p>
+              </div>
+              <Link href={t.href} className="inline-flex shrink-0 items-center gap-1 text-xs text-tg-accent hover:underline">
+                باز کردن
+                <ExternalLink className="h-3 w-3" />
+              </Link>
+            </li>
+          ))}
           {visible.map((t) => (
             <li key={`${t.partId}:${t.activity}`} className="p-3 flex items-center gap-3">
               <input
@@ -177,7 +219,7 @@ export default function TasksPage() {
 
       <div className="grid gap-4">
         {jobs.filter((j) => j !== "publisher_admin").map((job) => (
-          <JobSection key={job} job={job} tasks={byJob(job)} />
+          <JobSection key={job} job={job} tasks={byJob(job)} assetTasks={job === "graphic" ? (data.assetCovers ?? []) : undefined} />
         ))}
       </div>
 

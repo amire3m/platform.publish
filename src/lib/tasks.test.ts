@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildChecklistTasks, isTasksAdmin, type PartTaskInput } from "./tasks";
+import { buildAssetCoverTasks, buildChecklistTasks, isTasksAdmin, type PartTaskInput } from "./tasks";
 
 function part(overrides: Partial<PartTaskInput> = {}): PartTaskInput {
   return {
@@ -49,6 +49,28 @@ describe("buildChecklistTasks", () => {
     );
     expect(tasks[0].activity).toBe("yt_check_upload");
     expect(tasks[0].remainingForJob).toBe(4);
+  });
+});
+
+describe("buildAssetCoverTasks", () => {
+  const asset = {
+    assetId: "AST-1",
+    assetKind: "highlight",
+    assetLabel: "برش اول",
+    partId: "CPP-1",
+    productId: "CPR-1",
+    productTitle: "X",
+    channel: "zed_revayat",
+    channelLabel: "ضد روایت",
+    partNumber: 2,
+  };
+  it("flags assets with no pinned cover, including published products", () => {
+    const tasks = buildAssetCoverTasks([asset], new Set());
+    expect(tasks).toHaveLength(1);
+    expect(tasks[0].href).toBe("/content-room/CPR-1");
+  });
+  it("skips assets that already have a pinned cover", () => {
+    expect(buildAssetCoverTasks([asset], new Set(["AST-1"]))).toHaveLength(0);
   });
 });
 

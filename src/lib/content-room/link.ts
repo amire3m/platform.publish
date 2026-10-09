@@ -18,6 +18,8 @@ export interface LinkPartMediaOptions {
   source: "api" | "telegram";
   /** For kind=cover: which output this cover belongs to (else legacy single part cover). */
   targetKind?: "youtube_full" | "highlight" | "reel" | null;
+  /** For kind=cover: the exact highlight/reel asset this cover belongs to. */
+  targetAssetId?: string | null;
 }
 
 export interface LinkPartMediaResult {
@@ -36,7 +38,16 @@ export async function linkPartMedia(opts: LinkPartMediaOptions): Promise<LinkPar
   const nextVersion = currentVersion + 1;
 
   const coverTarget = kind === "cover" ? (opts.targetKind ?? null) : null;
-  if (kind === "highlight" || kind === "reel" || kind === "clean" || (kind === "cover" && coverTarget)) {
+  const coverAsset = kind === "cover" ? (opts.targetAssetId ?? null) : null;
+  if (coverAsset) {
+    const [target] = await db
+      .select({ id: contentPartAssets.id, partId: contentPartAssets.partId })
+      .from(contentPartAssets)
+      .where(eq(contentPartAssets.id, coverAsset))
+      .limit(1);
+    if (!target || target.partId !== partId) throw new Error("برش/ریلز هدف در همین قسمت یافت نشد.");
+  }
+  if (kind === "highlight" || kind === "reel" || kind === "clean" || (kind === "cover" && (coverTarget || coverAsset))) {
     const assetId = generateEntityId("CPP");
     await db.insert(contentPartAssets).values({
       id: assetId,
@@ -45,6 +56,7 @@ export async function linkPartMedia(opts: LinkPartMediaOptions): Promise<LinkPar
       fileRef: storedRef,
       fileName: fileName ?? `${kind}_${messageId}`,
       targetKind: coverTarget,
+      targetAssetId: coverAsset,
       createdBy: actorUserId,
       createdAt: now,
     } as never);
@@ -56,7 +68,7 @@ export async function linkPartMedia(opts: LinkPartMediaOptions): Promise<LinkPar
         entityId: partId,
         action: "linked_from_telegram",
         before: { kind, file_ref: null } as unknown as Record<string, unknown>,
-        after: { kind, targetKind: coverTarget, messageId, fileId: storedRef, fileName: fileName ?? null, assetId, version: nextVersion } as unknown as Record<string, unknown>,
+        after: { kind, targetKind: coverTarget, targetAssetId: coverAsset, messageId, fileId: storedRef, fileName: fileName ?? null, assetId, version: nextVersion } as unknown as Record<string, unknown>,
         actorUserId,
         source,
         reason: null,

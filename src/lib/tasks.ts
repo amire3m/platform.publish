@@ -84,3 +84,59 @@ export function isTasksAdmin(role: string | null | undefined, jobsRaw: unknown):
   if (role === "owner" || role === "manager") return true;
   return normalizeJobFunctions(jobsRaw).includes("publisher_admin");
 }
+
+export interface AssetCoverInput {
+  assetId: string;
+  assetKind: string;
+  assetLabel: string;
+  partId: string;
+  productId: string;
+  productTitle: string;
+  channel: string;
+  channelLabel: string;
+  partNumber: number;
+}
+
+export interface AssetCoverTask {
+  kind: "asset_cover";
+  job: "graphic";
+  jobLabel: string;
+  assetId: string;
+  assetKind: string;
+  assetLabel: string;
+  partId: string;
+  productId: string;
+  productTitle: string;
+  channel: string;
+  channelLabel: string;
+  partNumber: number;
+  href: string;
+}
+
+/**
+ * One task per highlight/reel asset that has no cover yet — including parts
+ * of already-published products (their YouTube versions still need thumbnails).
+ */
+export function buildAssetCoverTasks(assets: AssetCoverInput[], coveredAssetIds: Set<string> | ReadonlySet<string>): AssetCoverTask[] {
+  const covered = coveredAssetIds;
+  const out: AssetCoverTask[] = [];
+  for (const a of assets) {
+    if (covered.has(a.assetId)) continue;
+    out.push({
+      kind: "asset_cover",
+      job: "graphic",
+      jobLabel: "گرافیست",
+      assetId: a.assetId,
+      assetKind: a.assetKind,
+      assetLabel: a.assetLabel,
+      partId: a.partId,
+      productId: a.productId,
+      productTitle: a.productTitle,
+      channel: a.channel,
+      channelLabel: a.channelLabel,
+      partNumber: a.partNumber,
+      href: `/content-room/${a.productId}`,
+    });
+  }
+  return out;
+}

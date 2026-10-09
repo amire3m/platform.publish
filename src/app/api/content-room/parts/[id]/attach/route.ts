@@ -86,6 +86,9 @@ export async function POST(req: Request) {
         kind === "cover" && typeof targetRaw === "string" && ["youtube_full", "highlight", "reel"].includes(targetRaw)
           ? (targetRaw as "youtube_full" | "highlight" | "reel")
           : null;
+      const targetAssetRaw = (body as { targetAssetId?: unknown }).targetAssetId;
+      const targetAssetId =
+        kind === "cover" && typeof targetAssetRaw === "string" && targetAssetRaw.trim() !== "" ? targetAssetRaw.trim() : null;
       const result = await linkPartMedia({
         partId: body.partId,
         kind,
@@ -95,6 +98,7 @@ export async function POST(req: Request) {
         actorUserId: actor.id ?? null,
         source: "api",
         targetKind,
+        targetAssetId,
       });
       return jsonOk({ mode: "linked", storedRef: result.storedRef, resolved: !!fileId });
     }

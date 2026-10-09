@@ -42,7 +42,7 @@ WHERE target.part_id = src.part_id
   AND src.activity = 'editing_full_done'
   AND src.is_done = true;
 -- 3) Drop legacy rows (must precede the tightened CHECK)
-DELETE FROM content_part_activities WHERE activity IN ('raw_done','editing_full_done','editing_youtube');
+DELETE FROM content_part_activities WHERE activity IN ('raw_done','copyright_fix','editing_full_done','editing_youtube');
 -- 4) Add the tightened CHECK to the pipeline list (old rows already deleted above)
 ALTER TABLE content_part_activities ADD CONSTRAINT content_part_activities_activity_check CHECK (activity IN ('raw_telegram','raw_compressed','yt_check_upload','copyright_report','music_replaced','final_full','cover_ready','highlight_done','reel_done','previously_published'));
 -- 5) Optional per-part YouTube check-upload URL (unlisted check video)

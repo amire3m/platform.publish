@@ -1,12 +1,21 @@
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { rm, stat } from "node:fs/promises";
 import { dirname } from "node:path";
 import { db } from "@/db";
-import { mediaAssets, mediaRevisions, mediaStorageObjects, mediaUploadSessions } from "@/db/schema";
+import {
+  contentPartAssets,
+  contentParts,
+  mediaAssets,
+  mediaRevisions,
+  mediaStorageObjects,
+  mediaUploadSessions,
+  workflowEvents,
+} from "@/db/schema";
 import { jsonError, jsonInternalError, jsonOk, requirePermission } from "@/lib/api-helpers";
 import { generateEntityId } from "@/lib/ids";
-import { sha256File } from "@/lib/media/bundles";
-import { materializeStagingToTelegram } from "@/lib/media/telegram-materialize";
+import { bundleIdOf, isBundleRef, sha256File } from "@/lib/media/bundles";
+import { partLinkageFor } from "@/lib/media/part-linkage";
+import { materializeStagingToTelegram, type MaterializedPart } from "@/lib/media/telegram-materialize";
 import { nextMissingChunk } from "@/lib/media/upload-sessions";
 import { getTelegramConfig } from "@/lib/telegram/client";
 import { stagingPath } from "../chunks/route";
@@ -20,6 +29,7 @@ export interface CompleteResult {
   size: number;
   sha256: string;
   telegramFileRef: string;
+  linked: { partId: string; kind: string } | null;
 }
 
 export interface CompleteStore {
@@ -52,6 +62,17 @@ const dbCompleteStore: CompleteStore = {
       throw Object.assign(new Error("اندازه فایل با مقدار اعلام‌شده مطابقت ندارد."), { code: "SIZE_MISMATCH" });
     }
     const sha = await sha256File(path);
+
+    // Validate the bound part BEFORE touching Telegram so a bad partId
+    // never leaves an orphaned upload. Session stays open on failure.
+    const partId = (session.partId as string | null) ?? null;
+    const kind = ((session.kind as string | null) ?? "final") as string;
+    if (partId) {
+      const [part] = await db.select({ id: contentParts.id }).from(contentParts).where(eq(contentParts.id, partId)).limit(1);
+      if (!part) {
+        throw Object.assign(new Error("قسمت یافت نشد."), { code: "NOT_FOUND" });
+      }
+    }
 
     // Telegram is the phase-1 byte backend: materialize staging → Telegram
     // BEFORE creating the revision. Failures keep the session open for retry.
@@ -130,6 +151,82 @@ const dbCompleteStore: CompleteStore = {
       .update(mediaAssets)
       .set({ currentRevisionId: revisionId, status: "ready", updatedAt: new Date() } as never)
       .where(eq(mediaAssets.id, assetId));
+    // Link the revision into the part's playable surface so library
+    // listings, playback, and mirrors pick it up like any other upload.
+    let linked: { partId: string; kind: string } | null = null;
+    if (partId) {
+      const fileName = (session.fileName as string) || "upload.bin";
+      const now = new Date();
+      const bundled = isBundleRef(materialized.fileRef);
+      const writeBundleManifest = async (rowKind: string) => {
+        const bundleId = bundleIdOf(materialized.fileRef);
+        let idx = 0;
+        for (const m of materialized.manifest as MaterializedPart[]) {
+          idx++;
+          await db.insert(contentPartAssets).values({
+            id: generateEntityId("CPP"),
+            partId,
+            kind: rowKind,
+            fileRef: m.fileId,
+            fileName: `${fileName}.part${String(m.partIndex ?? idx).padStart(3, "0")}`,
+            bundleId,
+            partIndex: m.partIndex ?? idx,
+            partTotal: m.partTotal ?? materialized.partCount,
+            fileHash: m.hash,
+            createdBy: actorId,
+            createdAt: now,
+          } as never);
+        }
+      };
+      const target = partLinkageFor(kind);
+      if (target === "part-asset") {
+        if (kind === "final") {
+          await db.delete(contentPartAssets).where(and(eq(contentPartAssets.partId, partId), eq(contentPartAssets.kind, "final")));
+        }
+        if (bundled) {
+          await writeBundleManifest(kind);
+        } else {
+          await db.insert(contentPartAssets).values({
+            id: generateEntityId("CPP"),
+            partId,
+            kind,
+            fileRef: materialized.fileRef,
+            fileName,
+            createdBy: actorId,
+            createdAt: now,
+          } as never);
+        }
+      } else {
+        if (bundled) {
+          await writeBundleManifest(kind);
+        }
+        const slot = target === "part-file" ? { fileRef: materialized.fileRef } : { coverFileRef: materialized.fileRef };
+        await db
+          .update(contentParts)
+          .set({ ...slot, version: sql`${contentParts.version} + 1`, updatedAt: now } as never)
+          .where(eq(contentParts.id, partId));
+      }
+      try {
+        await db.insert(workflowEvents).values({
+          id: generateEntityId("WEV"),
+          entityType: "content_part",
+          entityId: partId,
+          action: "file_updated",
+          before: { kind, file_ref: null } as unknown as Record<string, unknown>,
+          after: { kind, fileRef: materialized.fileRef, revisionId, version } as unknown as Record<string, unknown>,
+          actorUserId: actorId,
+          source: "api",
+          reason: null,
+          createdAt: now,
+        } as never);
+      } catch {}
+      if (!bundled) {
+        const { maybeMirrorAfterLink } = await import("@/lib/mirrors/job");
+        void maybeMirrorAfterLink({ partId, kind, fileId: materialized.fileRef });
+      }
+      linked = { partId, kind };
+    }
+
     await db
       .update(mediaUploadSessions)
       .set({ status: "complete", updatedAt: new Date() } as never)
@@ -139,7 +236,7 @@ const dbCompleteStore: CompleteStore = {
     // cleanup; the retention sweep reaps anything left behind.
     await rm(dirname(path), { recursive: true, force: true }).catch(() => {});
 
-    return { assetId, revisionId, version, size: st.size, sha256: sha, telegramFileRef: materialized.fileRef };
+    return { assetId, revisionId, version, size: st.size, sha256: sha, telegramFileRef: materialized.fileRef, linked };
   },
 };
 

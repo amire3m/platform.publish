@@ -679,7 +679,7 @@ function PartUploadCard({
 
   const hasVideo = Boolean(part.fileRef);
   const hasCover = Boolean(part.coverFileRef);
-  const { data: assetsData, mutate: mutateAssets } = useSWR<{ ok: boolean; data: { assets: Array<{ id: string; kind: string; fileRef: string; fileName: string | null; targetKind?: string | null; targetAssetId?: string | null; createdAt: string }> } }>(
+  const { data: assetsData, mutate: mutateAssets } = useSWR<{ ok: boolean; data: { assets: Array<{ id: string; kind: string; fileRef: string; fileName: string | null; targetKind?: string | null; targetAssetId?: string | null; createdAt: string }>; bundles?: Array<{ bundleId: string; kind: string; parts: number }> } }>(
     `/api/content-room/parts/${part.id}/assets`,
     async (url: string) => {
       const res = await fetch(url);
@@ -694,6 +694,14 @@ function PartUploadCard({
   const reports = assetsData?.data?.assets?.filter((a) => a.kind === "report") ?? [];
   const hasFinal = finals.length > 0;
   const hasReport = reports.length > 0;
+  const bundles = assetsData?.data?.bundles ?? [];
+  const bundleOf = (kind: string): { bundleId: string; kind: string; parts: number } | undefined =>
+    bundles.find((b) => b.kind === kind);
+  const bundleBadge = (kind: string): ReactNode => {
+    const b = bundleOf(kind);
+    if (!b) return null;
+    return <p className="text-[11px] text-emerald-600">فایل چندپارچه ✓ ({b.parts} پارت، سرهم‌بندی خودکار)</p>;
+  };
 
   const coverAssets = assetsData?.data?.assets?.filter((a) => a.kind === "cover") ?? [];
   const [coverTarget, setCoverTarget] = useState<"" | "youtube_full" | "highlight" | "reel">("");
@@ -919,16 +927,17 @@ function PartUploadCard({
     setUploadSpeed(0);
     onError(null);
     try {
-      const form = new FormData();
-      form.set("file", file);
-      form.set("type", type);
-      if (type === "cover" && coverTarget) form.set("targetKind", coverTarget);
-      if (type === "cover" && coverAsset) form.set("targetAssetId", coverAsset);
-      if (part.version) form.set("expectedVersion", String(part.version));
+      // Raw octet-stream body + metadata in query: the server streams straight
+      // to disk and then to Telegram — RAM stays flat even for 2GB files.
+      const qs = new URLSearchParams({ type, filename: file.name, mime: file.type || "" });
+      if (type === "cover" && coverTarget) qs.set("targetKind", coverTarget);
+      if (type === "cover" && coverAsset) qs.set("targetAssetId", coverAsset);
+      if (part.version) qs.set("expectedVersion", String(part.version));
       const body = await new Promise<{ ok: boolean; error?: string }>((resolve, reject) => {
         const xhr = new XMLHttpRequest();
         xhrRef.current = xhr;
-        xhr.open("POST", `/api/content-room/parts/${part.id}/upload`);
+        xhr.open("POST", `/api/content-room/parts/${part.id}/upload?${qs.toString()}`);
+        xhr.setRequestHeader("Content-Type", "application/octet-stream");
         let lastLoaded = 0;
         let lastTime = Date.now();
         xhr.upload.onprogress = (e) => {
@@ -968,7 +977,7 @@ function PartUploadCard({
           xhrRef.current = null;
           reject(new Error("اتمام زمان آپلود"));
         };
-        xhr.send(form);
+        xhr.send(file);
       });
       if (!body.ok) {
         throw new Error(body.error ?? "خطا در آپلود");
@@ -1233,6 +1242,16 @@ function PartUploadCard({
           <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${hasReport ? "bg-orange-500/15 text-orange-700" : "bg-slate-500/10 text-slate-500"}`}>
             {hasReport ? "گزارش ✓" : "بدون گزارش"}
           </span>
+          {typeof part.fileRef === "string" && part.fileRef.startsWith("bundle:") && (
+            <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-400">
+              ویدیو چندپارچه ✓
+            </span>
+          )}
+          {typeof part.coverFileRef === "string" && part.coverFileRef.startsWith("bundle:") && (
+            <span className="rounded-full bg-sky-500/15 px-2 py-0.5 text-[11px] font-medium text-sky-700 dark:text-sky-400">
+              کاور چندپارچه ✓
+            </span>
+          )}
           {(isStaffAdmin || myJobs.length > 0) && (
             <button
               type="button"
@@ -1399,6 +1418,7 @@ function PartUploadCard({
               <p className="text-[11px] text-emerald-600">{reports.length} اسکرین‌شات ثبت شده</p>
             </div>
           )}
+          {bundleBadge("report")}
         </StepPanel>
         )}
 
@@ -1443,6 +1463,7 @@ function PartUploadCard({
                 ))}
               </div>
             )}
+            {bundleBadge("final")}
           </UploadZone>
           {finalPreviewUrl && (
             <DedicatedPlayer src={finalPreviewUrl} title={finalFile?.name} className="aspect-video w-full" />
@@ -1558,6 +1579,7 @@ function PartUploadCard({
               <p className="text-[11px] text-emerald-600">{coverAssets.length} کاور مخصوص ثبت شده</p>
             </div>
           )}
+          {bundleBadge("cover")}
         </UploadZone>
         {coverPreviewUrl && !part.coverFileRef && (
           <div className="space-y-1">
@@ -1601,6 +1623,7 @@ function PartUploadCard({
               <p className="text-[11px] text-emerald-600">{highlights.length} برش ثبت شده</p>
             </div>
           )}
+          {bundleBadge("highlight")}
         </UploadZone>
         {highlightPreviewUrl && (
           <DedicatedPlayer src={highlightPreviewUrl} title={highlightFile?.name} className="aspect-video w-full" />
@@ -1641,6 +1664,7 @@ function PartUploadCard({
               <p className="text-[11px] text-emerald-600">{reels.length} ریلز ثبت شده</p>
             </div>
           )}
+          {bundleBadge("reel")}
         </UploadZone>
         {reelPreviewUrl && (
           <DedicatedPlayer src={reelPreviewUrl} title={reelFile?.name} className="aspect-video w-full" />

@@ -721,11 +721,15 @@ export const contentPartAssets = pgTable(
     partId: text("part_id")
       .notNull()
       .references(() => contentParts.id, { onDelete: "cascade" }),
-    kind: text("kind").notNull(), // highlight | reel | clean | cover
+    kind: text("kind").notNull(), // highlight | reel | clean | cover | final | report | video
     fileRef: text("file_ref").notNull(),
     fileName: text("file_name"),
     targetKind: text("target_kind"), // for kind=cover: youtube_full | highlight | reel | null
     targetAssetId: text("target_asset_id").references((): AnyPgColumn => contentPartAssets.id, { onDelete: "set null" }),
+    bundleId: text("bundle_id"),
+    partIndex: integer("part_index"),
+    partTotal: integer("part_total"),
+    fileHash: text("file_hash"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => ({

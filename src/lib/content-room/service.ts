@@ -290,13 +290,29 @@ export function createContentRoomService(options: {
 
       // Latest highlight/reel assets per part (stored in content_part_assets)
       const assetsByPart = await loadPartAssets(sortedParts.map((p) => p.id));
-      const latestAsset = (partId: string, kind: "highlight" | "reel" | "final"): string | null => {
-        const rows = (assetsByPart[partId] ?? []).filter((a) => a.kind === kind);
-        return rows.length > 0 ? rows[rows.length - 1].fileRef : null;
+      const singleAssets = (partId: string, kind: string) =>
+        (assetsByPart[partId] ?? []).filter((a) => a.kind === kind && !(a as unknown as { bundleId?: string | null }).bundleId);
+      // Newest multipart bundle for a kind (if any) → bundle:<id> marker
+      const bundleMarker = (partId: string, kind: string): string | null => {
+        const rows = (assetsByPart[partId] ?? []).filter(
+          (a) => a.kind === kind && !!(a as unknown as { bundleId?: string | null }).bundleId,
+        );
+        if (rows.length === 0) return null;
+        const bundleId = (rows[rows.length - 1] as unknown as { bundleId: string }).bundleId;
+        return `bundle:${bundleId}`;
       };
-      // Cover for a specific output: exact asset match → kind match → untargeted → part main cover
+      // Newest file for a kind across singles and bundles (by creation order)
+      const newestFile = (partId: string, kind: string): string | null => {
+        const rows = (assetsByPart[partId] ?? []).filter((a) => a.kind === kind);
+        if (rows.length === 0) return null;
+        const last = rows[rows.length - 1] as unknown as { fileRef: string; bundleId?: string | null };
+        return last.bundleId ? `bundle:${last.bundleId}` : last.fileRef;
+      };
+      // Cover for a specific output: bundle → exact asset match → kind match → untargeted → part main cover
       const coverForKind = (partId: string, target: string, partCover: string | null, targetAssetId?: string | null): string | null => {
-        const rows = (assetsByPart[partId] ?? []).filter((a) => a.kind === "cover");
+        const bundle = bundleMarker(partId, "cover");
+        if (bundle) return bundle;
+        const rows = singleAssets(partId, "cover");
         if (targetAssetId) {
           const pinned = rows.filter((a) => (a as unknown as { targetAssetId?: string | null }).targetAssetId === targetAssetId);
           if (pinned.length > 0) return pinned[pinned.length - 1].fileRef;
@@ -322,9 +338,9 @@ export function createContentRoomService(options: {
       for (const part of sortedParts) {
         for (const kindDef of DELIVERABLE_KINDS) {
           const fileRef = resolveDeliverableFileRef(kindDef.kind, {
-            fileRef: latestAsset(part.id, "final") ?? part.fileRef,
-            highlightFileRef: latestAsset(part.id, "highlight") ?? part.highlightFileRef ?? null,
-            reelFileRef: latestAsset(part.id, "reel") ?? part.reelFileRef ?? null,
+            fileRef: newestFile(part.id, "final") ?? part.fileRef,
+            highlightFileRef: newestFile(part.id, "highlight") ?? part.highlightFileRef ?? null,
+            reelFileRef: newestFile(part.id, "reel") ?? part.reelFileRef ?? null,
             coverFileRef: part.coverFileRef,
           });
           const override = overridesByKey.get(`${part.id}:${kindDef.kind}`) ?? overridesByPartLegacy.get(part.id) as unknown as { title?: string; description?: string; playlistId?: string | null; youtubeTitle?: string; youtubeDescription?: string; instagramCaption?: string } | undefined;

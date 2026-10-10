@@ -37,7 +37,8 @@ export function generateEntityId(
     | "LSC"
     | "LSE"
     | "LSI"
-    | "MUS",
+    | "MUS"
+    | "BDL",
 ): string {
   const { jy } = todayJalali();
   const suffix = prefix === "ANS" ? analyticsSnapshotSuffix() : legacySuffix();

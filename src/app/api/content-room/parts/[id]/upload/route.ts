@@ -4,7 +4,9 @@ import { contentParts } from "@/db/schema";
 import { jsonError, jsonInternalError, jsonOk } from "@/lib/api-helpers";
 import { hasPermission } from "@/lib/permissions";
 import { getCurrentUser } from "@/lib/auth";
-import { TelegramClient, TelegramNotConfiguredError } from "@/lib/telegram/client";
+import { contentTypeFromPath, getTelegramConfig } from "@/lib/telegram/client";
+import { cleanupUpload, sanitizeUploadFilename, saveUploadStream, sendFileViaCurl } from "@/lib/telegram/direct-upload";
+import { BUNDLE_MAX_BYTES, BUNDLE_PART_BYTES } from "@/lib/media/bundles";
 import { generateEntityId } from "@/lib/ids";
 
 export const runtime = "nodejs";
@@ -61,55 +63,49 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   const [part] = await db.select().from(contentParts).where(eq(contentParts.id, id)).limit(1);
   if (!part) return jsonError("قسمت یافت نشد.", 404, "NOT_FOUND");
 
-  let form: FormData;
-  try {
-    form = await req.formData();
-  } catch {
-    return jsonError("فرم نامعتبر است.", 400, "INVALID_FORM");
-  }
-
-  const file = form.get("file");
-  const typeRaw = form.get("type");
-  const expectedVersionRaw = form.get("expectedVersion");
-  const targetKindRaw = form.get("targetKind");
+  // Raw octet-stream body + metadata in query (streaming: never buffers the file in RAM)
+  const url = new URL(req.url);
+  const q = url.searchParams;
+  const type = q.get("type") ?? "";
+  const filename = sanitizeUploadFilename(q.get("filename") ?? "");
+  const clientMime = q.get("mime") ?? "";
+  const expectedVersionRaw = q.get("expectedVersion");
+  const targetKindRaw = q.get("targetKind");
   const coverTarget =
-    typeRaw === "cover" && typeof targetKindRaw === "string" && ["youtube_full", "highlight", "reel"].includes(targetKindRaw)
+    type === "cover" && ["youtube_full", "highlight", "reel"].includes(targetKindRaw ?? "")
       ? (targetKindRaw as "youtube_full" | "highlight" | "reel")
       : null;
-  const targetAssetRaw = form.get("targetAssetId");
-  const coverAssetId = typeRaw === "cover" && typeof targetAssetRaw === "string" && targetAssetRaw.trim() !== "" ? targetAssetRaw.trim() : null;
+  const targetAssetRaw = q.get("targetAssetId");
+  const coverAssetId = type === "cover" && targetAssetRaw && targetAssetRaw.trim() !== "" ? targetAssetRaw.trim() : null;
 
-  if (!(file instanceof File)) return jsonError("فایل ارسال نشده است.", 400, "FILE_REQUIRED");
-  const type = typeof typeRaw === "string" ? typeRaw : "";
   if (type !== "video" && type !== "cover" && type !== "highlight" && type !== "reel" && type !== "clean" && type !== "final" && type !== "report") {
     return jsonError("نوع فایل نامعتبر است.", 400, "INVALID_TYPE");
   }
-
-  // Validate size and mime
-  const mime = file.type || "";
-  const size = file.size;
   const isVideoType = type === "video" || type === "highlight" || type === "reel" || type === "clean" || type === "final";
-  const isImageType = type === "cover" || type === "report";
+  const maxBytes = isVideoType ? MAX_VIDEO_BYTES : MAX_COVER_BYTES;
 
-  if (isVideoType) {
-    if (size > MAX_VIDEO_BYTES) {
-      return jsonError("حجم ویدئو نباید بیش از ۲ گیگابایت باشد. فایل‌های بزرگ‌تر را فشرده یا کوتاه کنید.", 422, "FILE_TOO_LARGE");
-    }
-    if (!isVideoMime(mime)) {
-      return jsonError(`فرمت ویدئو پشتیبانی نمی‌شود: ${mime || "نامشخص"}. فرمت‌های مجاز: mp4، mov، avi، webm و mkv.`, 422, "INVALID_MIME");
-    }
-  } else {
-    if (size > MAX_COVER_BYTES) {
-      return jsonError("حجم کاور/اسکرین‌شات نباید بیش از ۱۰ مگابایت باشد.", 422, "FILE_TOO_LARGE");
-    }
-    if (!isImageMime(mime)) {
-      return jsonError(`فرمت کاور/اسکرین‌شات پشتیبانی نمی‌شود: ${mime || "نامشخص"}. فرمت‌های مجاز: jpeg و png.`, 422, "INVALID_MIME");
-    }
+  // Early size gate from Content-Length (browsers set it for Blob bodies)
+  const contentLength = Number(req.headers.get("content-length") ?? "0");
+  if (contentLength > maxBytes) {
+    return jsonError(
+      isVideoType ? "حجم ویدئو نباید بیش از ۲ گیگابایت باشد. فایل‌های بزرگ‌تر را فشرده یا کوتاه کنید." : "حجم کاور/اسکرین‌شات نباید بیش از ۱۰ مگابایت باشد.",
+      422,
+      "FILE_TOO_LARGE",
+    );
+  }
+
+  // Declared mime (authoritative re-check happens after save; extension fallback)
+  const mime = clientMime || contentTypeFromPath(filename) || "application/octet-stream";
+  if (isVideoType && !isVideoMime(mime)) {
+    return jsonError(`فرمت ویدئو پشتیبانی نمی‌شود: ${mime || "نامشخص"}. فرمت‌های مجاز: mp4، mov، avi، webm و mkv.`, 422, "INVALID_MIME");
+  }
+  if (!isVideoType && !isImageMime(mime)) {
+    return jsonError(`فرمت کاور/اسکرین‌شات پشتیبانی نمی‌شود: ${mime || "نامشخص"}. فرمت‌های مجاز: jpeg و png.`, 422, "INVALID_MIME");
   }
 
   // Optional version check
   let expectedVersion: number | null = null;
-  if (typeof expectedVersionRaw === "string" && expectedVersionRaw.trim() !== "") {
+  if (expectedVersionRaw && expectedVersionRaw.trim() !== "") {
     const parsed = Number(expectedVersionRaw);
     if (!Number.isInteger(parsed) || parsed < 1) {
       return jsonError("نسخه ارسالی نامعتبر است. صفحه را تازه‌سازی کنید و دوباره تلاش کنید.", 400, "INVALID_VERSION");
@@ -121,79 +117,143 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     }
   }
 
-  // Telegram client
-  let client: TelegramClient;
-  try {
-    client = TelegramClient.fromEnv();
-  } catch (err) {
-    if (err instanceof TelegramNotConfiguredError) {
-      return jsonError(
-        "اتصال تلگرام پیکربندی نشده است؛ آپلود فایل بدون مخزن تلگرام امکان‌پذیر نیست.",
-        400,
-        "TELEGRAM_NOT_CONFIGURED",
-      );
-    }
-    throw err;
+  // Telegram config
+  const tg = getTelegramConfig();
+  if (!tg) {
+    return jsonError(
+      "اتصال تلگرام پیکربندی نشده است؛ آپلود فایل بدون مخزن تلگرام امکان‌پذیر نیست.",
+      400,
+      "TELEGRAM_NOT_CONFIGURED",
+    );
   }
-
-  // برای فایل 2GB کل محتوا را در RAM کپی نکن — File خود Blob است
-  const uploadBlob: Blob = file;
+  const apiBase = process.env.TELEGRAM_BOT_API_SERVER_URL?.trim() || "https://api.telegram.org";
 
   // Copyright-report screenshots go to the dedicated "بررسی کپی‌رایت" topic
   // (configurable via REPORT_TOPIC_THREAD_ID, default 4).
-  const reportThreadId =
-    type === "report" ? Number(process.env.REPORT_TOPIC_THREAD_ID ?? 4) || 4 : undefined;
+  const reportThreadId = type === "report" ? Number(process.env.REPORT_TOPIC_THREAD_ID ?? 4) || 4 : undefined;
+  const reportCaption = type === "report" ? `گزارش کپی‌رایت — قسمت ${(part as unknown as { partNumber?: number }).partNumber ?? ""}` : undefined;
 
-  // Use existing telegram storage pattern: sendDocument to preserve raw bytes
+  // Stream body → temp file (constant memory), then curl → Telegram (streams from disk).
+  let tmp: { dir: string; path: string; bytes: number } | null = null;
   let fileId: string | null = null;
   let messageId: number | null = null;
+  let bundle: { id: string; total: number } | null = null;
+  let partUploads: Array<{ fileId: string; messageId: number | null; hash: string | null }> = [];
   try {
-    if (isVideoType) {
-      // Try sendVideo first, fall back to sendDocument (video/highlight/reel are all video)
+    try {
+      tmp = await saveUploadStream(req.body);
+    } catch {
+      return jsonError("بدنه درخواست خوانده نشد.", 400, "INVALID_BODY");
+    }
+    if (!tmp) return jsonError("بدنه درخواست خوانده نشد.", 400, "INVALID_BODY");
+    if (tmp.bytes === 0) return jsonError("فایل ارسال نشده است.", 400, "FILE_REQUIRED");
+    // Videos may exceed the 2GB single-shot cap (multipart failover up to 8GB total)
+    const totalCap = isVideoType ? BUNDLE_MAX_BYTES : maxBytes;
+    if (tmp.bytes > totalCap) {
+      return jsonError(
+        isVideoType ? "حجم ویدئو از سقف مجاز (۸ گیگابایت) بیشتر است." : "حجم کاور/اسکرین‌شات نباید بیش از ۱۰ مگابایت باشد.",
+        422,
+        "FILE_TOO_LARGE",
+      );
+    }
+    if (!isVideoType) {
       try {
-        const sent = await client.sendVideo(uploadBlob, file.name);
-        fileId = sent.video?.file_id ?? null;
-        messageId = sent.message_id;
+        const { default: sharp } = await import("sharp");
+        await sharp(tmp.path).metadata();
       } catch {
-        const sent = await client.sendDocument(uploadBlob, file.name);
-        fileId =
-          sent.document?.file_id ??
-          sent.video?.file_id ??
-          sent.audio?.file_id ??
-          sent.photo?.[0]?.file_id ??
-          null;
-        messageId = sent.message_id;
-      }
-      if (!fileId) {
-        // fallback to document
-        const sent = await client.sendDocument(uploadBlob, file.name);
-        fileId =
-          sent.document?.file_id ??
-          sent.video?.file_id ??
-          sent.audio?.file_id ??
-          sent.photo?.[0]?.file_id ??
-          null;
-        messageId = sent.message_id;
-      }
-    } else {
-      // cover/report: sendPhoto or sendDocument (report goes to the copyright-review topic)
-      const caption = type === "report" ? `گزارش کپی‌رایت — قسمت ${(part as unknown as { partNumber?: number }).partNumber ?? ""}` : undefined;
-      try {
-        const sent = await client.sendPhoto(uploadBlob, file.name, reportThreadId, caption);
-        fileId = sent.photo?.[0]?.file_id ?? String(sent.message_id);
-        messageId = sent.message_id;
-      } catch {
-        const sent = await client.sendDocument(uploadBlob, file.name, reportThreadId, caption);
-        fileId =
-          sent.document?.file_id ??
-          sent.photo?.[0]?.file_id ??
-          String(sent.message_id);
-        messageId = sent.message_id;
+        return jsonError("فایل تصویری معتبر نیست.", 422, "INVALID_MIME");
       }
     }
-  } catch (err) {
-    console.error("[content-room-upload] Telegram upload failed:", err);
-    return jsonError("ارسال فایل به Telegram انجام نشد. دوباره تلاش کنید.", 502, "TELEGRAM_UPLOAD_FAILED");
+    const sendOpts = {
+      apiBase,
+      token: tg.botToken,
+      groupId: tg.groupId,
+      filePath: tmp.path,
+      filename,
+      mime,
+      threadId: reportThreadId,
+      caption: reportCaption,
+    };
+    // Single upload first; multipart failover (500MB raw parts + manifest) only when
+    // the file cannot go as one piece (>2GB Telegram cap) or the single shot fails.
+    const singleShot = async (): Promise<void> => {
+      if (isVideoType) {
+        try {
+          ({ fileId, messageId } = await sendFileViaCurl({ ...sendOpts, method: "sendVideo", field: "video" }));
+        } catch {
+          ({ fileId, messageId } = await sendFileViaCurl({ ...sendOpts, method: "sendDocument", field: "document" }));
+        }
+        if (!fileId) {
+          ({ fileId, messageId } = await sendFileViaCurl({ ...sendOpts, method: "sendDocument", field: "document" }));
+        }
+      } else {
+        try {
+          ({ fileId, messageId } = await sendFileViaCurl({ ...sendOpts, method: "sendPhoto", field: "photo" }));
+        } catch {
+          ({ fileId, messageId } = await sendFileViaCurl({ ...sendOpts, method: "sendDocument", field: "document" }));
+        }
+      }
+      if (!fileId) throw new Error("no file_id returned");
+    };
+    try {
+      if (!isVideoType) {
+        await singleShot();
+      } else {
+        if (tmp.bytes > BUNDLE_MAX_BYTES) {
+          return jsonError("حجم ویدئو از سقف مجاز (۸ گیگابایت) بیشتر است.", 422, "FILE_TOO_LARGE");
+        }
+        const mustSplit = tmp.bytes > MAX_VIDEO_BYTES;
+        let singleFailed = false;
+        if (!mustSplit) {
+          try {
+            await singleShot();
+          } catch {
+            singleFailed = true;
+          }
+        }
+        if (mustSplit || singleFailed) {
+          if (tmp.bytes <= BUNDLE_PART_BYTES) {
+            console.error("[content-room-upload] Telegram upload failed (single shot).");
+            return jsonError("ارسال فایل به Telegram انجام نشد. دوباره تلاش کنید.", 502, "TELEGRAM_UPLOAD_FAILED");
+          }
+          const { splitFileToParts, sha256File, BUNDLE_PART_BYTES: PART_BYTES } = await import("@/lib/media/bundles");
+          const bundleId = generateEntityId("BDL");
+          const partPaths = await splitFileToParts(tmp.path, PART_BYTES, tmp.dir);
+          let idx = 0;
+          for (const pp of partPaths) {
+            idx++;
+            const hash = await sha256File(pp).catch(() => null);
+            let pfid: string | null = null;
+            let pmsg: number | null = null;
+            try {
+              ({ fileId: pfid, messageId: pmsg } = await sendFileViaCurl({
+                ...sendOpts,
+                method: "sendDocument",
+                field: "document",
+                filePath: pp,
+                filename: `${filename}.part${String(idx).padStart(3, "0")}`,
+                caption: `${filename} — بخش ${idx} از ${partPaths.length}`,
+              }));
+            } catch (err) {
+              console.error(`[content-room-upload] bundle part ${idx}/${partPaths.length} failed:`, err);
+              return jsonError(`ارسال بخش ${idx} از ${partPaths.length} ناموفق بود. دوباره تلاش کنید.`, 502, "TELEGRAM_UPLOAD_FAILED");
+            }
+            if (!pfid) {
+              return jsonError(`ارسال بخش ${idx} از ${partPaths.length} ناموفق بود. دوباره تلاش کنید.`, 502, "TELEGRAM_UPLOAD_FAILED");
+            }
+            partUploads.push({ fileId: pfid, messageId: pmsg, hash });
+          }
+          bundle = { id: bundleId, total: partPaths.length };
+          fileId = `bundle:${bundleId}`;
+          messageId = partUploads[partUploads.length - 1]?.messageId ?? null;
+        }
+      }
+    } catch (err) {
+      console.error("[content-room-upload] Telegram upload failed:", err);
+      return jsonError("ارسال فایل به Telegram انجام نشد. دوباره تلاش کنید.", 502, "TELEGRAM_UPLOAD_FAILED");
+    }
+  } finally {
+    if (tmp) await cleanupUpload(tmp.dir);
   }
 
   if (!fileId) {
@@ -229,21 +289,51 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
           return jsonError("برش/ریلز هدف در همین قسمت یافت نشد.", 422, "INVALID_TARGET_ASSET");
         }
       }
-      const assetId = generateEntityId("CPP");
-      const [asset] = await db
-        .insert(contentPartAssets)
-        .values({
-          id: assetId,
-          partId: id,
-          kind,
-          fileRef: storedRef,
-          fileName: file.name,
-          targetKind: coverTarget,
-          targetAssetId: coverAssetId,
-          createdBy: (user as unknown as { id?: string }).id ?? null,
-          createdAt: now,
-        } as never)
-        .returning();
+      const actorId = (user as unknown as { id?: string }).id ?? null;
+      let asset: Record<string, unknown> | undefined;
+      if (bundle) {
+        // Multipart manifest: one row per part (bundled kinds resolve via bundle:<id>)
+        let idx = 0;
+        for (const pu of partUploads) {
+          idx++;
+          const [row] = await db
+            .insert(contentPartAssets)
+            .values({
+              id: generateEntityId("CPP"),
+              partId: id,
+              kind,
+              fileRef: pu.fileId,
+              fileName: `${filename}.part${String(idx).padStart(3, "0")}`,
+              targetKind: coverTarget,
+              targetAssetId: coverAssetId,
+              bundleId: bundle.id,
+              partIndex: idx,
+              partTotal: bundle.total,
+              fileHash: pu.hash,
+              createdBy: actorId,
+              createdAt: now,
+            } as never)
+            .returning();
+          if (!asset) asset = row as unknown as Record<string, unknown>;
+        }
+      } else {
+        const assetId = generateEntityId("CPP");
+        const [row] = await db
+          .insert(contentPartAssets)
+          .values({
+            id: assetId,
+            partId: id,
+            kind,
+            fileRef: storedRef,
+            fileName: filename,
+            targetKind: coverTarget,
+            targetAssetId: coverAssetId,
+            createdBy: actorId,
+            createdAt: now,
+          } as never)
+          .returning();
+        asset = row as unknown as Record<string, unknown>;
+      }
       // bump part version for optimistic concurrency
       const [updated] =
         expectedVersion !== null
@@ -270,17 +360,38 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
           entityId: id,
           action: "file_updated",
           before: { kind, file_ref: null } as unknown as Record<string, unknown>,
-          after: { kind, fileRef: storedRef, assetId, version: nextVersion } as unknown as Record<string, unknown>,
+          after: { kind, fileRef: storedRef, assetId: (asset as { id?: string } | undefined)?.id ?? null, version: nextVersion } as unknown as Record<string, unknown>,
           actorUserId: (user as unknown as { id?: string }).id ?? null,
           source: "api",
           reason: null,
           createdAt: now,
         } as never);
       } catch {}
-      return jsonOk({ part: updated, asset, telegramFileId: fileId, telegramMessageId: messageId, type, targetKind: coverTarget, targetAssetId: coverAssetId });
+      return jsonOk({ part: updated, asset, telegramFileId: fileId, telegramMessageId: messageId, type, targetKind: coverTarget, targetAssetId: coverAssetId, bundle: bundle ? { id: bundle.id, parts: bundle.total } : null });
     }
 
     const filePatch: Record<string, string> = type === "video" ? { fileRef: storedRef } : { coverFileRef: storedRef };
+    if (bundle) {
+      // Manifest rows for bundled single-column slots (kind video/cover)
+      const { contentPartAssets: bundleTbl } = await import("@/db/schema");
+      let bIdx = 0;
+      for (const pu of partUploads) {
+        bIdx++;
+        await db.insert(bundleTbl).values({
+          id: generateEntityId("CPP"),
+          partId: id,
+          kind: type,
+          fileRef: pu.fileId,
+          fileName: `${filename}.part${String(bIdx).padStart(3, "0")}`,
+          bundleId: bundle.id,
+          partIndex: bIdx,
+          partTotal: bundle.total,
+          fileHash: pu.hash,
+          createdBy: (user as unknown as { id?: string }).id ?? null,
+          createdAt: new Date(),
+        } as never);
+      }
+    }
 
     if (expectedVersion !== null) {
       const { and } = await import("drizzle-orm");
@@ -318,7 +429,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
         // non-fatal
       }
 
-      return jsonOk({ part: updated, telegramFileId: fileId, telegramMessageId: messageId, type });
+      return jsonOk({ part: updated, telegramFileId: fileId, telegramMessageId: messageId, type, bundle: bundle ? { id: bundle.id, parts: bundle.total } : null });
     } else {
       // No version provided - optimistic without check
       const [updated] = await db
@@ -351,7 +462,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
         // non-fatal
       }
 
-      return jsonOk({ part: updated, telegramFileId: fileId, telegramMessageId: messageId, type });
+      return jsonOk({ part: updated, telegramFileId: fileId, telegramMessageId: messageId, type, bundle: bundle ? { id: bundle.id, parts: bundle.total } : null });
     }
   } catch (err) {
     const msg = (err as Error).message;

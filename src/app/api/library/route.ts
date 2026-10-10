@@ -125,9 +125,10 @@ export async function GET() {
       reels: [],
       cover: isRealFileId(p.coverFileRef) ? fileOf(`${p.id}-cover`, `${baseTitle} - قسمت ${p.partNumber} - کاور`, "cover", p.coverFileRef!, "image/jpeg", p.createdAt, p.id) : null,
     };
-    for (const asset of assetRows as unknown as Array<{ id: string; partId: string; kind: string; fileRef: string; fileName: string | null; createdAt: Date }>) {
+    for (const asset of assetRows as unknown as Array<{ id: string; partId: string; kind: string; fileRef: string; fileName: string | null; bundleId?: string | null; createdAt: Date }>) {
       if (asset.partId !== p.id || !isRealFileId(asset.fileRef)) continue;
       if (asset.kind !== "highlight" && asset.kind !== "reel") continue;
+      if (asset.bundleId) continue; // bundle fragments never play alone (resolve via bundle:<id>)
       const type = asset.kind === "highlight" ? "highlight" : "reel";
       const item = fileOf(asset.id, asset.fileName ?? `${baseTitle} - قسمت ${p.partNumber} - ${type === "highlight" ? "برش" : "ریلز"}`, type, asset.fileRef, "video/mp4", asset.createdAt, p.id);
       if (type === "highlight") node.highlights.push(item);

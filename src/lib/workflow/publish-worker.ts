@@ -12,6 +12,14 @@ let tickRunning = false;
 
 async function getMediaPayload(client: TelegramClient, fileId: string): Promise<MediaPayload> {
   return runBigJob(`wf-publish:${fileId.slice(0, 16)}`, async () => {
+    const { isBundleRef, bundleIdOf, materializeBundle } = await import("@/lib/media/bundles");
+    if (isBundleRef(fileId)) {
+      const mat = await materializeBundle(bundleIdOf(fileId), async (ref) => {
+        const dl = await client.downloadToTempFile(ref);
+        return { path: dl.path, cleanup: dl.cleanup };
+      });
+      return { kind: "file", path: mat.path, size: mat.size, cleanup: mat.cleanup } as MediaPayload;
+    }
     const info = await client.getFile(fileId);
     const size = Number((info as unknown as { file_size?: number }).file_size ?? 0);
     if (size > TelegramClient.BUFFER_LIMIT_BYTES) {

@@ -13,8 +13,21 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
   if (!user) return jsonError("ابتدا وارد حساب کاربری خود شوید.", 401, "UNAUTHENTICATED");
   const [part] = await db.select().from(contentParts).where(eq(contentParts.id, id)).limit(1);
   if (!part) return jsonError("قسمت یافت نشد.", 404, "NOT_FOUND");
-  const rows = await db.select().from(contentPartAssets).where(eq(contentPartAssets.partId, id)).orderBy(asc(contentPartAssets.createdAt));
-  return jsonOk({ assets: rows });
+  const rows = (await db.select().from(contentPartAssets).where(eq(contentPartAssets.partId, id)).orderBy(asc(contentPartAssets.createdAt))) as unknown as Array<{
+    id: string;
+    kind: string;
+    bundleId: string | null;
+    partTotal: number | null;
+  }>;
+  // Bundle fragments never surface alone; one summary entry per bundle instead.
+  const assets = rows.filter((r) => !r.bundleId);
+  const seen = new Map<string, { kind: string; parts: number }>();
+  for (const r of rows) {
+    if (!r.bundleId || seen.has(r.bundleId)) continue;
+    seen.set(r.bundleId, { kind: r.kind, parts: r.partTotal ?? 0 });
+  }
+  const bundles = [...seen.entries()].map(([bundleId, b]) => ({ bundleId, kind: b.kind, parts: b.parts }));
+  return jsonOk({ assets, bundles });
 }
 
 export async function DELETE(req: Request, ctx: { params: Promise<{ id: string }> }) {

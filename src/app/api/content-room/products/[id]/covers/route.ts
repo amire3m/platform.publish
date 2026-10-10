@@ -42,6 +42,8 @@ export async function GET(_request: Request, ctx: { params: Promise<{ id: string
           fileRef: string;
           fileName: string | null;
           targetKind: string | null;
+          bundleId: string | null;
+          partTotal: number | null;
         }>)
       : [];
     const targetLabel = (t: string | null): string => {
@@ -62,7 +64,21 @@ export async function GET(_request: Request, ctx: { params: Promise<{ id: string
           previewUrl: isRealFileId(p.coverFileRef) ? buildPlaybackUrl(p.coverFileRef, "image/jpeg") : null,
         });
       }
+      const seenBundles = new Set<string>();
       for (const a of assets.filter((x) => x.partId === p.id)) {
+        if (a.bundleId) {
+          if (seenBundles.has(a.bundleId)) continue;
+          seenBundles.add(a.bundleId);
+          const marker = `bundle:${a.bundleId}`;
+          opts.push({
+            fileRef: marker,
+            label: `${targetLabel(a.targetKind)} — چندپارچه (${a.partTotal ?? "?"} پارت)`,
+            targetKind: a.targetKind,
+            isMain: false,
+            previewUrl: buildPlaybackUrl(marker, "image/jpeg"),
+          });
+          continue;
+        }
         opts.push({
           fileRef: a.fileRef,
           label: `${targetLabel(a.targetKind)}${a.fileName ? ` — ${a.fileName}` : ""}`,

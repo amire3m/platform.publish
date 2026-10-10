@@ -1,11 +1,14 @@
 import { desc, eq } from "drizzle-orm";
-import { stat } from "node:fs/promises";
+import { rm, stat } from "node:fs/promises";
+import { dirname } from "node:path";
 import { db } from "@/db";
 import { mediaAssets, mediaRevisions, mediaStorageObjects, mediaUploadSessions } from "@/db/schema";
 import { jsonError, jsonInternalError, jsonOk, requirePermission } from "@/lib/api-helpers";
 import { generateEntityId } from "@/lib/ids";
 import { sha256File } from "@/lib/media/bundles";
+import { materializeStagingToTelegram } from "@/lib/media/telegram-materialize";
 import { nextMissingChunk } from "@/lib/media/upload-sessions";
+import { getTelegramConfig } from "@/lib/telegram/client";
 import { stagingPath } from "../chunks/route";
 
 export const runtime = "nodejs";
@@ -16,6 +19,7 @@ export interface CompleteResult {
   version: number;
   size: number;
   sha256: string;
+  telegramFileRef: string;
 }
 
 export interface CompleteStore {
@@ -49,6 +53,32 @@ const dbCompleteStore: CompleteStore = {
     }
     const sha = await sha256File(path);
 
+    // Telegram is the phase-1 byte backend: materialize staging → Telegram
+    // BEFORE creating the revision. Failures keep the session open for retry.
+    const tg = getTelegramConfig();
+    if (!tg) {
+      throw Object.assign(new Error("اتصال تلگرام پیکربندی نشده است؛ تکمیل آپلود بدون مخزن تلگرام امکان‌پذیر نیست."), {
+        code: "TELEGRAM_NOT_CONFIGURED",
+      });
+    }
+    const apiBase = process.env.TELEGRAM_BOT_API_SERVER_URL?.trim() || "https://api.telegram.org";
+    let materialized: { fileRef: string; manifest: unknown[]; partCount: number };
+    try {
+      materialized = await materializeStagingToTelegram({
+        stagingPath: path,
+        filename: (session.fileName as string) || "upload.bin",
+        mime: (session.mime as string) || "application/octet-stream",
+        sizeBytes: st.size,
+        apiBase,
+        botToken: tg.botToken,
+        groupId: tg.groupId,
+      });
+    } catch (error) {
+      throw Object.assign(error instanceof Error ? error : new Error(String(error)), {
+        code: (error as { code?: string }).code ?? "TELEGRAM_UPLOAD_FAILED",
+      });
+    }
+
     let assetId = session.assetId as string | null;
     let version = 1;
     if (!assetId) {
@@ -73,10 +103,10 @@ const dbCompleteStore: CompleteStore = {
     const objectId = generateEntityId("MSO");
     await db.insert(mediaStorageObjects).values({
       id: objectId,
-      backend: "staging",
+      backend: "telegram",
       byteSize: st.size,
-      partCount: 1,
-      manifest: [{ path, sha256: sha }],
+      partCount: materialized.partCount,
+      manifest: materialized.manifest,
     } as never);
 
     const revisionId = generateEntityId("MRV");
@@ -89,6 +119,7 @@ const dbCompleteStore: CompleteStore = {
       sizeBytes: st.size,
       sha256: sha,
       storageObjectId: objectId,
+      telegramFileRef: materialized.fileRef,
       status: "ready",
       createdBy: actorId,
     } as never);
@@ -101,7 +132,11 @@ const dbCompleteStore: CompleteStore = {
       .set({ status: "complete", updatedAt: new Date() } as never)
       .where(eq(mediaUploadSessions.id, sessionId));
 
-    return { assetId, revisionId, version, size: st.size, sha256: sha };
+    // Staging served its purpose — Telegram is canonical now. Best-effort
+    // cleanup; the retention sweep reaps anything left behind.
+    await rm(dirname(path), { recursive: true, force: true }).catch(() => {});
+
+    return { assetId, revisionId, version, size: st.size, sha256: sha, telegramFileRef: materialized.fileRef };
   },
 };
 
@@ -127,6 +162,11 @@ export async function handleMediaCompleteRequest(
     if (code === "NOT_FOUND") return jsonError((error as Error).message, 404, "NOT_FOUND");
     if (code === "INCOMPLETE" || code === "SIZE_MISMATCH") return jsonError((error as Error).message, 409, code);
     if (code === "SESSION_CLOSED") return jsonError((error as Error).message, 409, "SESSION_CLOSED");
+    if (code === "TELEGRAM_NOT_CONFIGURED") return jsonError((error as Error).message, 400, "TELEGRAM_NOT_CONFIGURED");
+    if (code === "TELEGRAM_UPLOAD_FAILED") {
+      return jsonError("ارسال فایل به Telegram انجام نشد. نشست باز است؛ تکمیل را دوباره تلاش کنید.", 502, "TELEGRAM_UPLOAD_FAILED");
+    }
+    if (code === "FILE_TOO_LARGE") return jsonError((error as Error).message, 422, "FILE_TOO_LARGE");
     return jsonInternalError(error, "api/media/uploads/[id]/complete POST");
   }
 }

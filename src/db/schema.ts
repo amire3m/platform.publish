@@ -880,7 +880,7 @@ export const mediaMirrors = pgTable(
   "media_mirrors",
   {
     id: text("id").primaryKey(), // MMR-1405-000001
-    partId: text("part_id").references(() => contentParts.id, { onDelete: "cascade" }),
+    partId: text("part_id").references(() => contentParts.id, { onDelete: "set null" }),
     fileId: text("file_id").notNull(),
     provider: text("provider").notNull().default("vids.st"),
     remoteId: text("remote_id"),

@@ -5,6 +5,8 @@ import { jsonError, jsonOk } from "@/lib/api-helpers";
 import { getCurrentUser } from "@/lib/auth";
 import { summarizeMirrors } from "@/lib/mirrors/status";
 import type { MirrorRow } from "@/lib/mirrors/store";
+import type { VidsCapacity } from "@/lib/mirrors/vids";
+import { hasPermission } from "@/lib/permissions";
 
 export const dynamic = "force-dynamic";
 
@@ -58,5 +60,20 @@ export async function GET(req: Request) {
   } catch {}
 
   const filtered = status ? items.filter((i) => i.status === status) : items;
-  return jsonOk({ items: filtered, counts: summarizeMirrors(items) });
+  let capacity: VidsCapacity | null = null;
+  let capacityError: string | null = null;
+  if ((process.env.VIDS_API_KEY ?? "").trim()) {
+    try {
+      const { getVidsClient } = await import("@/lib/mirrors/vids");
+      capacity = await getVidsClient(5000).serverCapacity();
+    } catch (error) {
+      capacityError = error instanceof Error ? error.message : "دریافت ظرفیت سرویس میرور ناموفق بود.";
+    }
+  }
+  const canRecover = hasPermission({
+    role: user.role,
+    allowedActions: user.allowedActions,
+    allowedAccountIds: user.allowedAccountIds,
+  }, "manage_content_room");
+  return jsonOk({ items: filtered, counts: summarizeMirrors(items), capacity, capacityError, canRecover });
 }

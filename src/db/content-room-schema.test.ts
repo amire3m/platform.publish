@@ -212,6 +212,16 @@ describe("media_mirrors table", () => {
     );
     expect(columns.fileId.notNull).toBe(true);
   });
+
+  it("keeps file-level mirrors when a linked part is deleted", () => {
+    const migration = readFileSync(resolve(process.cwd(), "drizzle/0047_mirror_safety.sql"), "utf8");
+    expect(migration).toMatch(/ON DELETE SET NULL/i);
+  });
+
+  it("recovers legacy uploading mirrors that have no remote task", () => {
+    const migration = readFileSync(resolve(process.cwd(), "drizzle/0047_mirror_safety.sql"), "utf8");
+    expect(migration).toMatch(/UPDATE media_mirrors[\s\S]*status = 'queued'[\s\S]*status = 'uploading'[\s\S]*remote_task_id IS NULL/i);
+  });
 });
 
 describe("media_access table", () => {

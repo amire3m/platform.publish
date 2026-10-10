@@ -2,10 +2,11 @@
 
 import { useState } from "react";
 import useSWR from "swr";
-import { ChevronDown, ChevronLeft, CloudUpload, RefreshCw } from "lucide-react";
+import { AlertTriangle, ChevronDown, ChevronLeft, CloudUpload, RefreshCw } from "lucide-react";
 import { Button, Card, Select } from "@/components/ui";
 import { MIRROR_STATUS_FA, type MirrorCounts } from "@/lib/mirrors/status";
 import { timedFetch } from "@/lib/fetch-timeout";
+import type { VidsCapacity } from "@/lib/mirrors/vids";
 
 const fetcher = async (url: string) => {
   const res = await timedFetch(url);
@@ -20,6 +21,7 @@ interface MirrorItem {
   fileId: string;
   provider: string;
   remoteId: string | null;
+  remoteTaskId: string | null;
   remoteUrl: string | null;
   status: keyof MirrorCounts;
   error: string | null;
@@ -30,6 +32,9 @@ interface MirrorItem {
 interface MirrorResponse {
   items: MirrorItem[];
   counts: MirrorCounts;
+  capacity: VidsCapacity | null;
+  capacityError: string | null;
+  canRecover: boolean;
 }
 
 const STATUS_CLS: Record<keyof MirrorCounts, string> = {
@@ -46,8 +51,9 @@ export function MirrorStatusBox() {
   const qs = filter ? `?status=${filter}` : "";
   const { data, isLoading, error, mutate } = useSWR<MirrorResponse>(`/api/mirrors${qs}`, fetcher);
   const counts = data?.counts;
+  const capacityBlocked = !!data?.capacity && data.capacity.free_remote <= 0;
 
-  async function retry(body: { fileId?: string; all?: boolean }) {
+  async function retry(body: { fileId?: string; all?: boolean; forceUncertain?: boolean }) {
     const key = body.all ? "all" : (body.fileId ?? "");
     setBusy(key);
     try {
@@ -63,9 +69,16 @@ export function MirrorStatusBox() {
     }
   }
 
+  function recoverUncertain(fileId: string) {
+    const confirmed = window.confirm(
+      "نتیجه ارسال قبلی مشخص نیست. بازگردانی به صف ممکن است باعث آپلود تکراری شود. ادامه می‌دهید؟",
+    );
+    if (confirmed) void retry({ fileId, forceUncertain: true });
+  }
+
   return (
     <Card className="space-y-3 p-3">
-      <button onClick={() => setOpen((v) => !v)} className="flex w-full items-center gap-2 text-right" aria-expanded={open}>
+      <button onClick={() => setOpen((v) => !v)} className="flex w-full items-center gap-2 text-right" aria-expanded={open} aria-controls="mirror-status-details">
         {open ? <ChevronDown className="h-4 w-4 shrink-0 text-tg-secondary" /> : <ChevronLeft className="h-4 w-4 shrink-0 text-tg-secondary" />}
         <CloudUpload className="h-4 w-4 shrink-0 text-tg-accent" />
         <span className="text-sm font-bold text-tg-text">وضعیت آینه‌ها</span>
@@ -80,7 +93,22 @@ export function MirrorStatusBox() {
         )}
       </button>
       {open && (
-        <div className="space-y-2 border-t border-tg-border pt-2">
+        <div id="mirror-status-details" className="space-y-2 border-t border-tg-border pt-2">
+          {data?.capacity && (
+            <div role="status" className={`flex items-start gap-2 rounded-lg border px-3 py-2 text-xs leading-5 ${capacityBlocked ? "border-amber-500/30 bg-amber-500/10 text-amber-800 dark:text-amber-300" : "border-tg-border bg-tg-hover/40 text-tg-secondary"}`}>
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+              <span>
+                {capacityBlocked && <><strong>ظرفیت سرویس میرور پر است.</strong>{" "}</>}
+                انتقال فعال: {data.capacity.active_remote.toLocaleString("fa-IR")}، صف upstream: {data.capacity.queued_remote.toLocaleString("fa-IR")} فایل، ظرفیت آزاد: {data.capacity.free_remote.toLocaleString("fa-IR")}.
+                {capacityBlocked && " فایل‌های محلی امن در صف می‌مانند."}
+              </span>
+            </div>
+          )}
+          {data?.capacityError && (
+            <p role="status" className="rounded-lg bg-rose-500/10 px-3 py-2 text-xs text-rose-700 dark:text-rose-300">
+              وضعیت ظرفیت سرویس میرور دریافت نشد: {data.capacityError}
+            </p>
+          )}
           <div className="flex flex-wrap items-center gap-2">
             <Select value={filter} onChange={(e) => setFilter(e.target.value)} className="h-9 max-w-[180px] text-xs" aria-label="فیلتر وضعیت">
               <option value="">همه وضعیت‌ها</option>
@@ -90,7 +118,14 @@ export function MirrorStatusBox() {
               <option value="ready">آماده</option>
             </Select>
             {(counts?.error ?? 0) > 0 && (
-              <Button variant="secondary" size="sm" disabled={busy === "all"} onClick={() => retry({ all: true })} className="min-h-[36px]">
+              <Button
+                variant="secondary"
+                size="sm"
+                disabled={busy === "all" || capacityBlocked}
+                title={capacityBlocked ? "ابتدا باید ظرفیت سرویس میرور آزاد شود" : undefined}
+                onClick={() => retry({ all: true })}
+                className="min-h-[36px]"
+              >
                 <RefreshCw className="h-3.5 w-3.5" />
                 {busy === "all" ? "…" : `تلاش مجدد همه خطاها (${counts?.error})`}
               </Button>
@@ -119,6 +154,17 @@ export function MirrorStatusBox() {
                   >
                     <RefreshCw className="h-3 w-3" />
                     {busy === m.fileId ? "…" : "تلاش مجدد"}
+                  </button>
+                )}
+                {data?.canRecover && m.status === "uploading" && m.remoteTaskId?.startsWith("submitting:") && (
+                  <button
+                    type="button"
+                    disabled={busy === m.fileId}
+                    onClick={() => recoverUncertain(m.fileId)}
+                    className="inline-flex min-h-[32px] shrink-0 items-center gap-1 rounded-lg border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-[11px] text-amber-800 hover:bg-amber-500/15 disabled:opacity-50 dark:text-amber-300"
+                  >
+                    <RefreshCw className="h-3 w-3" aria-hidden="true" />
+                    {busy === m.fileId ? "…" : "بازگردانی دستی به صف"}
                   </button>
                 )}
                 {m.error && <span className="w-full truncate text-[10px] text-rose-600" title={m.error}>{m.error}</span>}

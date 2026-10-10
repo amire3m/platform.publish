@@ -135,13 +135,13 @@ export async function register() {
           lastMirrorRun = Date.now();
           const { reconcileMirrors } = await import("@/lib/mirrors/reconcile");
           const out = await reconcileMirrors({ maxItems: 3, poll: { tries: 2, intervalMs: 15000 } });
-          if (out.checked || out.enqueued || out.failed || out.requeued) {
+          if (out.checked || out.enqueued || out.failed || out.requeued || out.blocked) {
             console.log("[mirrors] tick:", JSON.stringify(out));
           }
           return out;
         } catch (err) {
           console.error("[mirrors] reconcile tick failed:", (err as Error).message);
-          return { checked: 0, completed: 0, failed: 0, enqueued: 0, requeued: 0 };
+          return { checked: 0, completed: 0, failed: 0, enqueued: 0, requeued: 0, blocked: 0, capacity: null };
         }
       })(),
       (async () => {

@@ -1,8 +1,11 @@
-import type { VidsClient } from "./vids";
+import { randomUUID } from "node:crypto";
+import { VidsApiError, type VidsClient } from "./vids";
 import { getTranscriptByPart } from "@/lib/captions/store";
 
 export interface MirrorJobStore {
-  setUploading: (fileId: string, taskId: string) => Promise<void>;
+  setSubmitting: (fileId: string, claimId: string) => Promise<boolean>;
+  setUploading: (fileId: string, taskId: string, claimId: string) => Promise<boolean>;
+  setClaimError: (fileId: string, claimId: string, error: string) => Promise<void>;
   setReady: (fileId: string, remoteId: string, remoteUrl: string | null) => Promise<void>;
   setError: (fileId: string, error: string) => Promise<void>;
   getTranscriptSrt: (partId: string) => Promise<string | null>;
@@ -16,6 +19,7 @@ export interface MirrorJobInput {
   sourceUrl: string;
   poll?: { tries: number; intervalMs: number };
   srtLabel?: string;
+  capacityGranted?: boolean;
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -29,11 +33,21 @@ export async function mirrorFile(input: MirrorJobInput): Promise<"ready" | "pend
   const { client, store, fileId, sourceUrl } = input;
   const tries = input.poll?.tries ?? 40;
   const intervalMs = input.poll?.intervalMs ?? 15000;
+  let claimId: string | null = null;
+  let claimed = false;
+  let accepted = false;
   try {
-    const capacity = await client.serverCapacity();
-    if (capacity.free_remote <= 0) return "pending";
+    if (input.capacityGranted !== true) {
+      const capacity = await client.serverCapacity();
+      if (capacity.free_remote <= 0) return "pending";
+    }
+    claimId = randomUUID();
+    claimed = await store.setSubmitting(fileId, claimId);
+    if (!claimed) return "pending";
     const taskId = await client.remoteUpload(sourceUrl);
-    await store.setUploading(fileId, taskId);
+    accepted = true;
+    const persisted = await store.setUploading(fileId, taskId, claimId);
+    if (!persisted) throw new Error(`task id persistence conflict (${taskId})`);
     for (let i = 0; i < tries; i++) {
       if (intervalMs > 0) await sleep(intervalMs);
       const st = await client.uploadStatus(taskId);
@@ -61,6 +75,16 @@ export async function mirrorFile(input: MirrorJobInput): Promise<"ready" | "pend
     return "pending";
   } catch (error) {
     const msg = error instanceof Error ? error.message : "خطای آینه‌سازی";
+    if (claimed && !accepted && claimId && error instanceof VidsApiError && error.fromApiPayload && error.status >= 400 && error.status < 500) {
+      await store.setClaimError(fileId, claimId, msg).catch(() => {});
+      return "error";
+    }
+    if (claimed) {
+      console.error(accepted
+        ? "[mirrors] accepted task persistence/poll failed, keeping claim active:"
+        : "[mirrors] remote submission uncertain, keeping claim active:", fileId, msg);
+      return "pending";
+    }
     console.error("[mirrors] job failed:", fileId, msg);
     await store.setError(fileId, msg).catch(() => {});
     return "error";
@@ -69,9 +93,17 @@ export async function mirrorFile(input: MirrorJobInput): Promise<"ready" | "pend
 /** Default store wiring against the real DB + transcript rows. */
 export function createDbMirrorJobStore(): MirrorJobStore {
   return {
-    setUploading: async (fileId, taskId) => {
+    setUploading: async (fileId, taskId, claimId) => {
       const { setMirrorUploading } = await import("./store");
-      await setMirrorUploading(fileId, taskId);
+      return setMirrorUploading(fileId, taskId, claimId);
+    },
+    setSubmitting: async (fileId, claimId) => {
+      const { setMirrorSubmitting } = await import("./store");
+      return setMirrorSubmitting(fileId, claimId);
+    },
+    setClaimError: async (fileId, claimId, error) => {
+      const { setMirrorClaimError } = await import("./store");
+      await setMirrorClaimError(fileId, claimId, error);
     },
     setReady: async (fileId, remoteId, remoteUrl) => {
       const { setMirrorReady } = await import("./store");

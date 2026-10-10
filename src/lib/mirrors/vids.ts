@@ -10,10 +10,35 @@ export interface VidsFileInfo {
   raw: unknown;
 }
 
+export interface VidsCapacity {
+  active_remote: number;
+  queued_remote: number;
+  free_remote: number;
+  max_remote: number;
+  max_concurrent: number;
+}
+
+export class VidsApiError extends Error {
+  constructor(
+    message: string,
+    public readonly action: string,
+    public readonly status: number,
+    public readonly fromApiPayload = true,
+  ) {
+    super(message);
+    this.name = "VidsApiError";
+  }
+}
+
 function formBody(params: Record<string, string>): FormData {
   const body = new FormData();
   for (const [k, v] of Object.entries(params)) body.append(k, v);
   return body;
+}
+
+function capacityCount(value: unknown): number {
+  const count = Number(value);
+  return Number.isFinite(count) ? Math.max(0, Math.floor(count)) : 0;
 }
 
 /** Thin client over the vids.st API (upload/url, status, file info/delete, subtitles). */
@@ -48,16 +73,28 @@ export class VidsClient {
         ?? "network error";
       throw new Error(`vids.st request failed (${action}): ${cause}`);
     }
-    const data = (await res.json().catch(() => null)) as { status?: number; message?: string; result?: T } | null;
+    const data = (await res.json().catch(() => null)) as { status?: number; message?: string; msg?: string; result?: T } | null;
     if (!res.ok || !data || data.status !== 200) {
-      throw new Error(data?.message || `vids.st request failed (${action}, http ${res.status})`);
+      const apiStatus = Number(data?.status);
+      throw new VidsApiError(
+        data?.message || data?.msg || `vids.st request failed (${action}, http ${res.status})`,
+        action,
+        !res.ok ? res.status : (Number.isFinite(apiStatus) ? apiStatus : res.status),
+        res.ok,
+      );
     }
     return data.result as T;
   }
 
-  async serverCapacity(): Promise<{ free_remote: number; max_concurrent: number }> {
-    const r = await this.call<{ free_remote?: number; max_concurrent?: number }>("upload/server", {}, "GET");
-    return { free_remote: Number(r.free_remote ?? 0), max_concurrent: Number(r.max_concurrent ?? 0) };
+  async serverCapacity(): Promise<VidsCapacity> {
+    const r = await this.call<Partial<VidsCapacity>>("upload/server", {}, "GET");
+    return {
+      active_remote: capacityCount(r.active_remote),
+      queued_remote: capacityCount(r.queued_remote),
+      free_remote: capacityCount(r.free_remote),
+      max_remote: capacityCount(r.max_remote),
+      max_concurrent: capacityCount(r.max_concurrent),
+    };
   }
 
   async remoteUpload(publicUrl: string): Promise<string> {
@@ -110,8 +147,8 @@ export class FakeVidsClient extends VidsClient {
     super("", "");
   }
 
-  override async serverCapacity(): Promise<{ free_remote: number; max_concurrent: number }> {
-    return { free_remote: 10, max_concurrent: 10 };
+  override async serverCapacity(): Promise<VidsCapacity> {
+    return { active_remote: 0, queued_remote: 0, free_remote: 10, max_remote: 10, max_concurrent: 10 };
   }
 
   override async remoteUpload(publicUrl: string): Promise<string> {
@@ -122,7 +159,7 @@ export class FakeVidsClient extends VidsClient {
 
   override async uploadStatus(taskId: string): Promise<VidsUploadStatus> {
     const t = this.tasks.get(taskId);
-    if (!t) throw new Error("unknown task");
+    if (!t) throw new VidsApiError("Upload task not found", "upload/status", 404);
     t.polls++;
     if (t.polls >= 2) {
       const fileId = `F-fake-${taskId}`;
@@ -145,9 +182,9 @@ export class FakeVidsClient extends VidsClient {
   override async uploadSubtitle(): Promise<void> {}
 }
 
-export function getVidsClient(): VidsClient {
+export function getVidsClient(timeoutMs = 60000): VidsClient {
   const base = (process.env.VIDS_API_BASE ?? "https://vids.st/api/index.php").trim();
   const key = (process.env.VIDS_API_KEY ?? "").trim();
   if (!key) return new FakeVidsClient();
-  return new VidsClient(base || "https://vids.st/api/index.php", key);
+  return new VidsClient(base || "https://vids.st/api/index.php", key, timeoutMs);
 }

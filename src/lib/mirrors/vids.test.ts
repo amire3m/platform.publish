@@ -1,6 +1,6 @@
 import { describe, expect, it, vi, afterEach } from "vitest";
 
-import { FakeVidsClient, VidsClient } from "./vids";
+import { FakeVidsClient, VidsApiError, VidsClient } from "./vids";
 
 function mockFetchOnce(payload: unknown, ok = true, status = 200) {
   const mock = vi.fn().mockResolvedValue({ ok, status, json: async () => payload });
@@ -46,6 +46,32 @@ describe("VidsClient", () => {
     mockFetchOnce({ status: 403, message: "denied" }, false, 403);
     const client = new VidsClient("https://vids.st/api/index.php", "key");
     await expect(client.remoteUpload("https://example.com/v.mp4")).rejects.toThrow("denied");
+  });
+
+  it("preserves the upstream status code so missing tasks can be recovered safely", async () => {
+    mockFetchOnce({ status: 404, msg: "Upload task not found" }, true, 200);
+    const client = new VidsClient("https://vids.st/api/index.php", "key");
+
+    const error = await client.uploadStatus("T-gone").catch((value) => value);
+
+    expect(error).toBeInstanceOf(VidsApiError);
+    expect(error).toMatchObject({ status: 404, action: "upload/status" });
+  });
+
+  it("normalizes malformed capacity values to nonnegative integers", async () => {
+    mockFetchOnce({
+      status: 200,
+      result: { active_remote: -1, queued_remote: "bad", free_remote: -3, max_remote: 1.9, max_concurrent: null },
+    });
+    const client = new VidsClient("https://vids.st/api/index.php", "key");
+
+    await expect(client.serverCapacity()).resolves.toEqual({
+      active_remote: 0,
+      queued_remote: 0,
+      free_remote: 0,
+      max_remote: 1,
+      max_concurrent: 0,
+    });
   });
 
   it("surfaces the network cause (e.g. TLS) instead of a bare fetch failure", async () => {

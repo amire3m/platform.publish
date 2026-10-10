@@ -6,7 +6,7 @@ import { maybeMirrorAfterLink } from "./job";
 
 function stubStore(overrides: Record<string, unknown> = {}) {
   return {
-    setUploading: vi.fn().mockResolvedValue(undefined),
+    setUploading: vi.fn().mockResolvedValue(true),
     setReady: vi.fn().mockResolvedValue(undefined),
     setError: vi.fn().mockResolvedValue(undefined),
     getTranscriptSrt: vi.fn().mockResolvedValue(null),

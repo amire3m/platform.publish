@@ -1,8 +1,7 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, like } from "drizzle-orm";
 import { db } from "@/db";
 import { mediaMirrors } from "@/db/schema";
-import { jsonError, jsonOk } from "@/lib/api-helpers";
-import { getCurrentUser } from "@/lib/auth";
+import { jsonError, jsonOk, requirePermission } from "@/lib/api-helpers";
 
 export const dynamic = "force-dynamic";
 
@@ -11,8 +10,8 @@ export const dynamic = "force-dynamic";
  * The worker loop picks them up within minutes.
  */
 export async function POST(req: Request) {
-  const user = await getCurrentUser();
-  if (!user) return jsonError("ابتدا وارد حساب کاربری خود شوید.", 401, "UNAUTHENTICATED");
+  const { response } = await requirePermission("manage_content_room");
+  if (response) return response;
 
   let body: unknown = null;
   try {
@@ -20,11 +19,25 @@ export async function POST(req: Request) {
   } catch {
     return jsonError("درخواست نامعتبر است.", 422, "VALIDATION_ERROR");
   }
-  const { fileId, all } = (body ?? {}) as { fileId?: string; all?: boolean };
+  const { fileId, all, forceUncertain } = (body ?? {}) as { fileId?: string; all?: boolean; forceUncertain?: boolean };
   if (!fileId && !all) return jsonError("fileId یا all لازم است.", 422, "VALIDATION_ERROR");
+  if (forceUncertain && (!fileId || all)) return jsonError("برای بازیابی ارسال نامطمئن، fileId لازم است.", 422, "VALIDATION_ERROR");
 
   try {
-    if (all) {
+    if (forceUncertain) {
+      const rows = await db
+        .update(mediaMirrors)
+        .set({ status: "queued", remoteTaskId: null, error: null, updatedAt: new Date() } as never)
+        .where(and(
+          eq(mediaMirrors.fileId, String(fileId)),
+          eq(mediaMirrors.status, "uploading"),
+          like(mediaMirrors.remoteTaskId, "submitting:%"),
+        ) as never)
+        .returning({ id: mediaMirrors.id });
+      if (rows.length === 0) {
+        return jsonError("وضعیت این ارسال تغییر کرده است؛ فهرست را تازه‌سازی کنید.", 409, "CLAIM_CHANGED");
+      }
+    } else if (all) {
       await db
         .update(mediaMirrors)
         .set({ status: "queued", error: null, updatedAt: new Date() } as never)

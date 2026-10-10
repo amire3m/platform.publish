@@ -9,6 +9,7 @@ import { Button, Card, Input, Label, Select, EmptyState, Skeleton, Modal } from 
 import { ChannelOptions } from "@/components/ChannelOptions";
 import { MirrorStatusBox } from "@/components/library/MirrorStatus";
 import { DedicatedPlayer } from "@/components/media/DedicatedPlayer";
+import { ResumableUploader } from "@/components/media/ResumableUploader";
 import { timedFetch } from "@/lib/fetch-timeout";
 
 const fetcher = async (url: string) => {
@@ -27,6 +28,8 @@ interface FileItem {
   fileId?: string | null;
   createdAt: string;
   telegramLink?: string;
+  assetId?: string | null;
+  version?: number | null;
 }
 
 interface PartNode {
@@ -152,6 +155,9 @@ function FileRow({ item }: { item: FileItem }) {
           <Icon className="h-3.5 w-3.5" />
         </span>
         <span className="min-w-0 flex-1 truncate text-xs font-medium text-tg-text" title={item.filename}>{item.filename}</span>
+        {item.version != null && (
+          <span className="shrink-0 rounded-full bg-tg-hover px-2 py-0.5 text-[10px] text-tg-secondary">نسخه {item.version}</span>
+        )}
         <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] ${meta.cls}`}>{meta.label}</span>
         {open ? <ChevronDown className="h-4 w-4 shrink-0 text-tg-secondary" /> : <Play className="h-3.5 w-3.5 shrink-0 text-tg-secondary" />}
       </button>
@@ -165,8 +171,13 @@ function FileRow({ item }: { item: FileItem }) {
   );
 }
 
-function PartSection({ part }: { part: PartNode }) {
+function PartSection({ part, productId, channel }: { part: PartNode; productId: string; channel: string }) {
   const [open, setOpen] = useState(false);
+  const [uploadOpen, setUploadOpen] = useState(false);
+  const { mutate } = useSWRConfig();
+  const refreshLibrary = () => {
+    void mutate((key) => typeof key === "string" && key.startsWith("/api/library"));
+  };
   const count = (part.fullVideo ? 1 : 0) + part.highlights.length + part.reels.length + (part.cover ? 1 : 0);
   return (
     <div className="rounded-lg border border-tg-border bg-tg-hover/20">
@@ -182,13 +193,31 @@ function PartSection({ part }: { part: PartNode }) {
           {part.reels.map((r) => <FileRow key={r.id} item={r} />)}
           {part.cover && <FileRow item={part.cover} />}
           {count === 0 && <p className="px-2 py-1 text-[11px] text-tg-secondary">فایلی ثبت نشده است.</p>}
+          <div className="sm:col-span-2">
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => setUploadOpen(true)}
+            >
+              <Plus className="h-3.5 w-3.5" /> آپلود نسخه جدید (تا ۸ گیگابایت)
+            </Button>
+          </div>
         </div>
       )}
+      <Modal open={uploadOpen} onClose={() => setUploadOpen(false)} title={`آپلود نسخه جدید — قسمت ${part.partNumber}`}>
+        <ResumableUploader
+          binding={{ partId: part.partId, productId, channel }}
+          onDone={() => {
+            setUploadOpen(false);
+            refreshLibrary();
+          }}
+        />
+      </Modal>
     </div>
   );
 }
 
-function ProductSection({ product }: { product: ProductNode }) {
+function ProductSection({ product, channel }: { product: ProductNode; channel: string }) {
   const [open, setOpen] = useState(false);
   const fileCount = product.parts.reduce((a, p) => a + (p.fullVideo ? 1 : 0) + p.highlights.length + p.reels.length + (p.cover ? 1 : 0), 0);
   return (
@@ -203,7 +232,7 @@ function ProductSection({ product }: { product: ProductNode }) {
       </button>
       {open && (
         <div className="space-y-1.5 border-t border-tg-border p-2">
-          {product.parts.map((p) => <PartSection key={p.partId} part={p} />)}
+          {product.parts.map((p) => <PartSection key={p.partId} part={p} productId={product.productId} channel={channel} />)}
           {product.parts.length === 0 && <p className="px-2 py-1 text-[11px] text-tg-secondary">قسمتی ثبت نشده است.</p>}
         </div>
       )}
@@ -238,7 +267,7 @@ function ChannelSection({ channel, defaultOpen }: { channel: ChannelNode; defaul
           {channel.products.length > 5 && (
             <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="جستجو در محصولات این کانال…" className="h-8 text-xs" />
           )}
-          {products.map((p) => <ProductSection key={p.productId} product={p} />)}
+          {products.map((p) => <ProductSection key={p.productId} product={p} channel={channel.channel} />)}
           {products.length === 0 && <p className="py-2 text-center text-[11px] text-tg-secondary">محصولی یافت نشد.</p>}
         </div>
       )}

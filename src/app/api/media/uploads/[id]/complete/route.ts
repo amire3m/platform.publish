@@ -86,7 +86,10 @@ const dbCompleteStore: CompleteStore = {
       await db.insert(mediaAssets).values({
         id: assetId,
         title: (session.fileName as string) || "",
-        kind: "final",
+        channel: (session.channel as string | null) ?? null,
+        productId: (session.productId as string | null) ?? null,
+        partId: (session.partId as string | null) ?? null,
+        kind: ((session.kind as string | null) ?? "final") as never,
         status: "ready",
         createdBy: actorId,
       } as never);

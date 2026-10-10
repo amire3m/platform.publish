@@ -1,12 +1,13 @@
 import { eq } from "drizzle-orm";
 import { mkdir, open } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { db } from "@/db";
 import { mediaUploadSessions } from "@/db/schema";
 import { jsonError, jsonInternalError, jsonOk, requirePermission } from "@/lib/api-helpers";
+import { stagingDir, stagingPath } from "@/lib/media/upload-sessions";
 
 export const runtime = "nodejs";
+
+export { stagingDir, stagingPath };
 
 export interface ChunkSession {
   id: string;
@@ -24,14 +25,6 @@ export interface ChunkStore {
 export interface ChunkRouteDependencies {
   requirePermission: typeof requirePermission;
   store: ChunkStore;
-}
-
-export function stagingDir(sessionId: string): string {
-  return join(tmpdir(), `emro-media-${sessionId}`);
-}
-
-export function stagingPath(sessionId: string): string {
-  return join(stagingDir(sessionId), "upload.bin");
 }
 
 const dbChunkStore: ChunkStore = {

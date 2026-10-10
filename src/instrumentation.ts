@@ -159,6 +159,20 @@ export async function register() {
         }
       })(),
       (async () => {
+        // Stale resumable-upload reaper: expire open sessions past TTL + drop staging.
+        try {
+          const { expireStaleUploadSessions } = await import("@/lib/media/staging-sweep");
+          const out = await expireStaleUploadSessions();
+          if (out.expired || out.errors) {
+            console.log(`[media] upload-sweep: expired=${out.expired} errors=${out.errors}`);
+          }
+          return out;
+        } catch (err) {
+          console.error("[media] upload-sweep tick failed:", (err as Error).message);
+          return { expired: 0, errors: 0 };
+        }
+      })(),
+      (async () => {
         // Instagram browser session keep-alive: touch each session every 6h
         // to rotate cookies and prevent idle expiry. Best-effort, never throws.
         try {

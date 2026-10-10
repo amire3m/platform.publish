@@ -38,6 +38,22 @@ describe("POST /api/media/uploads", () => {
     expect(store.createSession).toHaveBeenCalledOnce();
   });
 
+  it("passes binding context through to the store", async () => {
+    const requirePermission = vi.fn().mockResolvedValue({ user: { id: "u1" }, response: null });
+    const store = {
+      createSession: vi.fn().mockResolvedValue({ id: "MUS-9", totalChunks: 1, chunkBytes: 8388608 }),
+    };
+    const res = await handleMediaUploadsRequest(
+      new Request("http://test/api/media/uploads", {
+        method: "POST",
+        body: JSON.stringify({ fileName: "p1.mp4", mime: "video/mp4", totalBytes: 10, partId: "CPP-1", productId: "CPR-1", channel: "zed_revayat", kind: "highlight" }),
+      }),
+      { requirePermission: requirePermission as never, store: store as never },
+    );
+    expect(res.status).toBe(201);
+    expect(store.createSession).toHaveBeenCalledWith(expect.objectContaining({ partId: "CPP-1", productId: "CPR-1", channel: "zed_revayat", kind: "highlight" }));
+  });
+
   it("rejects oversize payloads over 8GB", async () => {
     const requirePermission = vi.fn().mockResolvedValue({ user: { id: "u1" }, response: null });
     const store = { createSession: vi.fn() };

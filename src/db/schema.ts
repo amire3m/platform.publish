@@ -1127,6 +1127,10 @@ export const mediaUploadSessions = pgTable(
   {
     id: text("id").primaryKey(),
     assetId: text("asset_id"),
+    partId: text("part_id"),
+    productId: text("product_id"),
+    channel: text("channel"),
+    kind: text("kind").notNull().default("final"),
     fileName: text("file_name").notNull().default(""),
     mime: text("mime").notNull().default("application/octet-stream"),
     totalBytes: bigint("total_bytes", { mode: "number" }).notNull().default(0),

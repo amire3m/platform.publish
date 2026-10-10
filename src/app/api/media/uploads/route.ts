@@ -11,6 +11,10 @@ export interface CreateSessionInput {
   mime: string;
   totalBytes: number;
   assetId?: string | null;
+  partId?: string | null;
+  productId?: string | null;
+  channel?: string | null;
+  kind?: string | null;
 }
 
 export interface MediaUploadStore {
@@ -22,6 +26,10 @@ export interface MediaUploadStore {
     chunkBytes: number;
     totalChunks: number;
     assetId: string | null;
+    partId: string | null;
+    productId: string | null;
+    channel: string | null;
+    kind: string;
     createdBy: string | null;
   }): Promise<{ id: string; totalChunks: number; chunkBytes: number }>;
 }
@@ -36,6 +44,10 @@ const dbStore: MediaUploadStore = {
     await db.insert(mediaUploadSessions).values({
       id: input.id,
       assetId: input.assetId,
+      partId: input.partId,
+      productId: input.productId,
+      channel: input.channel,
+      kind: input.kind,
       fileName: input.fileName,
       mime: input.mime,
       totalBytes: input.totalBytes,
@@ -86,7 +98,16 @@ export async function handleMediaUploadsRequest(
   const totalChunks = chunkPlan(totalBytes, chunkBytes).length;
   const id = createUploadSessionId();
   const createdBy = (user as unknown as { id?: string }).id ?? null;
-  const assetId = typeof b.assetId === "string" && b.assetId.trim() !== "" ? b.assetId.trim() : null;
+  const opt = (v: unknown, cap: number): string | null => {
+    if (typeof v !== "string") return null;
+    const t = v.trim();
+    return t === "" ? null : t.slice(0, cap);
+  };
+  const assetId = opt(b.assetId, 64);
+  const partId = opt(b.partId, 64);
+  const productId = opt(b.productId, 64);
+  const channel = opt(b.channel, 64);
+  const kind = opt(b.kind, 32) ?? "final";
 
   try {
     const created = await deps.store.createSession({
@@ -97,6 +118,10 @@ export async function handleMediaUploadsRequest(
       chunkBytes,
       totalChunks,
       assetId,
+      partId,
+      productId,
+      channel,
+      kind,
       createdBy,
     });
     return jsonOk(

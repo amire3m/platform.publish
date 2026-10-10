@@ -1,7 +1,17 @@
 import { randomUUID } from "node:crypto";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 export const UPLOAD_CHUNK_BYTES = 8 * 1024 * 1024;
 export const UPLOAD_MAX_BYTES = 8 * 1024 * 1024 * 1024;
+
+export function stagingDir(sessionId: string): string {
+  return join(tmpdir(), `emro-media-${sessionId}`);
+}
+
+export function stagingPath(sessionId: string): string {
+  return join(stagingDir(sessionId), "upload.bin");
+}
 
 export function createUploadSessionId(): string {
   return `MUS-${randomUUID().slice(0, 8)}`;

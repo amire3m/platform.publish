@@ -139,6 +139,11 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   // برای فایل 2GB کل محتوا را در RAM کپی نکن — File خود Blob است
   const uploadBlob: Blob = file;
 
+  // Copyright-report screenshots go to the dedicated "بررسی کپی‌رایت" topic
+  // (configurable via REPORT_TOPIC_THREAD_ID, default 4).
+  const reportThreadId =
+    type === "report" ? Number(process.env.REPORT_TOPIC_THREAD_ID ?? 4) || 4 : undefined;
+
   // Use existing telegram storage pattern: sendDocument to preserve raw bytes
   let fileId: string | null = null;
   let messageId: number | null = null;
@@ -171,13 +176,14 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
         messageId = sent.message_id;
       }
     } else {
-      // cover: sendPhoto or sendDocument
+      // cover/report: sendPhoto or sendDocument (report goes to the copyright-review topic)
+      const caption = type === "report" ? `گزارش کپی‌رایت — قسمت ${(part as unknown as { partNumber?: number }).partNumber ?? ""}` : undefined;
       try {
-        const sent = await client.sendPhoto(uploadBlob, file.name);
+        const sent = await client.sendPhoto(uploadBlob, file.name, reportThreadId, caption);
         fileId = sent.photo?.[0]?.file_id ?? String(sent.message_id);
         messageId = sent.message_id;
       } catch {
-        const sent = await client.sendDocument(uploadBlob, file.name);
+        const sent = await client.sendDocument(uploadBlob, file.name, reportThreadId, caption);
         fileId =
           sent.document?.file_id ??
           sent.photo?.[0]?.file_id ??

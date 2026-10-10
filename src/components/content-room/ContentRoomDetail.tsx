@@ -540,7 +540,6 @@ interface ConflictSession {
 /** Pipeline steps in order: activity key, fa label, owning jobs, telegram kind. */
 const PIPELINE_STEPS = [
   { activity: "raw_telegram", label: "خام (هندبریک)", jobs: ["full_editor"], tgKind: "video" },
-  { activity: "yt_check_upload", label: "چک یوتیوب", jobs: ["full_editor"], tgKind: null },
   { activity: "copyright_report", label: "گزارش کپی‌رایت", jobs: ["full_editor"], tgKind: "report" },
   { activity: "music_replaced", label: "موسیقی", jobs: ["full_editor"], tgKind: null },
   { activity: "final_full", label: "نسخه نهایی", jobs: ["full_editor"], tgKind: "final" },
@@ -650,8 +649,6 @@ function PartUploadCard({
   const [reportPreviewUrl, setReportPreviewUrl] = useState<string | null>(null);
   const [openStep, setOpenStep] = useState<string | null>(null);
   const [showAllSteps, setShowAllSteps] = useState(false);
-  const [ytUrl, setYtUrl] = useState<string | null>(null);
-  const [ytSaving, setYtSaving] = useState(false);
   const [playFailed, setPlayFailed] = useState(false);
   const [preparing, setPreparing] = useState(false);
   const [prepareError, setPrepareError] = useState<string | null>(null);
@@ -698,27 +695,6 @@ function PartUploadCard({
   const hasFinal = finals.length > 0;
   const hasReport = reports.length > 0;
 
-  async function saveYtUrl() {
-    const v = (ytUrl ?? part.ytCheckUrl ?? "").trim();
-    setYtSaving(true);
-    onError(null);
-    try {
-      const res = await fetch(`/api/content-room/parts/${part.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ytCheckUrl: v }),
-      });
-      const body = await res.json().catch(() => ({}));
-      if (!res.ok || !(body as { ok?: boolean }).ok) throw new Error((body as { error?: string }).error ?? "خطا در ذخیره لینک");
-      onToast("لینک چک یوتیوب ذخیره شد.");
-      setTimeout(() => onToast(null), 2000);
-      await onRefresh();
-    } catch (e) {
-      onError(e instanceof Error ? e.message : "خطا در ذخیره لینک");
-    } finally {
-      setYtSaving(false);
-    }
-  }
   const coverAssets = assetsData?.data?.assets?.filter((a) => a.kind === "cover") ?? [];
   const [coverTarget, setCoverTarget] = useState<"" | "youtube_full" | "highlight" | "reel">("");
   const [coverAsset, setCoverAsset] = useState("");
@@ -1069,6 +1045,8 @@ function PartUploadCard({
 
   const acts = (part as { activities?: Record<string, boolean> }).activities ?? {};
   const stepDone = (a: string): boolean => Boolean(acts[a]);
+  const stepBy = (a: string): PipelineStep =>
+    (PIPELINE_STEPS.find((s) => s.activity === a) ?? { activity: a, label: a, jobs: [], tgKind: null }) as PipelineStep;
   const canSeeStep = (s: PipelineStep): boolean => {
     if (showAllSteps || isStaffAdmin) return true;
     if (myJobs.length === 0) return true;
@@ -1352,7 +1330,7 @@ function PartUploadCard({
 
       <div className="space-y-3 border-t border-tg-border pt-3">
         {visibleSteps.some((s) => s.activity === "raw_telegram") && (
-        <StepPanel step={PIPELINE_STEPS[0]} index={visibleSteps.findIndex((s) => s.activity === "raw_telegram")} done={stepDone("raw_telegram")} open={activeStep === "raw_telegram"} onOpen={() => openStepAndKind("raw_telegram")} onToggleTick={(a, v) => onToggle(part.id, a, v)} telegram={telegramBlock}>
+        <StepPanel step={stepBy("raw_telegram")} index={visibleSteps.findIndex((s) => s.activity === "raw_telegram")} done={stepDone("raw_telegram")} open={activeStep === "raw_telegram"} onOpen={() => openStepAndKind("raw_telegram")} onToggleTick={(a, v) => onToggle(part.id, a, v)} telegram={telegramBlock}>
         <UploadZone
           icon={Film}
           title="ویدیو کامل"
@@ -1382,37 +1360,15 @@ function PartUploadCard({
         </StepPanel>
         )}
 
-        {visibleSteps.some((s) => s.activity === "yt_check_upload") && (
-        <StepPanel step={PIPELINE_STEPS[1]} index={visibleSteps.findIndex((s) => s.activity === "yt_check_upload")} done={stepDone("yt_check_upload")} open={activeStep === "yt_check_upload"} onOpen={() => openStepAndKind("yt_check_upload")} onToggleTick={(a, v) => onToggle(part.id, a, v)}>
-          <p className="text-[11px] leading-5 text-tg-secondary">
-            ویدیو را در صفحه چک یوتیوب (غیرفهرست‌شده) آپلود کن، صبر کن گزارش کپی‌رایت بیاید، بعد لینکش را اینجا ثبت کن.
-          </p>
-          <div className="flex gap-1.5">
-            <Input
-              value={ytUrl ?? part.ytCheckUrl ?? ""}
-              onChange={(e) => setYtUrl(e.target.value)}
-              placeholder="https://youtube.com/watch?v=... یا youtu.be/..."
-              dir="ltr"
-              className="h-9 flex-1 font-mono text-xs"
-            />
-            <Button size="sm" onClick={saveYtUrl} disabled={ytSaving} className="min-h-[36px] shrink-0 text-xs">
-              {ytSaving ? "…" : "ذخیره لینک"}
-            </Button>
-          </div>
-          {part.ytCheckUrl && (
-            <a href={part.ytCheckUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-tg-accent hover:underline" dir="ltr">
-              باز کردن ویدیوی چک ↗
-            </a>
-          )}
-        </StepPanel>
-        )}
-
         {visibleSteps.some((s) => s.activity === "copyright_report") && (
-        <StepPanel step={PIPELINE_STEPS[2]} index={visibleSteps.findIndex((s) => s.activity === "copyright_report")} done={stepDone("copyright_report")} open={activeStep === "copyright_report"} onOpen={() => openStepAndKind("copyright_report")} onToggleTick={(a, v) => onToggle(part.id, a, v)} telegram={telegramBlock}>
+        <StepPanel step={stepBy("copyright_report")} index={visibleSteps.findIndex((s) => s.activity === "copyright_report")} done={stepDone("copyright_report")} open={activeStep === "copyright_report"} onOpen={() => openStepAndKind("copyright_report")} onToggleTick={(a, v) => onToggle(part.id, a, v)} telegram={telegramBlock}>
+          <p className="text-[11px] leading-5 text-tg-secondary">
+            اسکرین‌شات صفحه کپی‌رایت یوتیوب را اینجا آپلود کن — مستقیم در تاپیک «بررسی کپی‌رایت» تلگرام ذخیره می‌شود.
+          </p>
           <UploadZone
             icon={ImageIcon}
             title="اسکرین‌شات گزارش کپی‌رایت"
-            hint="از صفحه کپی‌رایت یوتیوب — jpeg، png"
+            hint="jpeg، png — ذخیره در تاپیک بررسی کپی‌رایت"
             accept="image/jpeg,image/png,image/jpg,image/webp"
             file={reportFile}
             onSelect={(f) => { setReportFile(f); setReportPreviewUrl(f ? URL.createObjectURL(f) : null); }}
@@ -1447,13 +1403,13 @@ function PartUploadCard({
         )}
 
         {visibleSteps.some((s) => s.activity === "music_replaced") && (
-        <StepPanel step={PIPELINE_STEPS[3]} index={visibleSteps.findIndex((s) => s.activity === "music_replaced")} done={stepDone("music_replaced")} open={activeStep === "music_replaced"} onOpen={() => openStepAndKind("music_replaced")} onToggleTick={(a, v) => onToggle(part.id, a, v)}>
+        <StepPanel step={stepBy("music_replaced")} index={visibleSteps.findIndex((s) => s.activity === "music_replaced")} done={stepDone("music_replaced")} open={activeStep === "music_replaced"} onOpen={() => openStepAndKind("music_replaced")} onToggleTick={(a, v) => onToggle(part.id, a, v)}>
           <PartMusic partId={part.id} partNumber={part.partNumber} />
         </StepPanel>
         )}
 
         {visibleSteps.some((s) => s.activity === "final_full") && (
-        <StepPanel step={PIPELINE_STEPS[4]} index={visibleSteps.findIndex((s) => s.activity === "final_full")} done={stepDone("final_full")} open={activeStep === "final_full"} onOpen={() => openStepAndKind("final_full")} onToggleTick={(a, v) => onToggle(part.id, a, v)} telegram={telegramBlock}>
+        <StepPanel step={stepBy("final_full")} index={visibleSteps.findIndex((s) => s.activity === "final_full")} done={stepDone("final_full")} open={activeStep === "final_full"} onOpen={() => openStepAndKind("final_full")} onToggleTick={(a, v) => onToggle(part.id, a, v)} telegram={telegramBlock}>
           <p className="text-[11px] leading-5 text-tg-secondary">
             نسخه تمیز و نهایی (بدون کپی‌رایت + لوگو/اینترو/آترو کانال). فایل خام دست‌نخورده می‌ماند؛ ارسال یوتیوب از همین نسخه می‌خواند.
           </p>
@@ -1537,7 +1493,7 @@ function PartUploadCard({
         )}
 
         {visibleSteps.some((s) => s.activity === "cover_ready") && (
-        <StepPanel step={PIPELINE_STEPS[7]} index={visibleSteps.findIndex((s) => s.activity === "cover_ready")} done={stepDone("cover_ready")} open={activeStep === "cover_ready"} onOpen={() => openStepAndKind("cover_ready")} onToggleTick={(a, v) => onToggle(part.id, a, v)} telegram={telegramBlock}>
+        <StepPanel step={stepBy("cover_ready")} index={visibleSteps.findIndex((s) => s.activity === "cover_ready")} done={stepDone("cover_ready")} open={activeStep === "cover_ready"} onOpen={() => openStepAndKind("cover_ready")} onToggleTick={(a, v) => onToggle(part.id, a, v)} telegram={telegramBlock}>
         <UploadZone
           icon={ImageIcon}
           title="کاور"
@@ -1613,7 +1569,7 @@ function PartUploadCard({
         )}
 
         {visibleSteps.some((s) => s.activity === "highlight_done") && (
-        <StepPanel step={PIPELINE_STEPS[5]} index={visibleSteps.findIndex((s) => s.activity === "highlight_done")} done={stepDone("highlight_done")} open={activeStep === "highlight_done"} onOpen={() => openStepAndKind("highlight_done")} onToggleTick={(a, v) => onToggle(part.id, a, v)} telegram={telegramBlock}>
+        <StepPanel step={stepBy("highlight_done")} index={visibleSteps.findIndex((s) => s.activity === "highlight_done")} done={stepDone("highlight_done")} open={activeStep === "highlight_done"} onOpen={() => openStepAndKind("highlight_done")} onToggleTick={(a, v) => onToggle(part.id, a, v)} telegram={telegramBlock}>
         <UploadZone
           icon={Scissors}
           title="برش‌ها"
@@ -1653,7 +1609,7 @@ function PartUploadCard({
         )}
 
         {visibleSteps.some((s) => s.activity === "reel_done") && (
-        <StepPanel step={PIPELINE_STEPS[6]} index={visibleSteps.findIndex((s) => s.activity === "reel_done")} done={stepDone("reel_done")} open={activeStep === "reel_done"} onOpen={() => openStepAndKind("reel_done")} onToggleTick={(a, v) => onToggle(part.id, a, v)} telegram={telegramBlock}>
+        <StepPanel step={stepBy("reel_done")} index={visibleSteps.findIndex((s) => s.activity === "reel_done")} done={stepDone("reel_done")} open={activeStep === "reel_done"} onOpen={() => openStepAndKind("reel_done")} onToggleTick={(a, v) => onToggle(part.id, a, v)} telegram={telegramBlock}>
         <UploadZone
           icon={Smartphone}
           title="ریلزها"

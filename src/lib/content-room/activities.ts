@@ -1,6 +1,5 @@
 export const PART_ACTIVITIES = [
   "raw_telegram",
-  "yt_check_upload",
   "copyright_report",
   "music_replaced",
   "final_full",
@@ -14,7 +13,6 @@ export type PartActivity = (typeof PART_ACTIVITIES)[number];
 
 export const REQUIRED_FOR_SEND: PartActivity[] = [
   "raw_telegram",
-  "yt_check_upload",
   "copyright_report",
   "music_replaced",
   "final_full",
@@ -26,7 +24,6 @@ export const REQUIRED_FOR_SEND: PartActivity[] = [
 /** Canonical Persian labels for part activities (single source of truth). */
 export const ACTIVITY_LABELS_FA: Record<PartActivity, string> = {
   raw_telegram: "خام (هندبریک)",
-  yt_check_upload: "آپلود چک یوتیوب",
   copyright_report: "گزارش کپی‌رایت",
   music_replaced: "موسیقی جایگزین",
   final_full: "نسخه نهایی",
@@ -39,7 +36,6 @@ export const ACTIVITY_LABELS_FA: Record<PartActivity, string> = {
 /** Which job function owns each activity (drives the task queue). */
 export const ACTIVITY_JOB_MAP: Record<string, string[]> = {
   raw_telegram: ["full_editor"],
-  yt_check_upload: ["full_editor"],
   copyright_report: ["full_editor"],
   music_replaced: ["full_editor"],
   final_full: ["full_editor"],

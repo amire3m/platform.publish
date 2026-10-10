@@ -1072,3 +1072,73 @@ export const channelPalettes = pgTable("channel_palettes", {
   watermarkPath: text("watermark_path"),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+// ---------------------------------------------------------------------------
+// Unified media core (phase 1): Telegram bytes behind adapter, Postgres catalog.
+// ---------------------------------------------------------------------------
+export const mediaAssets = pgTable("media_assets", {
+  id: text("id").primaryKey(),
+  title: text("title").notNull().default(""),
+  channel: text("channel"),
+  productId: text("product_id"),
+  partId: text("part_id"),
+  kind: text("kind").notNull().default("final"),
+  status: text("status").notNull().default("draft"),
+  currentRevisionId: text("current_revision_id"),
+  createdBy: text("created_by"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const mediaRevisions = pgTable(
+  "media_revisions",
+  {
+    id: text("id").primaryKey(),
+    assetId: text("asset_id")
+      .notNull()
+      .references(() => mediaAssets.id, { onDelete: "cascade" }),
+    version: integer("version").notNull().default(1),
+    fileName: text("file_name"),
+    mime: text("mime"),
+    sizeBytes: bigint("size_bytes", { mode: "number" }).notNull().default(0),
+    sha256: text("sha256"),
+    storageObjectId: text("storage_object_id"),
+    telegramFileRef: text("telegram_file_ref"),
+    status: text("status").notNull().default("draft"),
+    createdBy: text("created_by"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    assetIdx: index("media_revisions_asset_idx").on(t.assetId),
+  }),
+);
+
+export const mediaStorageObjects = pgTable("media_storage_objects", {
+  id: text("id").primaryKey(),
+  backend: text("backend").notNull().default("telegram"),
+  byteSize: bigint("byte_size", { mode: "number" }).notNull().default(0),
+  partCount: integer("part_count").notNull().default(1),
+  manifest: jsonb("manifest").$type<unknown[]>().notNull().default([]),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const mediaUploadSessions = pgTable(
+  "media_upload_sessions",
+  {
+    id: text("id").primaryKey(),
+    assetId: text("asset_id"),
+    fileName: text("file_name").notNull().default(""),
+    mime: text("mime").notNull().default("application/octet-stream"),
+    totalBytes: bigint("total_bytes", { mode: "number" }).notNull().default(0),
+    chunkBytes: integer("chunk_bytes").notNull().default(8388608),
+    totalChunks: integer("total_chunks").notNull().default(1),
+    receivedChunks: jsonb("received_chunks").$type<number[]>().notNull().default([]),
+    status: text("status").notNull().default("open"),
+    createdBy: text("created_by"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    statusIdx: index("media_upload_sessions_status_idx").on(t.status),
+  }),
+);

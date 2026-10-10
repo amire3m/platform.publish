@@ -32,6 +32,8 @@ export interface LibraryFileItem {
   createdAt: string;
   telegramLink?: string;
   partId?: string;
+  assetId?: string | null;
+  version?: number | null;
 }
 
 export interface LibraryPartNode {
@@ -188,6 +190,50 @@ export async function GET() {
         telegramLink: `https://t.me/c/${chatIdForLink}/${messageId}`,
         messageId,
       });
+    }
+  } catch {}
+
+  // best-effort media-core enrichment (never fails the listing)
+  try {
+    const { attachMediaCore } = await import("@/lib/media/catalog");
+    const { mediaRevisions } = await import("@/db/schema");
+    const { inArray } = await import("drizzle-orm");
+    const collectIds = (items: Array<{ fileId?: string | null }>): string[] =>
+      items.map((i) => i.fileId).filter((f): f is string => !!f);
+    const preItems = [...channels.flatMap((c) => c.products.flatMap((p) => p.parts.flatMap((part) => [
+      ...(part.fullVideo ? [part.fullVideo] : []),
+      ...part.highlights,
+      ...part.reels,
+    ]))), ...group];
+    const ids = collectIds(preItems).slice(0, 2000);
+    if (ids.length > 0) {
+      const revRows = await db
+        .select({ fileRef: mediaRevisions.telegramFileRef, assetId: mediaRevisions.assetId, version: mediaRevisions.version })
+        .from(mediaRevisions)
+        .where(inArray(mediaRevisions.telegramFileRef, ids))
+        .limit(2000);
+      const revMap: Record<string, { assetId: string; version: number }> = {};
+      for (const r of revRows as Array<{ fileRef: string | null; assetId: string; version: number }>) {
+        if (!r.fileRef) continue;
+        const prev = revMap[r.fileRef];
+        if (!prev || r.version > prev.version) revMap[r.fileRef] = { assetId: r.assetId, version: r.version };
+      }
+      const enriched = new Map(attachMediaCore(preItems, revMap).map((i) => [i.id, { assetId: i.assetId, version: i.version }]));
+      const applyCore = (item: { id: string; assetId?: string | null; version?: number | null }) => {
+        const e = enriched.get(item.id);
+        item.assetId = e?.assetId ?? null;
+        item.version = e?.version ?? null;
+      };
+      for (const ch of channels) {
+        for (const prod of ch.products) {
+          for (const part of prod.parts) {
+            if (part.fullVideo) applyCore(part.fullVideo);
+            for (const h of part.highlights) applyCore(h);
+            for (const r of part.reels) applyCore(r);
+          }
+        }
+      }
+      for (const g of group) applyCore(g);
     }
   } catch {}
 

@@ -16,37 +16,6 @@ describe("panel group media", () => {
 
   it("renders recent group videos section", async () => {
     const originalFetch = global.fetch;
-    global.fetch = vi.fn(async (input: RequestInfo | URL) => {
-      const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : (input as Request).url;
-      if (typeof url === "string" && url.includes("/api/telegram/group-media")) {
-        return {
-          ok: true,
-          json: async () => ({
-            ok: true,
-            data: {
-              items: [
-                { messageId: "123", fileId: "abc", fileName: "video_123.mp4", mime: "video/mp4", date: new Date().toISOString(), caption: "hi" },
-              ],
-            },
-          }),
-        } as unknown as Response;
-      }
-      if (typeof url === "string" && url.includes("/api/content-room/parts/") && url.includes("/assets")) {
-        return {
-          ok: true,
-          json: async () => ({ ok: true, data: { assets: [] } }),
-        } as unknown as Response;
-      }
-      if (typeof url === "string" && url.includes("/api/channels")) {
-        return {
-          ok: true,
-          json: async () => ({ ok: true, data: { channels: [] } }),
-        } as unknown as Response;
-      }
-      return { ok: true, json: async () => ({ ok: true, data: {} }) } as unknown as Response;
-    }) as unknown as typeof fetch;
-
-    const { ContentRoomDetail } = await import("./ContentRoomDetail");
     const product = {
       id: "p1",
       title: "t1",
@@ -74,12 +43,45 @@ describe("panel group media", () => {
         },
       ],
     } as unknown as never;
+    global.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : (input as Request).url;
+      if (typeof url === "string" && url.includes("/api/telegram/group-media")) {
+        return {
+          ok: true,
+          json: async () => ({
+            ok: true,
+            data: {
+              items: [
+                { messageId: "123", fileId: "abc", fileName: "video_123.mp4", mime: "video/mp4", date: new Date().toISOString(), caption: "hi" },
+              ],
+            },
+          }),
+        } as unknown as Response;
+      }
+      if (typeof url === "string" && url.includes("/api/content-room/parts/") && url.includes("/assets")) {
+        return {
+          ok: true,
+          json: async () => ({ ok: true, data: { assets: [] } }),
+        } as unknown as Response;
+      }
+      if (typeof url === "string" && url.includes("/api/content-room/products/")) {
+        return {
+          ok: true,
+          json: async () => ({ ok: true, data: { product } }),
+        } as unknown as Response;
+      }
+      if (typeof url === "string" && url.includes("/api/channels")) {
+        return {
+          ok: true,
+          json: async () => ({ ok: true, data: { channels: [] } }),
+        } as unknown as Response;
+      }
+      return { ok: true, json: async () => ({ ok: true, data: {} }) } as unknown as Response;
+    }) as unknown as typeof fetch;
 
-    render(<ContentRoomDetail product={product as never} onRefresh={vi.fn()} />);
+    const { PartWorkspace } = await import("./PartWorkspace");
 
-    // The group-media section lives under the "files" tab; switch to it first
-    const filesTab = await screen.findByRole("button", { name: /فایل‌ها/ });
-    filesTab.click();
+    render(<PartWorkspace productId="p1" partId="part-1" />);
 
     await waitFor(() => expect(screen.getByText(/افزودن از تلگرام/)).toBeInTheDocument());
     expect(screen.getAllByText("خام (هندبریک)").length).toBeGreaterThan(0);
@@ -91,25 +93,9 @@ describe("panel group media", () => {
   it("shows transcript panel with transcribe action on part cards", async () => {
     const originalFetch = global.fetch;
     const calls: Array<{ url: string; init?: RequestInit }> = [];
-    global.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : (input as Request).url;
-      calls.push({ url, init });
-      if (typeof url === "string" && url.includes("/transcript")) {
-        return { ok: true, json: async () => ({ ok: true, data: { status: "none" } }) } as unknown as Response;
-      }
-      if (typeof url === "string" && url.includes("/transcribe")) {
-        return { ok: true, json: async () => ({ ok: true, data: { status: "queued" } }) } as unknown as Response;
-      }
-      if (typeof url === "string" && url.includes("/api/channels")) {
-        return { ok: true, json: async () => ({ ok: true, data: { channels: [] } }) } as unknown as Response;
-      }
-      return { ok: true, json: async () => ({ ok: true, data: {} }) } as unknown as Response;
-    }) as unknown as typeof fetch;
-
-    const { ContentRoomDetail } = await import("./ContentRoomDetail");
     const product = {
-      id: "p1",
-      title: "t1",
+      id: "p2",
+      title: "t2",
       status: "draft",
       productType: "episode",
       channel: "youtube",
@@ -118,7 +104,7 @@ describe("panel group media", () => {
       notes: null,
       parts: [
         {
-          id: "part-1",
+          id: "part-2",
           partNumber: 1,
           fileRef: "tg-file-1",
           coverFileRef: null,
@@ -134,11 +120,30 @@ describe("panel group media", () => {
         },
       ],
     } as unknown as never;
+    global.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : (input as Request).url;
+      calls.push({ url, init });
+      if (typeof url === "string" && url.includes("/transcript")) {
+        return { ok: true, json: async () => ({ ok: true, data: { status: "none" } }) } as unknown as Response;
+      }
+      if (typeof url === "string" && url.includes("/transcribe")) {
+        return { ok: true, json: async () => ({ ok: true, data: { status: "queued" } }) } as unknown as Response;
+      }
+      if (typeof url === "string" && url.includes("/api/content-room/products/")) {
+        return { ok: true, json: async () => ({ ok: true, data: { product } }) } as unknown as Response;
+      }
+      if (typeof url === "string" && url.includes("/api/channels")) {
+        return { ok: true, json: async () => ({ ok: true, data: { channels: [] } }) } as unknown as Response;
+      }
+      return { ok: true, json: async () => ({ ok: true, data: {} }) } as unknown as Response;
+    }) as unknown as typeof fetch;
 
-    render(<ContentRoomDetail product={product as never} onRefresh={vi.fn()} />);
+    const { PartWorkspace } = await import("./PartWorkspace");
 
-    const filesTab = await screen.findByRole("button", { name: /فایل‌ها/ });
-    filesTab.click();
+    render(<PartWorkspace productId="p2" partId="part-2" />);
+
+    const transcriptToggle = await screen.findByText("رونوشت / زیرنویس");
+    fireEvent.click(transcriptToggle);
 
     const transcribeBtn = await screen.findByRole("button", { name: "رونویسی" });
     transcribeBtn.click();
@@ -218,18 +223,6 @@ describe("panel group media", () => {
 
   it("warns when a pasted link resolves without a direct file", async () => {
     const originalFetch = global.fetch;
-    global.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : (input as Request).url;
-      if (typeof url === "string" && url.includes("/attach") && init?.method === "POST") {
-        return { ok: true, json: async () => ({ ok: true, data: { mode: "linked", storedRef: "tg_msg_9", resolved: false } }) } as unknown as Response;
-      }
-      if (typeof url === "string" && url.includes("/api/channels")) {
-        return { ok: true, json: async () => ({ ok: true, data: { channels: [] } }) } as unknown as Response;
-      }
-      return { ok: true, json: async () => ({ ok: true, data: {} }) } as unknown as Response;
-    }) as unknown as typeof fetch;
-
-    const { ContentRoomDetail } = await import("./ContentRoomDetail");
     const product = {
       id: "p1",
       title: "t1",
@@ -257,11 +250,23 @@ describe("panel group media", () => {
         },
       ],
     } as unknown as never;
+    global.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : (input as Request).url;
+      if (typeof url === "string" && url.includes("/attach") && init?.method === "POST") {
+        return { ok: true, json: async () => ({ ok: true, data: { mode: "linked", storedRef: "tg_msg_9", resolved: false } }) } as unknown as Response;
+      }
+      if (typeof url === "string" && url.includes("/api/content-room/products/")) {
+        return { ok: true, json: async () => ({ ok: true, data: { product } }) } as unknown as Response;
+      }
+      if (typeof url === "string" && url.includes("/api/channels")) {
+        return { ok: true, json: async () => ({ ok: true, data: { channels: [] } }) } as unknown as Response;
+      }
+      return { ok: true, json: async () => ({ ok: true, data: {} }) } as unknown as Response;
+    }) as unknown as typeof fetch;
 
-    render(<ContentRoomDetail product={product as never} onRefresh={vi.fn()} />);
+    const { PartWorkspace } = await import("./PartWorkspace");
 
-    const filesTab = await screen.findByRole("button", { name: /فایل‌ها/ });
-    filesTab.click();
+    render(<PartWorkspace productId="p1" partId="part-1" />);
 
     const tgBtn = await screen.findByRole("button", { name: /لینک پیام تلگرام یا ریپلای/ });
     tgBtn.click();
@@ -280,22 +285,9 @@ describe("panel group media", () => {
   it("offers video prepare after player failure and warms the file", async () => {
     const originalFetch = global.fetch;
     const calls: Array<{ url: string; init?: RequestInit }> = [];
-    global.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : (input as Request).url;
-      calls.push({ url, init });
-      if (typeof url === "string" && url.includes("/api/media/warm")) {
-        return { ok: true, json: async () => ({ ok: true, data: { warmed: true } }) } as unknown as Response;
-      }
-      if (typeof url === "string" && url.includes("/api/channels")) {
-        return { ok: true, json: async () => ({ ok: true, data: { channels: [] } }) } as unknown as Response;
-      }
-      return { ok: true, json: async () => ({ ok: true, data: {} }) } as unknown as Response;
-    }) as unknown as typeof fetch;
-
-    const { ContentRoomDetail } = await import("./ContentRoomDetail");
     const product = {
-      id: "p1",
-      title: "t1",
+      id: "p3",
+      title: "t3",
       status: "draft",
       productType: "episode",
       channel: "youtube",
@@ -304,7 +296,7 @@ describe("panel group media", () => {
       notes: null,
       parts: [
         {
-          id: "part-1",
+          id: "part-3",
           partNumber: 1,
           fileRef: "file-abc",
           coverFileRef: null,
@@ -320,13 +312,26 @@ describe("panel group media", () => {
         },
       ],
     } as unknown as never;
+    global.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : (input as Request).url;
+      calls.push({ url, init });
+      if (typeof url === "string" && url.includes("/api/media/warm")) {
+        return { ok: true, json: async () => ({ ok: true, data: { warmed: true } }) } as unknown as Response;
+      }
+      if (typeof url === "string" && url.includes("/api/content-room/products/")) {
+        return { ok: true, json: async () => ({ ok: true, data: { product } }) } as unknown as Response;
+      }
+      if (typeof url === "string" && url.includes("/api/channels")) {
+        return { ok: true, json: async () => ({ ok: true, data: { channels: [] } }) } as unknown as Response;
+      }
+      return { ok: true, json: async () => ({ ok: true, data: {} }) } as unknown as Response;
+    }) as unknown as typeof fetch;
 
-    render(<ContentRoomDetail product={product as never} onRefresh={vi.fn()} />);
+    const { PartWorkspace } = await import("./PartWorkspace");
 
-    const filesTab = await screen.findByRole("button", { name: /فایل‌ها/ });
-    filesTab.click();
+    render(<PartWorkspace productId="p3" partId="part-3" />);
 
-    await screen.findByText("قسمت 1");
+    await screen.findAllByText("قسمت 1");
     fireEvent.error(document.querySelector("video")!);
     const prepareBtn = await screen.findByRole("button", { name: "آماده‌سازی ویدیو" });
     prepareBtn.click();
@@ -342,6 +347,33 @@ describe("panel group media", () => {
     const originalFetch = global.fetch;
     const calls: Array<{ url: string; init?: RequestInit }> = [];
     let armCount = 0;
+    const product = {
+      id: "p1",
+      title: "t1",
+      status: "draft",
+      productType: "episode",
+      channel: "youtube",
+      partsCount: 1,
+      version: 1,
+      notes: null,
+      parts: [
+        {
+          id: "part-1",
+          partNumber: 1,
+          fileRef: null,
+          coverFileRef: null,
+          highlightFileRef: null,
+          reelFileRef: null,
+          playbackUrl: null,
+          coverUrl: null,
+          highlightUrl: null,
+          reelUrl: null,
+          isActive: true,
+          status: "draft",
+          version: 1,
+        },
+      ],
+    } as unknown as never;
     global.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : (input as Request).url;
       calls.push({ url, init });
@@ -365,45 +397,18 @@ describe("panel group media", () => {
         }
         return { ok: true, json: async () => ({ ok: true, data: { mode: "cancelled" } }) } as unknown as Response;
       }
+      if (typeof url === "string" && url.includes("/api/content-room/products/")) {
+        return { ok: true, json: async () => ({ ok: true, data: { product } }) } as unknown as Response;
+      }
       if (typeof url === "string" && url.includes("/api/channels")) {
         return { ok: true, json: async () => ({ ok: true, data: { channels: [] } }) } as unknown as Response;
       }
       return { ok: true, json: async () => ({ ok: true, data: {} }) } as unknown as Response;
     }) as unknown as typeof fetch;
 
-    const { ContentRoomDetail } = await import("./ContentRoomDetail");
-    const product = {
-      id: "p1",
-      title: "t1",
-      status: "draft",
-      productType: "episode",
-      channel: "youtube",
-      partsCount: 1,
-      version: 1,
-      notes: null,
-      parts: [
-        {
-          id: "part-1",
-          partNumber: 1,
-          fileRef: null,
-          coverFileRef: null,
-          highlightFileRef: null,
-          reelFileRef: null,
-          playbackUrl: null,
-          coverUrl: null,
-          highlightUrl: null,
-          reelUrl: null,
-          isActive: true,
-          status: "draft",
-          version: 1,
-        },
-      ],
-    } as unknown as never;
+    const { PartWorkspace } = await import("./PartWorkspace");
 
-    render(<ContentRoomDetail product={product as never} onRefresh={vi.fn()} />);
-
-    const filesTab = await screen.findByRole("button", { name: /فایل‌ها/ });
-    filesTab.click();
+    render(<PartWorkspace productId="p1" partId="part-1" />);
 
     const tgBtn = await screen.findByRole("button", { name: /لینک پیام تلگرام یا ریپلای/ });
     tgBtn.click();

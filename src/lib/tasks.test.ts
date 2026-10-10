@@ -21,7 +21,7 @@ describe("buildChecklistTasks", () => {
     expect(tasks).toHaveLength(1);
     expect(tasks[0].activity).toBe("raw_telegram");
     expect(tasks[0].remainingForJob).toBe(4);
-    expect(tasks[0].href).toBe("/content-room/CPR-1");
+    expect(tasks[0].href).toBe("/content-room/CPR-1/parts/CPP-1");
   });
 
   it("skips jobs with nothing missing and previously_published parts", () => {
@@ -67,7 +67,7 @@ describe("buildAssetCoverTasks", () => {
   it("flags assets with no pinned cover, including published products", () => {
     const tasks = buildAssetCoverTasks([asset], new Set());
     expect(tasks).toHaveLength(1);
-    expect(tasks[0].href).toBe("/content-room/CPR-1");
+    expect(tasks[0].href).toBe("/content-room/CPR-1/parts/CPP-1");
   });
   it("skips assets that already have a pinned cover", () => {
     expect(buildAssetCoverTasks([asset], new Set(["AST-1"]))).toHaveLength(0);

@@ -73,7 +73,7 @@ export function buildChecklistTasks(parts: PartTaskInput[], jobsRaw: unknown): C
         channelLabel: part.channelLabel,
         partNumber: part.partNumber,
         remainingForJob: missing.length,
-        href: `/content-room/${part.productId}`,
+        href: `/content-room/${part.productId}/parts/${part.partId}`,
       });
     }
   }
@@ -135,7 +135,7 @@ export function buildAssetCoverTasks(assets: AssetCoverInput[], coveredAssetIds:
       channel: a.channel,
       channelLabel: a.channelLabel,
       partNumber: a.partNumber,
-      href: `/content-room/${a.productId}`,
+      href: `/content-room/${a.productId}/parts/${a.partId}`,
     });
   }
   return out;

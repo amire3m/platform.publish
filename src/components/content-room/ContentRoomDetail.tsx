@@ -12,7 +12,7 @@ import { fetchWorkflowApi } from "@/lib/workflow/client";
 import { contentStatusPresentation } from "@/lib/content-room/presentation";
 import type { ContentStatus } from "@/lib/content-room/presentation";
 import type { ContentRoomProductDetail } from "./types";
-import { channelLabelFa, productTypeLabelFa, getProductProgressFromActivities, getNextActionFromActivities } from "./room-model";
+import { channelLabelFa, productTypeLabelFa, getProductProgressFromActivities, getNextActionFromActivities, progressFromActivities } from "./room-model";
 import { getChannelAccounts } from "@/lib/channels";
 import { PartActivitiesGrid } from "./PartActivitiesGrid";
 import { PartMusic } from "./PartMusic";
@@ -54,6 +54,25 @@ export function ContentRoomDetail({ product, onRefresh }: Props) {
   const [sendResult, setSendResult] = useState<{ programId: string } | null>(null);
   const [editOpen, setEditOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<"checklist" | "files" | "group">("checklist");
+  const [onlyIncompleteParts, setOnlyIncompleteParts] = useState(false);
+
+  const activePartsList = useMemo(
+    () => (product?.parts ?? []).filter((p) => (p as { isActive?: boolean }).isActive ?? true).sort((a, b) => a.partNumber - b.partNumber),
+    [product],
+  );
+
+  function partPercent(p: { activities?: Record<string, boolean> | null }): number {
+    return Math.round(progressFromActivities({ parts: [p] } as never) * 100);
+  }
+
+  function partFileSummary(p: { fileRef?: string | null; coverFileRef?: string | null; highlightFileRef?: string | null; reelFileRef?: string | null }): string {
+    const bits: string[] = [];
+    bits.push(p.fileRef ? "ویدیو ✓" : "ویدیو ✗");
+    bits.push(p.coverFileRef ? "کاور ✓" : "کاور ✗");
+    bits.push(p.highlightFileRef ? "برش ✓" : "برش ✗");
+    bits.push(p.reelFileRef ? "ریلز ✓" : "ریلز ✗");
+    return bits.join(" · ");
+  }
 
   const currentStatus = product.status as ContentStatus;
   const pres = contentStatusPresentation(currentStatus);
@@ -313,26 +332,62 @@ export function ContentRoomDetail({ product, onRefresh }: Props) {
 
       {activeTab === "files" && (
         <Card className="space-y-3">
-          <h2 className="text-sm font-bold text-tg-text">قسمت‌ها (آپلود فایل)</h2>
-        {product.parts && product.parts.length > 0 ? (
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {[...product.parts]
-              .sort((a, b) => a.partNumber - b.partNumber)
-              .filter((p) => (p as { isActive?: boolean }).isActive ?? true)
-              .map((part) => (
-                <div key={part.id} className="space-y-2">
-                  <PartUploadCard
-                    part={part}
-                    onRefresh={onRefresh}
-                    onError={setActionError}
-                    onToast={setToast}
-                    onToggle={handleToggle}
-                    myJobs={myJobs}
-                    isStaffAdmin={isStaffAdmin}
-                  />
-                </div>
-              ))}
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-sm font-bold text-tg-text">قسمت‌ها ({activePartsList.length}) — برای کار روی یک قسمت وارد صفحه‌اش شوید</h2>
+            <div className="flex items-center gap-2">
+              <label className="flex items-center gap-1.5 text-xs text-tg-secondary">
+                <input type="checkbox" checked={onlyIncompleteParts} onChange={(e) => setOnlyIncompleteParts(e.target.checked)} className="h-3.5 w-3.5" />
+                فقط ناقص‌ها
+              </label>
+              <Select
+                value=""
+                onChange={(e) => {
+                  if (e.target.value) router.push(`/content-room/${product.id}/parts/${e.target.value}`);
+                }}
+                className="min-h-[36px] text-xs"
+                aria-label="پرش به قسمت"
+              >
+                <option value="">پرش به قسمت…</option>
+                {activePartsList.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    قسمت {p.partNumber} — {partPercent(p)}٪
+                  </option>
+                ))}
+              </Select>
+            </div>
           </div>
+        {activePartsList.length > 0 ? (
+          <ul className="divide-y divide-tg-border overflow-hidden rounded-xl border border-tg-border">
+            {activePartsList
+              .filter((p) => !onlyIncompleteParts || partPercent(p) < 100)
+              .map((p) => {
+                const pct = partPercent(p);
+                const done = pct >= 100;
+                return (
+                  <li key={p.id}>
+                    <Link
+                      href={`/content-room/${product.id}/parts/${p.id}`}
+                      className="flex items-center gap-3 p-3 transition-colors hover:bg-tg-hover/40"
+                    >
+                      <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-sm font-bold ${done ? "bg-emerald-500 text-white" : "bg-tg-accent-soft text-tg-accent"}`}>
+                        {done ? "✓" : p.partNumber.toLocaleString("fa-IR")}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-sm font-semibold text-tg-text">قسمت {p.partNumber}</p>
+                          <span className="shrink-0 text-xs font-bold text-tg-text">{pct}٪</span>
+                        </div>
+                        <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-tg-hover">
+                          <div className={`h-full rounded-full ${done ? "bg-emerald-500" : "bg-tg-accent"}`} style={{ width: `${pct}%` }} />
+                        </div>
+                        <p className="mt-1 truncate text-[11px] text-tg-secondary">{partFileSummary(p)}</p>
+                      </div>
+                      <span className="shrink-0 text-tg-secondary">‹</span>
+                    </Link>
+                  </li>
+                );
+              })}
+          </ul>
         ) : (
           <p className="text-sm text-tg-secondary">قسمتی ثبت نشده است.</p>
         )}
@@ -594,7 +649,7 @@ function StepPanel({
   );
 }
 
-function PartUploadCard({
+export function PartUploadCard({
   part,
   onRefresh,
   onError,

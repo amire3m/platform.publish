@@ -33,6 +33,23 @@ describe("AppShell", () => {
 
     const navigation = screen.getByRole("navigation");
     expect(navigation).toHaveClass("min-h-0", "flex-1", "overflow-y-auto");
-    expect(navigation).not.toHaveAttribute("style");
+    expect(navigation.style.height).not.toContain("100vh");
+  });
+
+  it("preserves the desktop sidebar layout and navigation height", () => {
+    render(
+      <AppShell user={{ name: "Test User", role: "admin" }}>
+        <div>Page content</div>
+      </AppShell>,
+    );
+
+    const sidebar = screen.getByRole("complementary");
+    expect(sidebar).toHaveClass("lg:block", "lg:overflow-visible");
+
+    const sidebarHeader = screen.getByAltText("لوگوی مؤسسه امام روح‌الله").parentElement;
+    expect(sidebarHeader).toHaveClass("lg:shrink");
+
+    const navigation = screen.getByRole("navigation");
+    expect(navigation).toHaveClass("lg:min-h-auto", "lg:flex-none", "lg:h-[calc(100vh-4rem)]");
   });
 });

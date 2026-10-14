@@ -190,11 +190,11 @@ export function AppShell({
   return (
     <div className="flex min-h-screen">
       <aside
-        className={`fixed top-0 bottom-0 right-0 z-40 flex w-72 transform flex-col overflow-hidden border-l border-tg-border bg-tg-surface transition-transform lg:static lg:translate-x-0 ${
+        className={`fixed top-0 bottom-0 right-0 z-40 flex w-72 transform flex-col overflow-hidden border-l border-tg-border bg-tg-surface transition-transform lg:static lg:block lg:overflow-visible lg:translate-x-0 ${
           open ? "translate-x-0" : "translate-x-full lg:translate-x-0"
         }`}
       >
-        <div className="flex h-16 shrink-0 items-center gap-3 border-b border-tg-border px-5">
+        <div className="flex h-16 shrink-0 items-center gap-3 border-b border-tg-border px-5 lg:shrink">
           <img
             src="/brand/imam-logo.png"
             alt="لوگوی مؤسسه امام روح‌الله"
@@ -205,7 +205,7 @@ export function AppShell({
             <p className="text-[11px] text-tg-secondary">مخزن اصلی: گروه تلگرام</p>
           </div>
         </div>
-        <nav className="min-h-0 flex-1 flex flex-col gap-4 overflow-y-auto p-3">
+        <nav className="min-h-0 flex-1 flex flex-col gap-4 overflow-y-auto p-3 lg:h-[calc(100vh-4rem)] lg:min-h-auto lg:flex-none">
           {[
             { title: null as string | null, items: coreItems },
             { title: mailItems.length ? "پیام" : null, items: mailItems },

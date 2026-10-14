@@ -344,12 +344,11 @@ export function AppShell({
         {!pathname?.startsWith("/board") && (
           <Link
             href="/board"
-            className="fixed bottom-4 left-4 z-40 flex min-h-[44px] items-center gap-2 rounded-full bg-tg-accent py-2.5 pl-3 pr-4 text-sm font-bold text-tg-accent-fg shadow-lg transition hover:brightness-110"
-            aria-label="گزارش جامع پروژه (نسخه آزمایشی)"
+            className="fixed bottom-4 left-4 z-40 flex size-11 items-center justify-center rounded-full bg-tg-accent p-0 text-tg-accent-fg shadow-lg transition hover:brightness-110"
+            aria-label="گزارش جامع پروژه"
+            title="گزارش جامع پروژه"
           >
-            <FileText className="h-4 w-4" />
-            گزارش پروژه
-            <span className="rounded-full bg-black/20 px-2 py-0.5 text-[10px] font-medium">آزمایشی</span>
+            <FileText className="size-5" aria-hidden="true" />
           </Link>
         )}
         {showNotifications && (

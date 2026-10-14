@@ -64,4 +64,17 @@ describe("AppShell", () => {
     expect(main).toHaveClass("min-w-0");
     expect(main.parentElement).toHaveClass("min-w-0");
   });
+
+  it("renders the project report shortcut as an accessible icon-only link", () => {
+    render(
+      <AppShell user={{ name: "Test User", role: "admin" }}>
+        <div>Page content</div>
+      </AppShell>,
+    );
+
+    const reportLink = screen.getByRole("link", { name: "گزارش جامع پروژه" });
+    expect(reportLink).toHaveClass("size-11", "justify-center", "p-0");
+    expect(reportLink).toHaveAttribute("title", "گزارش جامع پروژه");
+    expect(reportLink).toHaveTextContent("");
+  });
 });

@@ -52,4 +52,16 @@ describe("AppShell", () => {
     const navigation = screen.getByRole("navigation");
     expect(navigation).toHaveClass("lg:min-h-auto", "lg:flex-none", "lg:h-[calc(100vh-4rem)]");
   });
+
+  it("contains intrinsically wide pages within the viewport", () => {
+    render(
+      <AppShell user={{ name: "Test User", role: "admin" }}>
+        <div style={{ minWidth: "1230px" }}>Wide table</div>
+      </AppShell>,
+    );
+
+    const main = screen.getByRole("main");
+    expect(main).toHaveClass("min-w-0");
+    expect(main.parentElement).toHaveClass("min-w-0");
+  });
 });

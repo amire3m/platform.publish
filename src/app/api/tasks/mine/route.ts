@@ -50,8 +50,10 @@ export async function GET(req: Request) {
   const productById = new Map(visibleProducts.map((p) => [p.id, p]));
 
   let checklist: ReturnType<typeof buildChecklistTasks> = [];
+  let partRows: Array<{ id: string; productId: string; partNumber: number }> = [];
+  const prevByPart = new Set<string>();
   if (productIds.length && queueJobs.length) {
-    const partRows = (await db
+    partRows = (await db
       .select({
         id: contentParts.id,
         productId: contentParts.productId,
@@ -62,7 +64,6 @@ export async function GET(req: Request) {
       .limit(2000)) as unknown as Array<{ id: string; productId: string; partNumber: number }>;
     const partIds = partRows.map((r) => r.id);
     const actsByPart = new Map<string, Record<string, boolean>>();
-    const prevByPart = new Set<string>();
     if (partIds.length) {
       const actRows = (await db
         .select({
@@ -205,15 +206,10 @@ export async function GET(req: Request) {
     perPerson.set(r.completedBy, e);
   }
 
-  // --- graphic queue: highlight/reel assets with no pinned cover ---
-  // (includes already-published products: their YouTube versions still need thumbnails)
+  // --- graphic queue: unpublished highlight/reel assets with no pinned cover ---
   let assetCovers: ReturnType<typeof buildAssetCoverTasks> = [];
   if (productIds.length && (admin || jobs.includes("graphic"))) {
-    const gParts = (await db
-      .select({ id: contentParts.id, productId: contentParts.productId, partNumber: contentParts.partNumber })
-      .from(contentParts)
-      .where(and(inArray(contentParts.productId, productIds), eq(contentParts.isActive, true)))
-      .limit(2000)) as unknown as Array<{ id: string; productId: string; partNumber: number }>;
+    const gParts = partRows;
     const gPartIds = gParts.map((r) => r.id);
     const gPartById = new Map(gParts.map((r) => [r.id, r]));
     if (gPartIds.length) {
@@ -252,6 +248,7 @@ export async function GET(req: Request) {
           channel: prod.channel,
           channelLabel: getChannelLabelFa(prod.channel),
           partNumber: part.partNumber,
+          previouslyPublished: prevByPart.has(part.id),
         });
       }
       inputs.sort((x, y) => (orderIdx.get(x.productId) ?? 9999) - (orderIdx.get(y.productId) ?? 9999));

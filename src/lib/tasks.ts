@@ -95,6 +95,7 @@ export interface AssetCoverInput {
   channel: string;
   channelLabel: string;
   partNumber: number;
+  previouslyPublished?: boolean;
 }
 
 export interface AssetCoverTask {
@@ -114,13 +115,13 @@ export interface AssetCoverTask {
 }
 
 /**
- * One task per highlight/reel asset that has no cover yet — including parts
- * of already-published products (their YouTube versions still need thumbnails).
+ * One task per unpublished highlight/reel asset that has no cover yet.
  */
 export function buildAssetCoverTasks(assets: AssetCoverInput[], coveredAssetIds: Set<string> | ReadonlySet<string>): AssetCoverTask[] {
   const covered = coveredAssetIds;
   const out: AssetCoverTask[] = [];
   for (const a of assets) {
+    if (a.previouslyPublished) continue;
     if (covered.has(a.assetId)) continue;
     out.push({
       kind: "asset_cover",

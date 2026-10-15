@@ -64,10 +64,13 @@ describe("buildAssetCoverTasks", () => {
     channelLabel: "ضد روایت",
     partNumber: 2,
   };
-  it("flags assets with no pinned cover, including published products", () => {
+  it("flags unpublished assets with no pinned cover", () => {
     const tasks = buildAssetCoverTasks([asset], new Set());
     expect(tasks).toHaveLength(1);
     expect(tasks[0].href).toBe("/content-room/CPR-1/parts/CPP-1");
+  });
+  it("skips assets from previously published parts", () => {
+    expect(buildAssetCoverTasks([{ ...asset, previouslyPublished: true }], new Set())).toHaveLength(0);
   });
   it("skips assets that already have a pinned cover", () => {
     expect(buildAssetCoverTasks([asset], new Set(["AST-1"]))).toHaveLength(0);

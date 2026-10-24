@@ -75,6 +75,7 @@ const STATUS_LABELS: Record<string, { label: string; className: string }> = {
   changes_requested: { label: "نیازمند اصلاح", className: "bg-orange-500/10 text-orange-600 dark:text-orange-400" },
   approved: { label: "تأییدشده", className: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" },
   scheduled: { label: "زمان‌بندی‌شده", className: "bg-tg-accent/10 text-tg-accent" },
+  planned: { label: "برنامه انتشار", className: "bg-sky-500/10 text-sky-700 dark:text-sky-300" },
   publishing: { label: "در حال انتشار", className: "bg-violet-500/10 text-violet-600 dark:text-violet-400" },
   published: { label: "منتشرشده", className: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400" },
   rejected: { label: "رد شده", className: "bg-rose-500/10 text-rose-600 dark:text-rose-400" },

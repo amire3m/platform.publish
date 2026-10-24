@@ -2,9 +2,10 @@ import { db } from "@/db";
 import { content, workflowDeliverables, workflowPrograms, workflowPublications } from "@/db/schema";
 import { requirePermission, jsonOk } from "@/lib/api-helpers";
 import { canAccessAccount, hasPermission } from "@/lib/permissions";
-import { CHANNEL_IDS, getChannelLabelFa, CHANNELS } from "@/lib/channels";
+import { CHANNEL_IDS, getChannelLabelFa, CHANNELS, resolveChannelAccountId } from "@/lib/channels";
 import { and, eq, inArray, isNotNull } from "drizzle-orm";
 import { formatJalaliSlash } from "@/lib/date/jalali";
+import { CALENDAR_PLAN_ENTRIES } from "@/lib/calendar-plan";
 
 const WORKFLOW_VISIBLE_STATUSES = ["scheduled", "ready", "publishing", "failed"] as const;
 
@@ -149,6 +150,37 @@ export async function GET(req: Request) {
   } catch (e) {
     // Never break the legacy listing if the workflow join fails
     console.error("[calendar] workflow publications listing failed:", (e as Error).message);
+  }
+
+  for (const entry of CALENDAR_PLAN_ENTRIES) {
+    const entryPlatform = "youtube";
+    const entryAccountId = resolveChannelAccountId(entry.channel, entryPlatform);
+    if (!entryAccountId) continue;
+    if (platform && platform !== entryPlatform) continue;
+    if (accountId && accountId !== entryAccountId) continue;
+    if (status && status !== "planned") continue;
+    if (channelParam && channelParam !== entry.channel) continue;
+    if (!canAccessAccount(user, entryAccountId)) continue;
+
+    events.push({
+      displayId: entry.id,
+      source: "plan",
+      contentId: null,
+      publicationId: null,
+      title: entry.title,
+      platform: entryPlatform,
+      accountId: entryAccountId,
+      channel: entry.channel,
+      channelLabel: getChannelLabelFa(entry.channel),
+      contentType: "plan",
+      status: "planned",
+      publishAtUtc: entry.publishAtUtc,
+      publishAtJalali: entry.publishAtJalali,
+      contentStatus: "planned",
+      approvalStatus: null,
+      hasError: false,
+      thumbnailAvailable: false,
+    } as never);
   }
 
   return jsonOk(events);

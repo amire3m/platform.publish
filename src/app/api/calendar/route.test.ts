@@ -29,8 +29,20 @@ import { GET } from "@/app/api/calendar/route";
 
 const user = { id: "user-1", telegramId: "tg-1", role: "owner", allowedActions: [], allowedAccountIds: [] };
 
-function req() {
-  return new Request("http://localhost/api/calendar");
+function req(search = "") {
+  return new Request(`http://localhost/api/calendar${search}`);
+}
+
+function mockEmptyCalendarQueries() {
+  mocks.select
+    .mockReturnValueOnce({ from: () => ({ where: async () => [] }) })
+    .mockReturnValueOnce({
+      from: () => ({
+        innerJoin: () => ({
+          innerJoin: () => ({ where: () => ({ limit: async () => [] }) }),
+        }),
+      }),
+    });
 }
 
 describe("GET /api/calendar", () => {
@@ -100,7 +112,7 @@ describe("GET /api/calendar", () => {
     const res = await GET(req());
     const body = await res.json();
     expect(body.ok).toBe(true);
-    expect(body.data).toHaveLength(3);
+    expect(body.data).toHaveLength(18);
 
     const wfYoutube = body.data.find((e: { publicationId: string }) => e.publicationId === "WPB-1");
     expect(wfYoutube).toMatchObject({
@@ -142,6 +154,72 @@ describe("GET /api/calendar", () => {
     const res = await GET(req());
     const body = await res.json();
     expect(body.ok).toBe(true);
-    expect(body.data).toHaveLength(0);
+    expect(body.data).toHaveLength(15);
+    expect(body.data.some((event: { publicationId?: string }) => event.publicationId === "WPB-X")).toBe(false);
+  });
+
+  it("merges the 15 approved display-only events with stable Tehran timestamps", async () => {
+    mockEmptyCalendarQueries();
+
+    const res = await GET(req());
+    const body = await res.json();
+    const planEvents = body.data.filter((event: { source?: string }) => event.source === "plan");
+
+    expect(planEvents).toHaveLength(15);
+    expect(new Set(planEvents.map((event: { displayId: string }) => event.displayId)).size).toBe(15);
+    expect(planEvents.map((event: {
+      displayId: string;
+      publishAtJalali: string;
+      publishAtUtc: string;
+      title: string;
+      channel: string;
+    }) => [event.displayId, event.publishAtJalali, event.publishAtUtc, event.title, event.channel])).toEqual([
+      ["plan-1405-08-02-01", "1405/08/02 11:00", "2026-10-24T07:30:00Z", "برنامه بلندگو", "zaviye_no"],
+      ["plan-1405-08-02-02", "1405/08/02 11:00", "2026-10-24T07:30:00Z", "برنامه بلندگو", "zed_revayat"],
+      ["plan-1405-08-02-03", "1405/08/02 13:00", "2026-10-24T09:30:00Z", "مستندهای ضد روایت", "zed_revayat"],
+      ["plan-1405-08-03-01", "1405/08/03 17:00", "2026-10-25T13:30:00Z", "برنامه زاویه صفر درجه", "zaviye_no"],
+      ["plan-1405-08-03-02", "1405/08/03 19:00", "2026-10-25T15:30:00Z", "سریال مشاور", "tamashin"],
+      ["plan-1405-08-04-01", "1405/08/04 09:00", "2026-10-26T05:30:00Z", "برش‌های سریال مشاور", "tamashin"],
+      ["plan-1405-08-04-02", "1405/08/04 13:00", "2026-10-26T09:30:00Z", "مستندهای ضد روایت", "zed_revayat"],
+      ["plan-1405-08-05-01", "1405/08/05 09:00", "2026-10-27T05:30:00Z", "ریلزهای مشاور", "tamashin"],
+      ["plan-1405-08-05-02", "1405/08/05 12:00", "2026-10-27T08:30:00Z", "برش‌های زاویه صفر درجه", "zaviye_no"],
+      ["plan-1405-08-06-01", "1405/08/06 11:00", "2026-10-28T07:30:00Z", "برنامه بلندگو", "zaviye_no"],
+      ["plan-1405-08-06-02", "1405/08/06 11:00", "2026-10-28T07:30:00Z", "برنامه بلندگو", "zed_revayat"],
+      ["plan-1405-08-06-03", "1405/08/06 13:00", "2026-10-28T09:30:00Z", "مستندهای ضد روایت", "zed_revayat"],
+      ["plan-1405-08-07-01", "1405/08/07 10:30", "2026-10-29T07:00:00Z", "ریلز زاویه صفر درجه", "zaviye_no"],
+      ["plan-1405-08-07-02", "1405/08/07 19:00", "2026-10-29T15:30:00Z", "سریال مشاور", "tamashin"],
+      ["plan-1405-08-08-01", "1405/08/08 10:00", "2026-10-30T06:30:00Z", "برش و ریلز مشاور", "tamashin"],
+    ]);
+    expect(planEvents[0]).toMatchObject({
+      source: "plan",
+      contentId: null,
+      publicationId: null,
+      platform: "youtube",
+      accountId: "ACC-1405-398046",
+      channelLabel: "زاویه نو",
+      contentType: "plan",
+      status: "planned",
+      contentStatus: "planned",
+      approvalStatus: null,
+      hasError: false,
+      thumbnailAvailable: false,
+    });
+    expect(Object.fromEntries(planEvents.map((event: { channel: string; accountId: string }) => [event.channel, event.accountId]))).toEqual({
+      zaviye_no: "ACC-1405-398046",
+      zed_revayat: "ACC-1405-688518",
+      tamashin: "ACC-1405-724040",
+    });
+  });
+
+  it("applies platform and channel filters to display-only events", async () => {
+    mockEmptyCalendarQueries();
+
+    const res = await GET(req("?platform=youtube&channel=zaviye_no"));
+    const body = await res.json();
+
+    expect(body.data).toHaveLength(5);
+    expect(body.data.every((event: { source: string; platform: string; channel: string }) =>
+      event.source === "plan" && event.platform === "youtube" && event.channel === "zaviye_no"
+    )).toBe(true);
   });
 });

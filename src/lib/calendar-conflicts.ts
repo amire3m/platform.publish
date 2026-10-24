@@ -5,7 +5,8 @@
  */
 
 export interface ConflictEvent {
-  contentId: string;
+  displayId?: string;
+  contentId: string | null;
   publicationId?: string | null;
   title: string;
   platform: string;
@@ -31,6 +32,7 @@ export function eventKey(e: ConflictEvent): string {
 
 export function getEventUid(e: ConflictEvent): string {
   // stable uid for maps
+  if (e.displayId) return `display:${e.displayId}`;
   if (e.publicationId) return `pub:${e.publicationId}`;
   return `cnt:${e.contentId}:${e.platform}:${e.accountId}`;
 }

@@ -28,7 +28,9 @@ import {
 const fetcher = (url: string) => timedFetch(url).then((r) => r.json());
 
 interface CalendarEvent {
-  contentId: string;
+  displayId?: string;
+  source?: "plan";
+  contentId: string | null;
   publicationId?: string | null;
   title: string;
   platform: string;
@@ -176,10 +178,14 @@ export default function CalendarPage() {
     ev: React.DragEvent,
     e: CalendarEvent
   ) {
+    if (e.source === "plan") {
+      ev.preventDefault();
+      return;
+    }
     const uid = getEventUid(e as never);
     setDraggingId(uid);
     ev.dataTransfer.effectAllowed = "move";
-    ev.dataTransfer.setData("contentId", e.contentId);
+    ev.dataTransfer.setData("contentId", e.contentId ?? "");
     if (e.publicationId) ev.dataTransfer.setData("publicationId", e.publicationId);
     ev.dataTransfer.setData("time", e.publishAtJalali?.split(" ")[1] ?? "12:00");
     ev.dataTransfer.setData("platform", e.platform);
@@ -324,16 +330,17 @@ export default function CalendarPage() {
                       const tooltip = isConflict && info ? formatConflictTooltip(info.conflictingTitles) : e.title;
                       const isDragging = draggingId === uid;
                       const isRescheduling = reschedulingId === uid;
+                      const isPlan = e.source === "plan";
                       return (
                         <div
-                          key={`${e.contentId}-${e.platform}-${e.publicationId ?? ""}`}
-                          draggable={!isRescheduling}
-                          onDragStart={(ev) => handleDragStart(ev, e)}
+                          key={e.displayId ?? `${e.contentId}-${e.platform}-${e.publicationId ?? ""}`}
+                          draggable={!isPlan && !isRescheduling}
+                          onDragStart={isPlan ? undefined : (ev) => handleDragStart(ev, e)}
                           onDragEnd={() => {
                             setDraggingId(null);
                             setDragOverKey(null);
                           }}
-                          className={`group cursor-move truncate rounded px-1 py-0.5 text-[10px] sm:text-[11px] flex items-center gap-1 transition ${
+                          className={`group truncate rounded px-1 py-0.5 text-[10px] sm:text-[11px] flex items-center gap-1 transition ${isPlan ? "cursor-default" : "cursor-move"} ${
                             isConflict
                               ? "bg-orange-500/15 text-orange-700 dark:text-orange-300 ring-1 ring-orange-400/50"
                               : e.hasError
@@ -386,15 +393,11 @@ export default function CalendarPage() {
               const info = conflicts.conflictMap.get(uid);
               const tooltip = isConflict && info ? formatConflictTooltip(info.conflictingTitles) : undefined;
               const isRescheduling = reschedulingId === uid;
-              return (
-                <Link
-                  key={`${e.contentId}-${e.platform}-${e.publicationId ?? ""}`}
-                  href={(e as { programId?: string }).programId ? `/workflow/${(e as { programId?: string }).programId}` : `/content/${e.contentId}`}
-                  className={`flex flex-col gap-1 p-3 text-sm hover:bg-tg-hover sm:flex-row sm:items-center sm:justify-between ${
-                    isConflict ? "bg-orange-500/5" : ""
-                  }`}
-                  title={tooltip}
-                >
+              const rowClassName = `flex flex-col gap-1 p-3 text-sm sm:flex-row sm:items-center sm:justify-between ${
+                isConflict ? "bg-orange-500/5" : ""
+              }`;
+              const rowContent = (
+                <>
                   <div className="flex items-center gap-2 min-w-0">
                     <span className="text-tg-secondary shrink-0">
                       {e.platform === "youtube" ? (
@@ -424,6 +427,23 @@ export default function CalendarPage() {
                     <span className="text-[11px] sm:text-xs">{formatJalaliDateTime(e.publishAtUtc)}</span>
                     <StatusBadge status={e.status} />
                   </div>
+                </>
+              );
+              if (e.source === "plan") {
+                return (
+                  <div key={e.displayId} className={rowClassName} title={tooltip}>
+                    {rowContent}
+                  </div>
+                );
+              }
+              return (
+                <Link
+                  key={`${e.contentId}-${e.platform}-${e.publicationId ?? ""}`}
+                  href={(e as { programId?: string }).programId ? `/workflow/${(e as { programId?: string }).programId}` : `/content/${e.contentId}`}
+                  className={`${rowClassName} hover:bg-tg-hover`}
+                  title={tooltip}
+                >
+                  {rowContent}
                 </Link>
               );
             })}

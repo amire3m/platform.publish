@@ -76,6 +76,7 @@ export async function register() {
       })(),
       (async () => {
         const { runWorkflowNotificationDelivery } = await import("@/lib/workflow/notifications");
+        const { createDbTaskRecipientValidator } = await import("@/lib/task-board/postgres-port");
         // DB-backed delivery via same logic as cron route but without CRON_SECRET
         const { db } = await import("@/db");
         const { workflowNotifications, users } = await import("@/db/schema");
@@ -110,7 +111,9 @@ export async function register() {
             return u ? { id: u.id, telegramId: (u as unknown as { telegramId?: string }).telegramId ?? null } : null;
           },
         };
-        const result = await runWorkflowNotificationDelivery(port as never);
+        const result = await runWorkflowNotificationDelivery(port as never, {
+          validateRecipient: createDbTaskRecipientValidator() as never,
+        });
         for (const n of port.notifications as unknown as { id: string; status: string; attempts: number; claimedAt: Date | null; claimId: string | null; lastError: string | null }[]) {
           await db
             .update(workflowNotifications)

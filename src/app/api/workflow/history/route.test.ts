@@ -77,4 +77,35 @@ describe("GET /api/workflow/history", () => {
     expect(response.status).toBe(401);
     expect(repository.listHistory).not.toHaveBeenCalled();
   });
+
+  it("blocks task entity types from generic history", async () => {
+    const repository = { listHistory: vi.fn() };
+    const response = await handleHistoryRequest(
+      new Request("http://test/api/workflow/history?entityType=task"),
+      deps({ repository: repository as never }),
+    );
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toMatchObject({ ok: false, code: "FORBIDDEN" });
+    expect(repository.listHistory).not.toHaveBeenCalled();
+  });
+
+  it("blocks task_assignment entity types from generic history", async () => {
+    const repository = { listHistory: vi.fn() };
+    const response = await handleHistoryRequest(
+      new Request("http://test/api/workflow/history?entityType=task_assignment&entityId=TSK-1405-000001:graphic"),
+      deps({ repository: repository as never }),
+    );
+    expect(response.status).toBe(403);
+    expect(repository.listHistory).not.toHaveBeenCalled();
+  });
+
+  it("blocks TSK entity ids from generic history", async () => {
+    const repository = { listHistory: vi.fn() };
+    const response = await handleHistoryRequest(
+      new Request("http://test/api/workflow/history?entityId=TSK-1405-000001"),
+      deps({ repository: repository as never }),
+    );
+    expect(response.status).toBe(403);
+    expect(repository.listHistory).not.toHaveBeenCalled();
+  });
 });

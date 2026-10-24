@@ -41,7 +41,8 @@ export function generateEntityId(
     | "BDL"
     | "MAS"
     | "MRV"
-    | "MSO",
+    | "MSO"
+    | "TSK",
 ): string {
   const { jy } = todayJalali();
   const suffix = prefix === "ANS" ? analyticsSnapshotSuffix() : legacySuffix();

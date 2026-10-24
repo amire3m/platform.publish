@@ -23,6 +23,7 @@ import { sql } from "drizzle-orm";
 import {
   bigint,
   boolean,
+  check,
   date,
   doublePrecision,
   index,
@@ -667,6 +668,66 @@ export const contentParts = pgTable(
   (table) => ({
     productIdx: index("content_part_product_idx").on(table.productId),
     productPartUnique: uniqueIndex("content_part_product_part_unique").on(table.productId, table.partNumber),
+  }),
+);
+
+// ---------------------------------------------------------------------------
+// Manual task board — PostgreSQL-authoritative
+// ---------------------------------------------------------------------------
+export const tasks = pgTable(
+  "tasks",
+  {
+    id: text("id").primaryKey(), // TSK-1405-000001
+    title: varchar("title", { length: 200 }).notNull(),
+    description: text("description"),
+    status: text("status").notNull().default("open"),
+    dueAt: timestamp("due_at", { withTimezone: true }),
+    productId: text("product_id").references(() => contentProducts.id, { onDelete: "set null" }),
+    partId: text("part_id").references(() => contentParts.id, { onDelete: "set null" }),
+    createdBy: text("created_by").references(() => users.id, { onDelete: "set null" }),
+    version: integer("version").notNull().default(1),
+    awaitingApprovalAt: timestamp("awaiting_approval_at", { withTimezone: true }),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    statusCheck: check(
+      "task_status_check",
+      sql`${table.status} in ('open', 'awaiting_approval', 'completed', 'archived')`,
+    ),
+    versionCheck: check("task_version_check", sql`${table.version} > 0`),
+    openOrderIdx: index("task_open_order_idx").on(table.status, table.dueAt, table.createdAt, table.id),
+    approvalOrderIdx: index("task_approval_order_idx").on(table.status, table.awaitingApprovalAt, table.id),
+    completedOrderIdx: index("task_completed_order_idx").on(table.status, table.completedAt, table.id),
+    archivedOrderIdx: index("task_archived_order_idx").on(table.status, table.archivedAt, table.id),
+    productIdx: index("task_product_idx").on(table.productId),
+    partIdx: index("task_part_idx").on(table.partId),
+  }),
+);
+
+export const taskAssignments = pgTable(
+  "task_assignments",
+  {
+    taskId: text("task_id")
+      .notNull()
+      .references(() => tasks.id, { onDelete: "cascade" }),
+    jobFunction: text("job_function").notNull(),
+    status: text("status").notNull().default("open"),
+    submissionNote: text("submission_note"),
+    submissionUrl: text("submission_url"),
+    submittedBy: text("submitted_by").references(() => users.id, { onDelete: "set null" }),
+    submittedAt: timestamp("submitted_at", { withTimezone: true }),
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.taskId, table.jobFunction] }),
+    statusCheck: check("task_assignment_status_check", sql`${table.status} in ('open', 'submitted')`),
+    jobFunctionCheck: check(
+      "task_assignment_job_function_check",
+      sql`${table.jobFunction} in ('full_editor', 'reel_editor', 'graphic', 'publisher_admin')`,
+    ),
+    jobStatusIdx: index("task_assignment_job_status_idx").on(table.jobFunction, table.status, table.taskId),
   }),
 );
 

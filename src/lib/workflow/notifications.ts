@@ -1,4 +1,5 @@
 import { generateEntityId } from "@/lib/ids";
+import { buildTaskNotificationText, isTaskNotificationType } from "@/lib/task-board/notifications";
 
 export interface NotificationEvent {
   type: string;
@@ -42,6 +43,7 @@ export interface NotificationPort {
 
 export interface DeliveryDeps {
   sendPrivateMessage?: (telegramId: string, text: string) => Promise<boolean>;
+  validateRecipient?: (notification: WorkflowNotificationRecord) => Promise<boolean>;
 }
 
 function buildSafePayload(event: NotificationEvent): Record<string, unknown> {
@@ -54,7 +56,7 @@ function buildSafePayload(event: NotificationEvent): Record<string, unknown> {
   if (event.dueAt) safe.dueAt = event.dueAt instanceof Date ? event.dueAt.toISOString() : event.dueAt;
   // only allow safe fields from payload
   if (event.payload) {
-    const allowed = ["title", "deliverableName", "programTitle", "dueAt", "reason", "platform"];
+    const allowed = ["title", "deliverableName", "programTitle", "dueAt", "reason", "platform", "taskId", "jobFunction", "jobFunctions"];
     for (const k of allowed) {
       if (k in event.payload) safe[k] = event.payload[k];
     }
@@ -278,6 +280,23 @@ export async function runWorkflowNotificationDelivery(
     n.attempts += 1;
     n.updatedAt = now;
 
+    // Revalidate task notification recipients before any delivery attempt.
+    if (isTaskNotificationType(n.eventType) && deps?.validateRecipient) {
+      let valid = false;
+      try {
+        valid = await deps.validateRecipient(n);
+      } catch {
+        valid = false;
+      }
+      if (!valid) {
+        n.status = "cancelled";
+        n.updatedAt = new Date();
+        skipped++;
+        console.log(`[workflow-notifications] cancelled task notification ${n.eventType} ${n.idempotencyKey} - recipient invalid`);
+        continue;
+      }
+    }
+
     // check recipient
     const telegramId = (n as unknown as { recipientTelegramId?: string | null }).recipientTelegramId ?? null;
     // Also try to resolve via getUser if provided
@@ -298,8 +317,9 @@ export async function runWorkflowNotificationDelivery(
         if (u) resolvedTelegramId = (u as unknown as { telegramId?: string | null }).telegramId ?? null;
       } catch {}
     }
-    // Final fallback to manager telegramId for deadline/failure types
-    if (!resolvedTelegramId && (n.eventType === "due_24h" || n.eventType === "due24h" || n.eventType === "failure" || n.eventType === "publish_failed" || n.eventType === "overdue_daily")) {
+    // Final fallback to manager telegramId for deadline/failure types.
+    // Task notifications never use the manager fallback.
+    if (!resolvedTelegramId && !isTaskNotificationType(n.eventType) && (n.eventType === "due_24h" || n.eventType === "due24h" || n.eventType === "failure" || n.eventType === "publish_failed" || n.eventType === "overdue_daily")) {
       resolvedTelegramId = await resolveTelegramIdWithManagerFallback(port, n, resolvedTelegramId);
     }
 
@@ -365,6 +385,9 @@ export async function runWorkflowNotificationDelivery(
 
 function buildNotificationText(n: WorkflowNotificationRecord): string {
   const p = n.payload as Record<string, unknown>;
+  if (isTaskNotificationType(n.eventType)) {
+    return buildTaskNotificationText(n.eventType, p);
+  }
   const title = (p.title as string) ?? (p.deliverableName as string) ?? n.eventType;
   const dueStr = (p.dueAt as string) ? ` موعد: ${String(p.dueAt).slice(0,16)}` : "";
   const platform = (p.platform as string) ? ` بستر: ${p.platform}` : "";

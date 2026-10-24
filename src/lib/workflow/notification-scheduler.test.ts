@@ -51,4 +51,33 @@ describe("notification-scheduler", () => {
     // Should be false when not 09:00 Tehran
     expect(hasOverdue2).toBe(false);
   });
+
+  it("schedules task reminders idempotently through the task tick", async () => {
+    const { runTaskSchedulerTick } = await import("./notification-scheduler");
+    const now = new Date("2026-10-24T08:00:00.000Z");
+    const dueAt = new Date("2026-10-25T08:00:00.000Z");
+    const stored: { idempotencyKey: string }[] = [];
+    const deps = {
+      listReminderCandidates: async () => [
+        { taskId: "TSK-1", title: "t1", dueAt, status: "open", channel: null, openJobFunctions: ["graphic"] },
+      ],
+      resolveJobRecipients: async () => [{ id: "u1", role: "editor", active: true, jobFunctions: ["graphic"], allowedChannels: [] }],
+      resolveOwners: async () => [],
+      insertTaskNotifications: async (rows: { idempotencyKey: string }[]) => {
+        let count = 0;
+        for (const row of rows) {
+          if (!stored.some((item) => item.idempotencyKey === row.idempotencyKey)) {
+            stored.push(row);
+            count += 1;
+          }
+        }
+        return count;
+      },
+    };
+    const first = await runTaskSchedulerTick(now, deps as never);
+    expect(first.enqueued).toBe(1);
+    const second = await runTaskSchedulerTick(now, deps as never);
+    expect(second.enqueued).toBe(0);
+    expect(stored).toHaveLength(1);
+  });
 });

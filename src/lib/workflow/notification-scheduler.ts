@@ -1,4 +1,5 @@
 import { enqueueWorkflowNotification, cancelDueNotification, type NotificationEvent, type NotificationPort } from "./notifications";
+import { scheduleTaskReminders, type TaskReminderPort } from "@/lib/task-board/notifications";
 import { generateEntityId } from "@/lib/ids";
 
 export interface SchedulerPort extends NotificationPort {
@@ -108,6 +109,17 @@ export async function scheduleWorkflowReminders(
   return { enqueued };
 }
 
+export async function runTaskSchedulerTick(now: Date = new Date(), deps?: TaskReminderPort): Promise<{ enqueued: number }> {
+  try {
+    if (deps) return scheduleTaskReminders(now, deps);
+    const { PostgresTaskPort } = await import("@/lib/task-board/postgres-port");
+    return scheduleTaskReminders(now, new PostgresTaskPort());
+  } catch (err) {
+    console.error("[task-notifications] scheduler tick failed:", (err as Error).message);
+    return { enqueued: 0 };
+  }
+}
+
 export async function handleDeadlineChange(
   port: SchedulerPort & { notifications: import("./notifications").WorkflowNotificationRecord[] },
   deliverableId: string,
@@ -208,6 +220,10 @@ export async function runSchedulerTick(): Promise<{ enqueued: number }> {
         }
       }
     }
+  } catch {}
+  try {
+    const taskTick = await runTaskSchedulerTick(now);
+    enqueued += taskTick.enqueued;
   } catch {}
   return { enqueued };
 }

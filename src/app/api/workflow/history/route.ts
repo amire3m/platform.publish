@@ -25,6 +25,15 @@ export async function handleHistoryRequest(request: Request, deps: HistoryRouteD
   if (!user) return response!;
 
   const url = new URL(request.url);
+  const entityTypeParam = url.searchParams.get("entityType");
+  const entityIdParam = url.searchParams.get("entityId");
+  if (
+    entityTypeParam === "task" ||
+    entityTypeParam === "task_assignment" ||
+    (entityIdParam !== null && (entityIdParam.startsWith("TSK-") || entityIdParam.includes("TSK-:")))
+  ) {
+    return jsonError("تاریخچه کارها فقط از مسیر کارها در دسترس است.", 403, "FORBIDDEN");
+  }
   const raw = {
     entityType: url.searchParams.get("entityType") ?? undefined,
     entityId: url.searchParams.get("entityId") ?? undefined,

@@ -96,4 +96,87 @@ describe("workflow notifications idempotency and delivery", () => {
     await runWorkflowNotificationDelivery(port as never, { sendPrivateMessage: sendPrivateMessage as never });
     expect(sendPrivateMessage).toHaveBeenCalledTimes(1);
   });
+
+  it("does not use manager fallback for task events", async () => {
+    const port: { notifications: unknown[] } = { notifications: [] as never } as never;
+    const sendPrivateMessage = vi.fn(async () => true);
+    const record = {
+      id: "WNT-1",
+      recipientUserId: "u-task",
+      channel: "in_app",
+      eventType: "task_created",
+      payload: { taskId: "TSK-1", title: "cover", version: 1 },
+      idempotencyKey: "task:TSK-1:task_created:1:u-task",
+      scheduledAt: new Date(Date.now() - 1000),
+      status: "pending",
+      attempts: 0,
+      lastError: null,
+      claimId: null,
+      claimedAt: null,
+      readAt: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      recipientTelegramId: null,
+    };
+    (port.notifications as unknown[]).push(record as never);
+    const result = await runWorkflowNotificationDelivery(port as never, {
+      sendPrivateMessage: sendPrivateMessage as never,
+      validateRecipient: async () => true,
+    });
+    expect(result.skipped).toBe(1);
+    expect(sendPrivateMessage).not.toHaveBeenCalled();
+    expect((port.notifications as unknown as { status: string }[])[0].status).toBe("skipped_no_recipient");
+  });
+
+  it("cancels task notifications that fail recipient revalidation", async () => {
+    const port: { notifications: unknown[] } = { notifications: [] as never } as never;
+    const sendPrivateMessage = vi.fn(async () => true);
+    const record = {
+      id: "WNT-2",
+      recipientUserId: "u-stale",
+      channel: "in_app",
+      eventType: "task_due_24h",
+      payload: { taskId: "TSK-9", title: "late", jobFunction: "graphic", dueAt: "2026-10-25T08:00:00.000Z" },
+      idempotencyKey: "task:TSK-9:due_24h:2026-10-25T08:00:00.000Z:u-stale:graphic",
+      scheduledAt: new Date(Date.now() - 1000),
+      status: "pending",
+      attempts: 0,
+      lastError: null,
+      claimId: null,
+      claimedAt: null,
+      readAt: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      recipientTelegramId: "999",
+    };
+    (port.notifications as unknown[]).push(record as never);
+    const result = await runWorkflowNotificationDelivery(port as never, {
+      sendPrivateMessage: sendPrivateMessage as never,
+      validateRecipient: async () => false,
+    });
+    expect(result.skipped).toBe(1);
+    expect(sendPrivateMessage).not.toHaveBeenCalled();
+    expect((port.notifications as unknown as { status: string }[])[0].status).toBe("cancelled");
+  });
+
+  it("keeps workflow fallback behavior for non-task events", async () => {
+    const port: { notifications: unknown[] } = { notifications: [] as never } as never;
+    const sendPrivateMessage = vi.fn(async () => true);
+    const event = {
+      type: "assignment",
+      deliverableId: "del4",
+      assigneeUserId: "u4",
+      version: 1,
+      recipientUserId: "u4",
+      recipientTelegramId: null,
+      payload: { title: "Need" },
+    };
+    await enqueueWorkflowNotification(port as never, event);
+    const result = await runWorkflowNotificationDelivery(port as never, {
+      sendPrivateMessage: sendPrivateMessage as never,
+      validateRecipient: async () => true,
+    });
+    expect(result.skipped).toBe(1);
+    expect((port.notifications as unknown as { status: string }[])[0].status).toBe("skipped_no_recipient");
+  });
 });

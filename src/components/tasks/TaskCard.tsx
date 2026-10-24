@@ -41,8 +41,15 @@ export default function TaskCard({
             {card.partNumber != null ? ` · قسمت ${toPersianDigits(card.partNumber)}` : ""}
           </span>
         )}
+        {card.status === "awaiting_approval" && card.awaitingApprovalAt && (
+          <span className="block text-xs tabular-nums text-tg-secondary">
+            تحویل: {formatJalaliDateTime(card.awaitingApprovalAt)}
+          </span>
+        )}
         {card.dueAt && (
-          <span className="block text-xs text-tg-secondary">{formatJalaliDateTime(card.dueAt)}</span>
+          <span className="block text-xs tabular-nums text-tg-secondary">
+            موعد: {formatJalaliDateTime(card.dueAt)}
+          </span>
         )}
         {overdue && (
           <span className="block text-xs font-semibold text-rose-500">موعد گذشته</span>

@@ -246,6 +246,34 @@ describe("TaskBoard", () => {
     expect(await screen.findByText("موعد گذشته")).toBeInTheDocument();
   });
 
+  it("labels submission and due timestamps on awaiting-approval cards", async () => {
+    mockedFetch.mockImplementation(async (url: string) => {
+      if (url === "/api/auth/me") return { role: "owner" };
+      if (url.startsWith("/api/tasks?")) {
+        const parsed = new URL(url, "http://test");
+        if (parsed.searchParams.get("column") === "awaiting_approval") {
+          return {
+            items: [
+              makeCard({
+                status: "awaiting_approval",
+                awaitingApprovalAt: "2026-10-22T15:30:00.000Z",
+                dueAt: "2026-11-21T05:20:00.000Z",
+              }),
+            ],
+            nextCursor: null,
+            total: 1,
+          };
+        }
+        return { items: [], nextCursor: null, total: 0 };
+      }
+      if (url === "/api/content-room/products") return [];
+      throw new Error("unexpected url " + url);
+    });
+    renderBoard({ initialTaskId: null });
+    expect(await screen.findByText("تحویل: پنجشنبه ۳۰ مهر ۱۴۰۵ ساعت ۱۹:۰۰")).toBeInTheDocument();
+    expect(screen.getByText("موعد: شنبه ۳۰ آبان ۱۴۰۵ ساعت ۰۸:۵۰")).toBeInTheDocument();
+  });
+
   it("shows a filtered empty state with a clear action", async () => {
     renderBoard({ initialTaskId: null });
     expect(await screen.findByText("کاور قسمت پنجم")).toBeInTheDocument();

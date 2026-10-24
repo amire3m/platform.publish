@@ -92,6 +92,21 @@ function makeDetail() {
 
 function installDefaultMock() {
   mockedFetch.mockImplementation(async (url: string) => {
+    if (url === "/api/auth/me") {
+      return {
+        id: "owner1",
+        name: "مالک",
+        username: "owner",
+        role: "owner",
+        telegramId: "100",
+        permissions: [],
+        allowedAccountIds: null,
+        allowedChannels: [],
+        jobFunctions: [],
+        impersonatedBy: null,
+        impersonationExpiresAt: null,
+      };
+    }
     if (url.startsWith("/api/tasks/TSK-")) return makeDetail();
     if (url.startsWith("/api/tasks?")) {
       const parsed = new URL(url, "http://test");
@@ -149,8 +164,48 @@ describe("TaskBoard", () => {
     expect(screen.getByRole("button", { name: "نمایش بایگانی" })).toBeInTheDocument();
   });
 
+  it("shows create control to an owner when every task column is empty", async () => {
+    mockedFetch.mockImplementation(async (url: string) => {
+      if (url === "/api/auth/me") {
+        return {
+          id: "owner1",
+          name: "مالک",
+          username: "owner",
+          role: "owner",
+          telegramId: "100",
+          permissions: [],
+          allowedAccountIds: null,
+          allowedChannels: [],
+          jobFunctions: [],
+          impersonatedBy: null,
+          impersonationExpiresAt: null,
+        };
+      }
+      if (url.startsWith("/api/tasks?")) return { items: [], nextCursor: null, total: 0 };
+      if (url === "/api/content-room/products") return [];
+      throw new Error("unexpected url " + url);
+    });
+    renderBoard({ initialTaskId: null });
+    expect(await screen.findByRole("button", { name: "کار جدید" })).toBeInTheDocument();
+  });
+
   it("hides owner controls when capabilities deny them", async () => {
     mockedFetch.mockImplementation(async (url: string) => {
+      if (url === "/api/auth/me") {
+        return {
+          id: "worker1",
+          name: "همکار",
+          username: "worker",
+          role: "editor",
+          telegramId: "1",
+          permissions: [],
+          allowedAccountIds: null,
+          allowedChannels: [],
+          jobFunctions: ["graphic"],
+          impersonatedBy: null,
+          impersonationExpiresAt: null,
+        };
+      }
       if (url.startsWith("/api/tasks?")) {
         const parsed = new URL(url, "http://test");
         if (parsed.searchParams.get("column") === "open") {

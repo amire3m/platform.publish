@@ -14,7 +14,6 @@ import {
   DEFAULT_TASK_FILTERS,
   TASK_COLUMN_LABELS,
   type TaskBoardFilters,
-  type TaskCardItem,
   type TaskColumnKey,
   type TaskPageResponse,
 } from "./types";
@@ -129,13 +128,8 @@ export default function TaskBoard({ initialTaskId }: { initialTaskId: string | n
     [open, awaiting, completed, archived],
   );
 
-  const privileged = useMemo(
-    () =>
-      (["open", "awaiting_approval", "completed"] as TaskColumnKey[]).some((column) =>
-        states[column].items.some((card: TaskCardItem) => card.capabilities.canEdit || card.capabilities.canArchive),
-      ),
-    [states],
-  );
+  const { data: currentUser } = useSWR<{ role: string }>("/api/auth/me", fetchWorkflowApi);
+  const privileged = currentUser?.role === "owner";
 
   const { data: productsData } = useSWR<unknown>("/api/content-room/products", fetchWorkflowApi);
   const products: ProductOption[] = useMemo(() => {

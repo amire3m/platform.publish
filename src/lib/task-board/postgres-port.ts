@@ -269,20 +269,28 @@ async function insertAssignments(tx: DbTransaction, assignments: TaskAssignmentR
   await tx.insert(taskAssignments).values(assignments);
 }
 
-async function cancelPendingTaskReminders(tx: DbTransaction, bundle: TaskMutationBundle): Promise<void> {
-  if (bundle.cancelPendingReminderTaskIds.length === 0) return;
+export function buildCancelPendingTaskRemindersQuery(bundle: {
+  cancelPendingReminderTaskIds: string[];
+  notifications: Array<Pick<TaskNotificationRecord, "idempotencyKey">>;
+}): SQL {
+  const taskIds = sql.join(bundle.cancelPendingReminderTaskIds.map((taskId) => sql`${taskId}`), sql`, `);
   const keepKeys = bundle.notifications.map((row) => row.idempotencyKey);
   const keepCondition = keepKeys.length > 0
-    ? sql`and not (${workflowNotifications.idempotencyKey} = any (${keepKeys}))`
+    ? sql`and not (${workflowNotifications.idempotencyKey} in (${sql.join(keepKeys.map((key) => sql`${key}`), sql`, `)}))`
     : sql``;
-  await tx.execute(sql`
+  return sql`
     update workflow_notifications
     set status = 'cancelled', updated_at = now()
     where status = 'pending'
       and event_type in ('task_due_24h', 'task_overdue')
-      and payload->>'taskId' = any (${bundle.cancelPendingReminderTaskIds})
+      and payload->>'taskId' in (${taskIds})
       ${keepCondition}
-  `);
+  `;
+}
+
+async function cancelPendingTaskReminders(tx: DbTransaction, bundle: TaskMutationBundle): Promise<void> {
+  if (bundle.cancelPendingReminderTaskIds.length === 0) return;
+  await tx.execute(buildCancelPendingTaskRemindersQuery(bundle));
 }
 
 export class PostgresTaskPort implements TaskPort {

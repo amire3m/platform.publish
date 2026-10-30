@@ -1,12 +1,37 @@
 import { describe, expect, it } from "vitest";
+import { PgDialect } from "drizzle-orm/pg-core";
 
 import {
+  buildCancelPendingTaskRemindersQuery,
   decodeTaskCursor,
   encodeTaskCursor,
   resolveCompletedRange,
   resolveDueRange,
   visibleChannelsForActor,
 } from "./postgres-port";
+
+describe("task reminder cancellation query", () => {
+  it("binds task IDs and retained notification keys as scalar IN values", () => {
+    const query = new PgDialect().sqlToQuery(
+      buildCancelPendingTaskRemindersQuery({
+        cancelPendingReminderTaskIds: ["TSK-1", "TSK-2"],
+        notifications: [
+          { idempotencyKey: "task:TSK-1:task_approved:3:USR-1" },
+          { idempotencyKey: "task:TSK-2:task_approved:2:USR-2" },
+        ],
+      }),
+    );
+
+    expect(query.sql).toContain("payload->>'taskId' in ($1, $2)");
+    expect(query.sql).toContain('and not ("workflow_notifications"."idempotency_key" in ($3, $4))');
+    expect(query.params).toEqual([
+      "TSK-1",
+      "TSK-2",
+      "task:TSK-1:task_approved:3:USR-1",
+      "task:TSK-2:task_approved:2:USR-2",
+    ]);
+  });
+});
 
 describe("task cursor encoding", () => {
   it("round-trips every field in an open cursor", () => {

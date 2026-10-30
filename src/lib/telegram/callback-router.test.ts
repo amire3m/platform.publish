@@ -59,6 +59,27 @@ vi.mock("@/lib/content-room/repository", () => ({
   },
 }));
 
+vi.mock("@/lib/content-room/link", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/content-room/link")>();
+  return { ...actual, linkPartMedia: vi.fn().mockResolvedValue({ storedRef: "photo-large" }) };
+});
+
+beforeEach(async () => {
+  const { db } = await import("@/db");
+  vi.mocked(db.select as unknown as () => unknown).mockReset().mockImplementation((() => ({
+    from: () => ({
+      where: () => ({
+        limit: () => Promise.resolve([]),
+        orderBy: () => ({ limit: () => Promise.resolve([]) }),
+      }),
+      orderBy: () => ({ limit: () => ({ offset: () => Promise.resolve([]) }) }),
+      limit: () => Promise.resolve([]),
+    }),
+  })) as never);
+  const { linkPartMedia } = await import("@/lib/content-room/link");
+  vi.mocked(linkPartMedia).mockClear();
+});
+
 describe("link_existing", () => {
   it("shows product picker for link_existing", async () => {
     const { routeCallback } = await import("./callback-router");
@@ -118,6 +139,60 @@ describe("link_existing", () => {
     const kb = mockEdit.mock.calls[0][2] as { replyMarkup: { inline_keyboard: Array<Array<{ text: string; callback_data?: string }>> } };
     const kinds = kb.replyMarkup.inline_keyboard.flat().map((b) => b.callback_data?.split(":").pop());
     expect(kinds).toEqual(expect.arrayContaining(["video", "cover", "highlight", "reel", "clean"]));
+  });
+
+  it("shows only existing full-video, reel, and highlight targets for an image", async () => {
+    const { db } = await import("@/db");
+    const { TelegramClient } = await import("./client");
+    const OWNER = { id: "u-tg", telegramId: "999", name: "T", role: "owner", active: true, allowedActions: [], allowedAccountIds: [] };
+    const selectMock = vi.mocked(db.select as unknown as () => unknown);
+    selectMock
+      .mockImplementationOnce((() => ({ from: () => ({ where: () => ({ limit: () => Promise.resolve([OWNER]) }) }) })) as never)
+      .mockImplementationOnce((() => ({ from: () => ({ where: () => ({ limit: () => Promise.resolve([{ action: "group_image_replied" }]) }) }) })) as never)
+      .mockImplementationOnce((() => ({ from: () => ({ where: () => ({ limit: () => Promise.resolve([{ id: "CPP-1", fileRef: "video-file" }]) }) }) })) as never)
+      .mockImplementationOnce((() => ({ from: () => ({ where: () => Promise.resolve([
+        { id: "AST-H1", kind: "highlight", fileName: "برش اول" },
+        { id: "AST-R1", kind: "reel", fileName: "ریلز اول" },
+      ]) }) })) as never);
+    const mockEdit = vi.fn().mockResolvedValue({});
+    vi.mocked(TelegramClient.fromEnv as unknown as () => unknown).mockReturnValueOnce({
+      editMessageText: mockEdit,
+      sendMessage: vi.fn(),
+    } as never);
+
+    const { routeCallback } = await import("./callback-router");
+    const res = await routeCallback("link_pick_part", "200:CPP-1", "999", 100);
+
+    expect(res.ok).toBe(true);
+    const kb = mockEdit.mock.calls[0][2] as { replyMarkup: { inline_keyboard: Array<Array<{ text: string; callback_data?: string }>> } };
+    const buttons = kb.replyMarkup.inline_keyboard.flat();
+    expect(buttons.map((button) => button.text)).toEqual(expect.arrayContaining([
+      "کاور ویدیوی کامل",
+      "کاور برش — برش اول",
+      "کاور ریلز — ریلز اول",
+    ]));
+  });
+
+  it("links an image cover to the selected existing reel", async () => {
+    const { db } = await import("@/db");
+    const { linkPartMedia } = await import("@/lib/content-room/link");
+    const OWNER = { id: "u-tg", telegramId: "999", name: "T", role: "owner", active: true, allowedActions: [], allowedAccountIds: [] };
+    vi.mocked(db.select as unknown as () => unknown)
+      .mockImplementationOnce((() => ({ from: () => ({ where: () => ({ limit: () => Promise.resolve([OWNER]) }) }) })) as never)
+      .mockImplementationOnce((() => ({ from: () => ({ where: () => ({ limit: () => Promise.resolve([{ after: { fileId: "photo-large", fileName: "cover.jpg" } }]) }) }) })) as never)
+      .mockImplementationOnce((() => ({ from: () => ({ where: () => ({ limit: () => Promise.resolve([{ id: "AST-R1", partId: "CPP-1", kind: "reel" }]) }) }) })) as never);
+
+    const { routeCallback } = await import("./callback-router");
+    const res = await routeCallback("link_pick_cover", "200:CPP-1:AST-R1", "999", 100);
+
+    expect(res.ok).toBe(true);
+    expect(linkPartMedia).toHaveBeenCalledWith(expect.objectContaining({
+      partId: "CPP-1",
+      kind: "cover",
+      fileId: "photo-large",
+      targetKind: "reel",
+      targetAssetId: "AST-R1",
+    }));
   });
 
   it("links file via link_pick_kind", async () => {

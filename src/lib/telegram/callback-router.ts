@@ -1,4 +1,4 @@
-import { asc, desc, eq, and } from "drizzle-orm";
+import { asc, desc, eq, and, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import { content, users, contentProducts, contentParts, contentPartAssets, workflowEvents } from "@/db/schema";
 import { hasPermission, type Permission } from "@/lib/permissions";
@@ -6,6 +6,7 @@ import { updateContentRecord, appendAuditEvent } from "@/lib/telegram/tgdb";
 import { publishContentNow } from "@/lib/worker";
 import { nowUtcIso } from "@/lib/date/jalali";
 import { generateEntityId } from "@/lib/ids";
+import { linkPartMedia } from "@/lib/content-room/link";
 
 const PERMISSION_MAP: Record<string, string> = {
   approve: "approve_content",
@@ -192,6 +193,15 @@ async function handleLinkPickPart(contentId: string, botMessageId?: number): Pro
   const partId = parts[1] || "";
   if (!messageId || !partId) return { ok: false, message: "درخواست نامعتبر است." };
 
+  try {
+    const [imageEvent] = await db
+      .select()
+      .from(workflowEvents)
+      .where(and(eq(workflowEvents.entityType, "telegram_group_message"), eq(workflowEvents.entityId, messageId), eq(workflowEvents.action, "group_image_replied")))
+      .limit(1);
+    if (imageEvent) return handleImageCoverTargets(messageId, partId, botMessageId);
+  } catch {}
+
   const kb = {
     inline_keyboard: [
       [
@@ -242,6 +252,92 @@ async function handleLinkPickPart(contentId: string, botMessageId?: number): Pro
     }
   } catch {}
   return { ok: true, message: "انتخاب نوع" };
+}
+
+async function handleImageCoverTargets(messageId: string, partId: string, botMessageId?: number): Promise<{ ok: boolean; message: string }> {
+  const [part] = await db.select().from(contentParts).where(eq(contentParts.id, partId)).limit(1);
+  if (!part) return { ok: false, message: "قسمت یافت نشد." };
+  const assets = await db
+    .select()
+    .from(contentPartAssets)
+    .where(and(eq(contentPartAssets.partId, partId), inArray(contentPartAssets.kind, ["highlight", "reel"])));
+
+  const rows: Array<Array<{ text: string; callback_data: string }>> = [];
+  if ((part as unknown as { fileRef?: string | null }).fileRef) {
+    rows.push([{ text: "کاور ویدیوی کامل", callback_data: `link_pick_cover:${messageId}:${partId}:youtube_full` }]);
+  }
+  for (const asset of assets as unknown as Array<{ id: string; kind: string; fileName: string | null }>) {
+    const kindLabelFa = asset.kind === "reel" ? "ریلز" : "برش";
+    const name = asset.fileName?.trim() || asset.id;
+    rows.push([{ text: `کاور ${kindLabelFa} — ${name}`.slice(0, 60), callback_data: `link_pick_cover:${messageId}:${partId}:${asset.id}` }]);
+  }
+  rows.push([{ text: "◀️ بازگشت", callback_data: `link_existing:${messageId}:0` }]);
+
+  const selectableCount = rows.length - 1;
+  const text = selectableCount > 0
+    ? `<b>🖼️ انتخاب خروجی هدف</b>\nتامنیل را به کدام خروجی قسمت متصل می‌کنید؟`
+    : `<b>🖼️ خروجی قابل انتخابی وجود ندارد</b>\nابتدا ویدیوی کامل، ریلز یا برش را به این قسمت اضافه کنید.`;
+  const client = await getTelegramClientSafe();
+  if (client) {
+    await (client as unknown as { editMessageText: (id: number, text: string, opts: unknown) => Promise<unknown> }).editMessageText(
+      botMessageId ?? (Number(messageId) || 0),
+      text,
+      { parseMode: "HTML", replyMarkup: { inline_keyboard: rows } },
+    );
+  }
+  return { ok: true, message: selectableCount > 0 ? "انتخاب خروجی هدف" : "خروجی موجود نیست" };
+}
+
+async function handleLinkPickCover(contentId: string, actorUserId: string, botMessageId?: number): Promise<{ ok: boolean; message: string }> {
+  const [messageId, partId, targetId] = contentId.split(":");
+  if (!messageId || !partId || !targetId) return { ok: false, message: "درخواست نامعتبر است." };
+
+  const [imageEvent] = await db
+    .select()
+    .from(workflowEvents)
+    .where(and(eq(workflowEvents.entityType, "telegram_group_message"), eq(workflowEvents.entityId, messageId), eq(workflowEvents.action, "group_image_replied")))
+    .limit(1);
+  const image = imageEvent?.after as { fileId?: string; fileName?: string } | null;
+  if (!image?.fileId) return { ok: false, message: "فایل تصویر یافت نشد." };
+
+  let targetKind: "youtube_full" | "highlight" | "reel";
+  let targetAssetId: string | null = null;
+  if (targetId === "youtube_full") {
+    const [part] = await db.select().from(contentParts).where(eq(contentParts.id, partId)).limit(1);
+    if (!(part as unknown as { fileRef?: string | null } | undefined)?.fileRef) return { ok: false, message: "ویدیوی کامل این قسمت موجود نیست." };
+    targetKind = "youtube_full";
+  } else {
+    const [asset] = await db.select().from(contentPartAssets).where(eq(contentPartAssets.id, targetId)).limit(1);
+    const target = asset as unknown as { id: string; partId: string; kind: string } | undefined;
+    if (!target || target.partId !== partId || (target.kind !== "highlight" && target.kind !== "reel")) {
+      return { ok: false, message: "ریلز یا برش هدف یافت نشد." };
+    }
+    targetKind = target.kind;
+    targetAssetId = target.id;
+  }
+
+  await linkPartMedia({
+    partId,
+    kind: "cover",
+    messageId,
+    fileId: image.fileId,
+    fileName: image.fileName ?? null,
+    actorUserId,
+    source: "telegram",
+    targetKind,
+    targetAssetId,
+  });
+
+  const text = `✅ تامنیل به <b>${targetKind === "youtube_full" ? "ویدیوی کامل" : targetKind === "reel" ? "ریلز" : "برش"}</b> متصل شد.`;
+  const client = await getTelegramClientSafe();
+  if (client) {
+    await (client as unknown as { editMessageText: (id: number, text: string, opts: unknown) => Promise<unknown> }).editMessageText(
+      botMessageId ?? (Number(messageId) || 0),
+      text,
+      { parseMode: "HTML", replyMarkup: { inline_keyboard: [] } },
+    );
+  }
+  return { ok: true, message: "✅ تامنیل متصل شد" };
 }
 
 async function handleLinkPickKind(contentId: string, actorUserId: string, actorTelegramId: string, botMessageId?: number): Promise<{ ok: boolean; message: string }> {
@@ -725,7 +821,7 @@ export async function routeCallback(
     user = found ?? null;
   } catch {
     // if DB unavailable, allow link actions to proceed in test mode with mock user
-    const linkActions = new Set(["link_existing", "link_new", "link_new_type", "link_new_channel", "link_new_back", "link_new_title", "link_new_cancel", "link_pick_product", "link_pick_part", "link_pick_kind", "link_search"]);
+    const linkActions = new Set(["link_existing", "link_new", "link_new_type", "link_new_channel", "link_new_back", "link_new_title", "link_new_cancel", "link_pick_product", "link_pick_part", "link_pick_kind", "link_pick_cover", "link_search"]);
     if (linkActions.has(action)) {
       const isTest = typeof process !== "undefined" && (process.env.VITEST === "true" || process.env.NODE_ENV === "test");
       if (isTest) {
@@ -754,7 +850,7 @@ export async function routeCallback(
     }
   }
   if (!user) {
-    const linkActionsForNull = new Set(["link_existing", "link_new", "link_new_type", "link_new_channel", "link_new_back", "link_new_title", "link_new_cancel", "link_pick_product", "link_pick_part", "link_pick_kind", "link_search"]);
+    const linkActionsForNull = new Set(["link_existing", "link_new", "link_new_type", "link_new_channel", "link_new_back", "link_new_title", "link_new_cancel", "link_pick_product", "link_pick_part", "link_pick_kind", "link_pick_cover", "link_search"]);
     const isTestNull = typeof process !== "undefined" && (process.env.VITEST === "true" || process.env.NODE_ENV === "test");
     if (isTestNull && linkActionsForNull.has(action)) {
       user = {
@@ -782,7 +878,7 @@ export async function routeCallback(
   }
 
   // Link flow handling — before old PERMISSION_MAP check, with manage_content_room | update_assigned_content
-  const linkActionsSet = new Set(["link_existing", "link_new", "link_new_type", "link_new_channel", "link_new_back", "link_new_title", "link_new_cancel", "link_pick_product", "link_pick_part", "link_pick_kind", "link_search"]);
+  const linkActionsSet = new Set(["link_existing", "link_new", "link_new_type", "link_new_channel", "link_new_back", "link_new_title", "link_new_cancel", "link_pick_product", "link_pick_part", "link_pick_kind", "link_pick_cover", "link_search"]);
   if (linkActionsSet.has(action)) {
     const subject = {
       role: user.role,
@@ -804,6 +900,8 @@ export async function routeCallback(
           return await handleLinkPickPart(contentId, botMessageId);
         case "link_pick_kind":
           return await handleLinkPickKind(contentId, user.id, user.telegramId || fromTelegramId, botMessageId);
+        case "link_pick_cover":
+          return await handleLinkPickCover(contentId, user.id, botMessageId);
         case "link_search":
           return await handleLinkSearch(contentId, fromTelegramId, botMessageId, messageThreadId);
         case "link_new_type":

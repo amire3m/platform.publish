@@ -1,5 +1,9 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
+const webhookMocks = vi.hoisted(() => ({
+  insertValues: vi.fn(() => Promise.resolve()),
+}));
+
 vi.stubEnv("TELEGRAM_WEBHOOK_SECRET", "s");
 vi.stubEnv("TELEGRAM_BOT_TOKEN", "test-token");
 vi.stubEnv("TELEGRAM_GROUP_ID", "-1001");
@@ -15,7 +19,7 @@ vi.mock("@/lib/telegram/callback-router", () => ({
 }));
 
 // Mock TelegramClient to avoid real fetch
-vi.mock("@/db", () => ({ db: { select: () => ({ from: () => ({ where: () => ({ limit: () => Promise.resolve([]), orderBy: () => ({ limit: () => Promise.resolve([]) }) }) }) }), insert: () => ({ values: () => Promise.resolve() }) } }));
+vi.mock("@/db", () => ({ db: { select: () => ({ from: () => ({ where: () => ({ limit: () => Promise.resolve([]), orderBy: () => ({ limit: () => Promise.resolve([]) }) }) }) }), insert: () => ({ values: webhookMocks.insertValues }) } }));
 vi.mock("@/db/schema", () => ({ workflowEvents: {}, users: { telegramId: "telegram_id" }, contentProducts: { id: "id", title: "title", createdAt: "created_at" } }));
 vi.mock("@/lib/telegram/client", async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>;
@@ -38,6 +42,7 @@ import { POST } from "./route";
 
 describe("webhook", () => {
   beforeEach(() => {
+    vi.clearAllMocks();
     vi.stubEnv("TELEGRAM_WEBHOOK_SECRET", "s");
     vi.stubEnv("TELEGRAM_BOT_TOKEN", "test-token");
     vi.stubEnv("TELEGRAM_GROUP_ID", "-1001");
@@ -139,3 +144,81 @@ describe("webhook group video", () => {
   });
 });
 
+describe("webhook image reply", () => {
+  it("opens the link flow for a replied photo and stores its largest file id", async () => {
+    webhookMocks.insertValues.mockClear();
+    const { TelegramClient } = await import("@/lib/telegram/client");
+    const mockSend = vi.fn().mockResolvedValue({ message_id: 1001 });
+    vi.mocked(TelegramClient.fromEnv as unknown as () => unknown).mockReturnValueOnce({
+      sendMessage: mockSend,
+      answerCallbackQuery: vi.fn().mockResolvedValue({}),
+      editMessageReplyMarkup: vi.fn().mockResolvedValue({}),
+    } as unknown as InstanceType<typeof TelegramClient>);
+
+    const body = {
+      message: {
+        message_id: 201,
+        chat: { id: -1001, type: "supergroup" },
+        from: { id: 1, first_name: "Ali" },
+        text: "لینک",
+        message_thread_id: 10,
+        reply_to_message: {
+          message_id: 200,
+          photo: [
+            { file_id: "photo-small", file_unique_id: "small", width: 90, height: 90 },
+            { file_id: "photo-large", file_unique_id: "large", width: 1280, height: 720 },
+          ],
+        },
+      },
+    };
+
+    const res = await POST(new Request("http://localhost/api/telegram/webhook", {
+      method: "POST",
+      headers: { "x-telegram-bot-api-secret-token": "s" },
+      body: JSON.stringify(body),
+    }) as never);
+
+    expect(res.status).toBe(200);
+    expect(webhookMocks.insertValues).toHaveBeenCalledWith(expect.objectContaining({
+      entityId: "200",
+      action: "group_image_replied",
+      after: expect.objectContaining({ fileId: "photo-large", mime: "image/jpeg" }),
+    }));
+    const opts = mockSend.mock.calls[0][2] as { replyMarkup: { inline_keyboard: Array<Array<{ callback_data?: string }>> } };
+    expect(opts.replyMarkup.inline_keyboard[0][0].callback_data).toBe("link_existing:200");
+  });
+
+  it("accepts an image document as a thumbnail source", async () => {
+    webhookMocks.insertValues.mockClear();
+    const { TelegramClient } = await import("@/lib/telegram/client");
+    vi.mocked(TelegramClient.fromEnv as unknown as () => unknown).mockReturnValueOnce({
+      sendMessage: vi.fn().mockResolvedValue({ message_id: 1002 }),
+      answerCallbackQuery: vi.fn(),
+      editMessageReplyMarkup: vi.fn(),
+    } as unknown as InstanceType<typeof TelegramClient>);
+
+    const res = await POST(new Request("http://localhost/api/telegram/webhook", {
+      method: "POST",
+      headers: { "x-telegram-bot-api-secret-token": "s" },
+      body: JSON.stringify({
+        message: {
+          message_id: 301,
+          chat: { id: -1001, type: "supergroup" },
+          from: { id: 1 },
+          text: "لینک",
+          reply_to_message: {
+            message_id: 300,
+            document: { file_id: "image-document", file_unique_id: "doc-1", mime_type: "image/png", file_name: "cover.png" },
+          },
+        },
+      }),
+    }) as never);
+
+    expect(res.status).toBe(200);
+    expect(webhookMocks.insertValues).toHaveBeenCalledWith(expect.objectContaining({
+      entityId: "300",
+      action: "group_image_replied",
+      after: expect.objectContaining({ fileId: "image-document", fileName: "cover.png", mime: "image/png" }),
+    }));
+  });
+});

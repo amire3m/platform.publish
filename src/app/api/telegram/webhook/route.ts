@@ -22,10 +22,13 @@ export async function POST(req: Request) {
     return Response.json({ ok: true });
   }
 
-  const msg = (body as { message?: { message_id: number; chat: { id: number; type?: string }; from?: { id: number | string; first_name?: string; last_name?: string; username?: string }; video?: { file_id: string; file_unique_id: string; duration?: number; thumbnail?: { file_id: string }; file_name?: string }; document?: { file_id: string; file_unique_id: string; mime_type?: string; file_name?: string; thumbnail?: { file_id: string } }; caption?: string; text?: string; date?: number; message_thread_id?: number; reply_to_message?: { message_id: number; video?: { file_id: string }; document?: { file_id: string; mime_type?: string; file_name?: string }; caption?: string; from?: { id: number | string } } } })?.message;
+  const msg = (body as { message?: { message_id: number; chat: { id: number; type?: string }; from?: { id: number | string; first_name?: string; last_name?: string; username?: string }; video?: { file_id: string; file_unique_id: string; duration?: number; thumbnail?: { file_id: string }; file_name?: string }; photo?: Array<{ file_id: string; file_unique_id: string; width?: number; height?: number; file_size?: number }>; document?: { file_id: string; file_unique_id: string; mime_type?: string; file_name?: string; thumbnail?: { file_id: string } }; caption?: string; text?: string; date?: number; message_thread_id?: number; reply_to_message?: { message_id: number; video?: { file_id: string }; photo?: Array<{ file_id: string; file_unique_id: string; width?: number; height?: number; file_size?: number }>; document?: { file_id: string; mime_type?: string; file_name?: string }; caption?: string; from?: { id: number | string } } } })?.message;
   const hasVideo = !!(msg?.video || (msg?.document && String(msg.document?.mime_type || "").startsWith("video/")));
   const replyTarget = msg?.reply_to_message;
   const hasVideoInReply = !!(replyTarget?.video || (replyTarget?.document && String(replyTarget?.document?.mime_type || "").startsWith("video/")));
+  const replyPhoto = replyTarget?.photo?.[replyTarget.photo.length - 1];
+  const replyImageDocument = replyTarget?.document && String(replyTarget.document.mime_type || "").startsWith("image/") ? replyTarget.document : null;
+  const hasImageInReply = Boolean(replyPhoto || replyImageDocument);
   const isLinkCommand = (t?: string) => !!t && /(لینک|link|\/link)/i.test(t);
   const isLiveCommand = (t?: string) => !!t && /^(\/live|!live|پنل لایو|لایو)$/i.test(t.trim());
   // /live → the live conductor panel lives in its own topic (2540); don't touch group video flow
@@ -97,6 +100,48 @@ export async function POST(req: Request) {
       }
     } catch (err) {
       console.error("[webhook] old file reply failed:", (err as Error).message);
+    }
+    return Response.json({ ok: true });
+  }
+  if (msg && hasImageInReply && isLinkCommand(msg.text)) {
+    const groupId = process.env.TELEGRAM_GROUP_ID;
+    if (String(msg.chat?.id) !== String(groupId)) return Response.json({ ok: true });
+
+    const imageMessageId = String(replyTarget!.message_id);
+    const fileId = replyPhoto?.file_id ?? replyImageDocument?.file_id ?? "";
+    const fileName = replyImageDocument?.file_name ?? `photo_${imageMessageId}.jpg`;
+    const mime = replyImageDocument?.mime_type ?? "image/jpeg";
+    try {
+      const { db } = await import("@/db");
+      const { workflowEvents } = await import("@/db/schema");
+      const { nanoid } = await import("nanoid");
+      await db.insert(workflowEvents).values({
+        id: "WFE-" + nanoid(8),
+        entityType: "telegram_group_message",
+        entityId: imageMessageId,
+        action: "group_image_replied",
+        before: null,
+        after: { fileId, fileName, mime, messageId: replyTarget!.message_id, chatId: msg.chat.id },
+        actorUserId: null as unknown as string,
+        source: "telegram_webhook",
+      });
+
+      const chatIdStr = String(msg.chat.id).replace("-100", "");
+      const kb = {
+        inline_keyboard: [
+          [{ text: "➕ افزودن تامنیل به محصول موجود", callback_data: `link_existing:${imageMessageId}` }],
+          [{ text: "🔗 مشاهده در گروه", url: `https://t.me/c/${chatIdStr}/${imageMessageId}` }],
+        ],
+      };
+      const { TelegramClient } = await import("@/lib/telegram/client");
+      const client = TelegramClient.fromEnv();
+      await client.sendMessage("<b>🖼️ تصویر برای تامنیل انتخاب شد</b>\nمحصول و خروجی هدف را انتخاب کنید.", msg.message_thread_id, {
+        parseMode: "HTML",
+        replyMarkup: kb,
+        replyToMessageId: replyTarget!.message_id,
+      } as never);
+    } catch (err) {
+      console.error("[webhook] image reply failed:", (err as Error).message);
     }
     return Response.json({ ok: true });
   }
